@@ -1,0 +1,27 @@
+# Python envs
+env/
+venv/
+pycache/
+*.py[cod]
+
+# Node junk
+frontend/node_modules/
+frontend/dist/
+
+# Logs / reports
+logs/
+*.log
+coverage/
+htmlcov/
+
+# Git / IDE / OS
+.git
+.gitignore
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
+
+# Env files
+.env
+.env.*
