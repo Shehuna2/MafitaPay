@@ -1,0 +1,26 @@
+# Django backend specific ignores
+
+# Python bytecode / cache
+pycache/
+*.py[cod]
+
+# Virtual envs
+env/
+venv/
+
+# Django
+db.sqlite3
+*.log
+celerybeat-schedule
+celerybeat.pid
+
+# Environment
+.env
+.env.*
+
+# Coverage / Build
+dist/
+build/
+*.egg-info/
+coverage/
+htmlcov/
