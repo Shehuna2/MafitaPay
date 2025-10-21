@@ -26,7 +26,7 @@ BSC_SENDER_PRIVATE_KEY = os.getenv("BSC_SENDER_PRIVATE_KEY")
 BSC_RPC_URL = os.getenv("BSC_RPC_URL")
 
 
-BASE_URL = os.getenv("BASE_URL")
+
 FLUTTERWAVE_PUBLIC_KEY = os.getenv("FLUTTERWAVE_PUBLIC_KEY")
 FLUTTERWAVE_SECRET_KEY = os.getenv("FLUTTERWAVE_SECRET_KEY")
 FLUTTERWAVE_HASH_KEY = os.getenv("FLUTTERWAVE_HASH_KEY")
@@ -63,17 +63,17 @@ AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",  # fallback
 ]
 
+BASE_URL = os.getenv("BASE_URL")
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", 25))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "False") == "True"
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "webmaster@localhost")
 
-# Email configuration
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'jikaninna7@gmail.com'  # Replace with your email
-EMAIL_HOST_PASSWORD = 'dbqu pnwh hjhx ntvx'  # Replace with your app-specific password
-DEFAULT_FROM_EMAIL = 'MafitaPay <jikaninna7@gmail.com>'
-FRONTEND_URL = 'http://localhost:5173'  # Update for production
 
 # JWT settings
 SIMPLE_JWT = {
@@ -83,7 +83,7 @@ SIMPLE_JWT = {
 }
 
 TON_SEQNO_CHECK_INTERVAL = 10  # Seconds between seqno checks
-TON_SEQNO_MAX_ATTEMPTS = 5    # Number of attempts before giving up
+TON_SEQNO_MAX_ATTEMPTS = 5   
 
 
 # Celery settings
