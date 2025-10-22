@@ -15,8 +15,10 @@ import Login from "./pages/accounts/Login";
 import Register from "./pages/accounts/Register";
 import Profile from "./pages/accounts/Profile";
 import VerifyEmail from "./pages/accounts/VerifyEmail";
+
 import ResetPassword from "./pages/accounts/ResetPassword";
 import ResetPasswordRequest from "./pages/accounts/ResetPasswordRequest";
+
 
 import BuyData from "./pages/bills/BuyData";
 import BuyAirtime from "./pages/bills/BuyAirtime";

@@ -1,103 +1,148 @@
 // File: src/pages/accounts/VerifyEmail.jsx
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom"; // Added Link import
+import { useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
 import client from "../../api/client";
+import { motion } from "framer-motion";
 import { toast, ToastContainer } from "react-toastify";
-import { Loader2, CheckCircle } from "lucide-react";
 import "react-toastify/dist/ReactToastify.css";
 
 export default function VerifyEmail() {
-    const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
-    const [loading, setLoading] = useState(true);
-    const [message, setMessage] = useState("");
-    const [isSuccess, setIsSuccess] = useState(false);
+  const location = useLocation();
+  const email =
+    location.state?.email || new URLSearchParams(location.search).get("email");
+  const verified = new URLSearchParams(location.search).get("verified");
 
-    useEffect(() => {
-        const verified = searchParams.get("verified");
-        const token = searchParams.get("token");
+  const COOLDOWN_DURATION = 60; // seconds
+  const COOLDOWN_KEY = `verify_cooldown_${email || "unknown"}`;
 
-        if (verified) {
-            setIsSuccess(verified === "true");
-            setMessage(verified === "true" ? "Email verified successfully." : "Failed to verify email.");
-            setLoading(false);
-            toast[verified === "true" ? "success" : "error"](message, { autoClose: 3000 });
-            setTimeout(() => navigate("/login"), 3000);
-            return;
-        }
+  const [resending, setResending] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
 
-        // Fallback for direct access with token (if backend changes back to path param)
-        if (token) {
-            const verifyEmail = async () => {
-                try {
-                    const res = await client.get(`/verify-email/${token}/`);
-                    setMessage(res.data.message || "Email verified successfully.");
-                    setIsSuccess(res.data.verified);
-                    toast.success(res.data.message, { autoClose: 3000 });
-                    setTimeout(() => navigate("/login"), 3000);
-                } catch (err) {
-                    const errorMsg = err.response?.data?.error || "Failed to verify email.";
-                    setMessage(errorMsg);
-                    setIsSuccess(false);
-                    toast.error(errorMsg, { autoClose: 3000 });
-                    setTimeout(() => navigate("/login"), 3000);
-                } finally {
-                    setLoading(false);
-                }
-            };
-            verifyEmail();
-        } else {
-            setMessage("No verification token provided.");
-            setIsSuccess(false);
-            setLoading(false);
-            toast.error("No verification token provided.", { autoClose: 3000 });
-            setTimeout(() => navigate("/login"), 3000);
-        }
-    }, [navigate, searchParams]);
+  // Load cooldown timer from localStorage
+  useEffect(() => {
+    const savedUntil = localStorage.getItem(COOLDOWN_KEY);
+    if (savedUntil) {
+      const diff = Math.floor((Number(savedUntil) - Date.now()) / 1000);
+      if (diff > 0) setCooldown(diff);
+    }
+  }, [email]);
 
+  // Handle countdown
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => setCooldown((c) => c - 1), 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
+  const handleResend = async () => {
+    if (!email) {
+      toast.error("No email found to resend verification.");
+      return;
+    }
+    try {
+      setResending(true);
+      await client.post("resend-verification/", { email });
+      toast.success("Verification email resent successfully!");
+      const expiresAt = Date.now() + COOLDOWN_DURATION * 1000;
+      localStorage.setItem(COOLDOWN_KEY, expiresAt.toString());
+      setCooldown(COOLDOWN_DURATION);
+    } catch (err) {
+      console.error("Resend failed:", err);
+      toast.error(
+        err.response?.data?.error || "Failed to resend verification email."
+      );
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const MotionButton = motion.button;
+
+  const buttonVariants = {
+    idle: { scale: 1, boxShadow: "0px 0px 0px rgba(0,0,0,0)" },
+    hover: { scale: 1.05, boxShadow: "0px 0px 15px rgba(99,102,241,0.5)" },
+    cooldown: {
+      scale: [1, 1.02, 1],
+      transition: { duration: 1, repeat: Infinity, ease: "easeInOut" },
+    },
+  };
+
+  const Section = ({ children, bg = "bg-gray-900" }) => (
+    <section
+      className={`flex items-center justify-center min-h-screen ${bg} text-white`}
+    >
+      <ToastContainer />
+      <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-white/10 p-8 shadow-xl backdrop-blur-md text-center">
+        {children}
+      </div>
+    </section>
+  );
+
+  if (verified === "true") {
     return (
-        <section className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-900 via-indigo-900 to-gray-800 p-4">
-            <ToastContainer />
-            <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-white/80 p-6 sm:p-8 shadow-xl backdrop-blur-md text-center transform transition-all duration-300 ease-in-out">
-                {loading ? (
-                    <div className="flex flex-col items-center">
-                        <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mb-4" />
-                        <h2 className="text-2xl font-semibold text-gray-700">Verifying Your Email...</h2>
-                    </div>
-                ) : isSuccess ? (
-                    <div className="flex flex-col items-center">
-                        <CheckCircle className="w-16 h-16 text-green-500 mb-4 animate-bounce" />
-                        <h2 className="text-3xl font-bold text-gray-900 mb-2">Email Verified!</h2>
-                        <p className="text-lg text-green-600 mb-4">{message}</p>
-                        <p className="text-sm text-gray-600 mb-6">
-                            You’re all set! You’ll be redirected to the login page in <span className="font-medium text-indigo-500">3 seconds</span>.
-                        </p>
-                        <Link
-                            to="/login"
-                            className="inline-block px-6 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors duration-200 shadow-md"
-                        >
-                            Go to Login Now
-                        </Link>
-                    </div>
-                ) : (
-                    <div className="flex flex-col items-center">
-                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                            <CheckCircle className="w-10 h-10 text-red-500 opacity-50" />
-                        </div>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Verification Failed</h2>
-                        <p className="text-lg text-red-600 mb-4">{message}</p>
-                        <p className="text-sm text-gray-600 mb-6">
-                            It seems there was an issue. You’ll be redirected to the login page in <span className="font-medium text-indigo-500">3 seconds</span>.
-                        </p>
-                        <Link
-                            to="/login"
-                            className="inline-block px-6 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors duration-200 shadow-md"
-                        >
-                            Back to Login
-                        </Link>
-                    </div>
-                )}
-            </div>
-        </section>
+      <Section bg="bg-gradient-to-br from-green-900 via-gray-900 to-green-800">
+        <h1 className="text-3xl font-bold mb-3 text-green-400">✅ Email Verified</h1>
+        <p className="text-gray-200 mb-6">
+          Your email has been successfully verified. You can now log in to your
+          account.
+        </p>
+        <a
+          href="/login"
+          className="inline-block rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-3 font-semibold text-white shadow-md hover:from-green-600 hover:to-emerald-700 transition-all"
+        >
+          Go to Login
+        </a>
+      </Section>
     );
+  }
+
+  if (verified === "false") {
+    return (
+      <Section bg="bg-gradient-to-br from-red-900 via-gray-900 to-red-800">
+        <h1 className="text-3xl font-bold mb-3 text-red-400">❌ Verification Failed</h1>
+        <p className="text-gray-200 mb-6">
+          Invalid or expired verification link. You can request a new one below.
+        </p>
+        <MotionButton
+          onClick={handleResend}
+          disabled={resending || cooldown > 0}
+          className="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3 text-white font-semibold shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
+          variants={buttonVariants}
+          animate={resending || cooldown > 0 ? "cooldown" : "idle"}
+          whileHover={!resending && cooldown <= 0 ? "hover" : ""}
+        >
+          {resending
+            ? "Resending..."
+            : cooldown > 0
+            ? `Resend available in ${cooldown}s`
+            : "Resend Verification Email"}
+        </MotionButton>
+      </Section>
+    );
+  }
+
+  return (
+    <Section bg="bg-gradient-to-br from-gray-900 via-indigo-900 to-purple-900">
+      <h1 className="text-3xl font-bold mb-3 text-indigo-400">Verify Your Email</h1>
+      <p className="text-gray-200 mb-6">
+        A verification link has been sent to{" "}
+        <span className="font-semibold text-white">{email}</span>. <br />
+        Please check your inbox or spam folder to complete your registration.
+      </p>
+      <MotionButton
+        onClick={handleResend}
+        disabled={resending || cooldown > 0}
+        className="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3 text-white font-semibold shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
+        variants={buttonVariants}
+        animate={resending || cooldown > 0 ? "cooldown" : "idle"}
+        whileHover={!resending && cooldown <= 0 ? "hover" : ""}
+      >
+        {resending
+          ? "Resending..."
+          : cooldown > 0
+          ? `Resend available in ${cooldown}s`
+          : "Resend Verification Email"}
+      </MotionButton>
+    </Section>
+  );
 }

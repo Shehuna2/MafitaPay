@@ -83,8 +83,8 @@ export default function Login() {
     return (
         <section className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-900 via-indigo-900 to-gray-800 p-4">
             <ToastContainer />
-            <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-white/80 p-8 shadow-xl backdrop-blur-md">
-                <h2 className="text-2xl font-semibold text-center text-gray-900 mb-6">
+            <div className="w-full max-w-md rounded-2xl border border-green-900 bg-indigo-900 p-8 shadow-xl backdrop-blur-md">
+                <h2 className="text-2xl font-semibold text-center text-green-200 mb-6">
                     Welcome Back
                 </h2>
 
@@ -137,7 +137,7 @@ export default function Login() {
 
                     {/* Remember Me Checkbox */}
                     <div className="flex items-center justify-between text-sm">
-                        <label className="flex items-center text-gray-700">
+                        <label className="flex items-center text-white-700">
                             <input
                                 type="checkbox"
                                 checked={rememberMe}
@@ -169,7 +169,7 @@ export default function Login() {
                     </div>
                 )}
 
-                <div className="mt-4 text-center text-sm text-gray-700">
+                <div className="mt-4 text-center text-sm text-white-700">
                     Don’t have an account?{" "}
                     <Link
                         to="/register"

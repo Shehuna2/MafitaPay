@@ -32,7 +32,10 @@ export default function Register() {
         position: "top-right",
         autoClose: 3000,
       });
-      setTimeout(() => navigate("/login"), 3000);
+
+      // redirect to verify page
+      setTimeout(() => navigate("/verify-email", { state: { email: form.email } }), 0);
+
     } catch (err) {
       console.error("❌ Registration error:", err.response?.data || err.message);
       const errors = err.response?.data?.errors || {};

@@ -129,7 +129,55 @@ export default function Dashboard() {
     fetchWallet();
   };
 
-  if (loading) return <p className="text-center text-gray-400">Loading wallet...</p>;
+  if (loading) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white px-4 py-10">
+      {/* Wallet Card Skeleton */}
+      <div className="animate-pulse w-full max-w-3xl bg-gray-800/80 rounded-2xl p-8 shadow-xl border border-gray-700">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 bg-gray-700 rounded-full"></div>
+            <div className="h-5 bg-gray-700 rounded w-32"></div>
+          </div>
+          <div className="flex gap-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="w-8 h-8 bg-gray-700 rounded-full"></div>
+            ))}
+          </div>
+        </div>
+
+        <div className="h-12 bg-gray-700 rounded-lg mb-3 w-2/3 md:w-1/2"></div>
+        <div className="h-4 bg-gray-700 rounded w-1/4 mb-8"></div>
+
+        <div className="flex justify-start md:justify-end gap-4">
+          <div className="h-12 w-12 bg-gray-700 rounded-full"></div>
+          <div className="h-12 w-12 bg-gray-700 rounded-full"></div>
+        </div>
+      </div>
+
+      {/* Service Grid Skeleton */}
+      <div className="w-full max-w-5xl mt-10 px-2 sm:px-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
+          {Array(8)
+            .fill()
+            .map((_, i) => (
+              <div
+                key={i}
+                className="h-24 sm:h-28 bg-gray-800/60 rounded-xl animate-pulse border border-gray-700"
+              ></div>
+            ))}
+        </div>
+      </div>
+
+      {/* Loading Text */}
+      <p className="text-gray-400 mt-10 text-sm md:text-base animate-pulse text-center">
+        Fetching your wallet data securely...
+      </p>
+    </div>
+  );
+}
+
+
 
   const renderBalance = () => {
     if (!showBalance) {
