@@ -60,3 +60,5 @@ class ExchangeRateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExchangeRate
         fields = ["asset", "rate_ngn", "updated_at"]
+
+

@@ -198,8 +198,17 @@ class BuyCryptoAPI(APIView):
             )
 
         except Exception as e:
-            logger.error(f"BuyCryptoAPI failed: {e}", exc_info=True)
-            return Response({"success": False, "error": str(e)}, status=400)
+            err_str = str(e)
+            if "InsufficientFunds" in err_str:
+                msg = "Insufficient funds. Please top up your wallet."
+            elif "InvalidAddress" in err_str:
+                msg = "The wallet address appears invalid. Please check and try again."
+            elif "network" in err_str.lower():
+                msg = "Network issue — please retry in a few seconds."
+            else:
+                msg = "Transaction failed. Please try again later."
+
+            return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
 
 
 def refund_user(purchase):

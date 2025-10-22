@@ -1,12 +1,13 @@
 // src/pages/WalletTransactions.jsx
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Loader2 } from "lucide-react"; // For loading spinner
+import { motion, AnimatePresence } from "framer-motion";
+import { Loader2 } from "lucide-react";
 import client from "../api/client";
 
 export default function WalletTransactions() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [reloading, setReloading] = useState(false);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
     search: "",
@@ -23,12 +24,15 @@ export default function WalletTransactions() {
   });
 
   async function fetchTransactions(url = null) {
-    setLoading(true);
+    if (transactions.length > 0) setReloading(true);
+    else setLoading(true);
+
     setError(null);
     try {
       const query = new URLSearchParams(
         Object.fromEntries(Object.entries(filters).filter(([_, v]) => v))
       ).toString();
+
       const res = await client.get(url || `/wallet/transactions/?${query}`);
       const data = res.data;
 
@@ -51,6 +55,7 @@ export default function WalletTransactions() {
       setError("Failed to load transactions. Please try again later.");
     } finally {
       setLoading(false);
+      setReloading(false);
     }
   }
 
@@ -95,19 +100,31 @@ export default function WalletTransactions() {
 
   const totalPages = Math.ceil(pagination.count / 10) || 1;
 
-  if (error) return <p className="text-red-400 text-center p-4">{error}</p>;
-  if (loading && transactions.length === 0)
-    return (
-      <div className="text-center p-6">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-400 mx-auto" />
-        <p className="text-gray-400 mt-2">Loading transactions...</p>
+  const SkeletonRow = () => (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="animate-pulse flex justify-between items-center py-4"
+    >
+      <div>
+        <div className="h-4 w-32 bg-gray-700 rounded mb-2"></div>
+        <div className="h-3 w-24 bg-gray-800 rounded"></div>
       </div>
-    );
+      <div className="text-right">
+        <div className="h-4 w-16 bg-gray-700 rounded mb-2"></div>
+        <div className="h-3 w-10 bg-gray-800 rounded"></div>
+      </div>
+    </motion.div>
+  );
+
+  if (error)
+    return <p className="text-red-400 text-center p-4">{error}</p>;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <div className="max-w-5xl mx-auto p-6">
-        <div className="flex justify-between items-center mb-6">
+    <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
+      <div className="max-w-5xl mx-auto p-6 relative z-10 space-y-6">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-2">
           <h2 className="text-2xl font-bold">Wallet Transactions</h2>
           <button
             onClick={() => fetchTransactions()}
@@ -117,8 +134,13 @@ export default function WalletTransactions() {
           </button>
         </div>
 
-        {/* Filters */}
-        <div className="bg-indigo-600/30 backdrop-blur-md border border-indigo-600/20 rounded-xl p-6 mb-6 shadow-lg">
+        {/* Sticky Filter Bar */}
+        <motion.div
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.4 }}
+          className="sticky top-0 z-40 bg-indigo-600/30 backdrop-blur-lg border border-indigo-600/20 rounded-xl p-6 shadow-lg"
+        >
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <input
               type="text"
@@ -172,64 +194,97 @@ export default function WalletTransactions() {
           >
             Clear Filters
           </button>
-        </div>
+        </motion.div>
 
         {/* Transactions List */}
-        <div className="bg-indigo-600/30 backdrop-blur-md border border-indigo-600/20 rounded-xl p-6 shadow-lg">
-          {transactions.length === 0 ? (
-            <p className="text-gray-400 text-center py-6">No transactions found.</p>
-          ) : (
-            <ul className="divide-y divide-gray-700">
-              {transactions.map((tx) => {
-                const explorerUrl = getExplorerUrl(tx);
-                return (
-                  <li key={tx.id} className="py-4 flex justify-between items-center hover:bg-gray-800/50 transition">
-                    <div>
-                      <p className="font-medium capitalize text-lg">
-                        {tx.category} ({tx.tx_type})
-                      </p>
-                      <p className="text-sm text-gray-400">
-                        {new Date(tx.created_at).toLocaleString()}
-                      </p>
-                      {explorerUrl && (
-                        <a
-                          href={explorerUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-indigo-400 hover:underline mt-1 inline-block"
+        <div className="bg-indigo-600/30 backdrop-blur-md border border-indigo-600/20 rounded-xl p-6 shadow-lg relative overflow-hidden">
+          <AnimatePresence mode="wait">
+            {loading ? (
+              <motion.div
+                key="skeleton"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.4 }}
+              >
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <SkeletonRow key={i} />
+                ))}
+              </motion.div>
+            ) : transactions.length === 0 ? (
+              <motion.p
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-gray-400 text-center py-6"
+              >
+                No transactions found.
+              </motion.p>
+            ) : (
+              <motion.ul
+                key="transactions"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4 }}
+                className="divide-y divide-gray-700"
+              >
+                {transactions.map((tx) => {
+                  const explorerUrl = getExplorerUrl(tx);
+                  return (
+                    <motion.li
+                      key={tx.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="py-4 flex justify-between items-center hover:bg-gray-800/50 transition rounded-lg px-2"
+                    >
+                      <div>
+                        <p className="font-medium capitalize text-lg">
+                          {tx.category} ({tx.tx_type})
+                        </p>
+                        <p className="text-sm text-gray-400">
+                          {new Date(tx.created_at).toLocaleString()}
+                        </p>
+                        {explorerUrl && (
+                          <a
+                            href={explorerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-indigo-400 hover:underline mt-1 inline-block"
+                          >
+                            View on Explorer
+                          </a>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p
+                          className={`font-semibold text-xl ${
+                            tx.tx_type === "debit"
+                              ? "text-red-400"
+                              : "text-green-400"
+                          }`}
                         >
-                          View on Explorer
-                        </a>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <p
-                        className={`font-semibold text-xl ${
-                          tx.tx_type === "debit"
-                            ? "text-red-400"
-                            : "text-green-400"
-                        }`}
-                      >
-                        {tx.tx_type === "debit" ? "-" : "+"}₦
-                        {parseFloat(tx.amount).toFixed(2)}
-                      </p>
-                      <p
-                        className={`text-sm capitalize ${
-                          tx.status === "success"
-                            ? "text-green-400"
-                            : tx.status === "pending"
-                            ? "text-yellow-400"
-                            : "text-red-400"
-                        } mt-1`}
-                      >
-                        {tx.status}
-                      </p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                          {tx.tx_type === "debit" ? "-" : "+"}₦
+                          {parseFloat(tx.amount).toFixed(2)}
+                        </p>
+                        <p
+                          className={`text-sm capitalize ${
+                            tx.status === "success"
+                              ? "text-green-400"
+                              : tx.status === "pending"
+                              ? "text-yellow-400"
+                              : "text-red-400"
+                          } mt-1`}
+                        >
+                          {tx.status}
+                        </p>
+                      </div>
+                    </motion.li>
+                  );
+                })}
+              </motion.ul>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Pagination */}
@@ -268,6 +323,20 @@ export default function WalletTransactions() {
           </button>
         </div>
       </div>
+
+      {/* Reload Overlay */}
+      <AnimatePresence>
+        {reloading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.6 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/60 flex items-center justify-center z-50"
+          >
+            <Loader2 className="w-10 h-10 animate-spin text-indigo-400" />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

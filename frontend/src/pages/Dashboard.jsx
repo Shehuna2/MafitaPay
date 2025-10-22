@@ -132,26 +132,44 @@ export default function Dashboard() {
   if (loading) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white px-4 py-10">
+      {/* Shimmer animation keyframes */}
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .shimmer {
+          background: linear-gradient(
+            110deg,
+            rgba(55, 65, 81, 0.3) 8%,
+            rgba(147, 197, 253, 0.2) 18%,
+            rgba(55, 65, 81, 0.3) 33%
+          );
+          background-size: 200% 100%;
+          animation: shimmer 2.2s infinite linear;
+        }
+      `}</style>
+
       {/* Wallet Card Skeleton */}
-      <div className="animate-pulse w-full max-w-3xl bg-gray-800/80 rounded-2xl p-8 shadow-xl border border-gray-700">
+      <div className="w-full max-w-3xl bg-gray-800/80 rounded-2xl p-8 shadow-xl border border-gray-700">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-6 h-6 bg-gray-700 rounded-full"></div>
-            <div className="h-5 bg-gray-700 rounded w-32"></div>
+            <div className="w-6 h-6 bg-gray-700 rounded-full shimmer"></div>
+            <div className="h-5 w-32 rounded shimmer"></div>
           </div>
           <div className="flex gap-3">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="w-8 h-8 bg-gray-700 rounded-full"></div>
+              <div key={i} className="w-8 h-8 rounded-full shimmer"></div>
             ))}
           </div>
         </div>
 
-        <div className="h-12 bg-gray-700 rounded-lg mb-3 w-2/3 md:w-1/2"></div>
-        <div className="h-4 bg-gray-700 rounded w-1/4 mb-8"></div>
+        <div className="h-12 rounded-lg mb-3 w-2/3 md:w-1/2 shimmer"></div>
+        <div className="h-4 rounded w-1/4 mb-8 shimmer"></div>
 
         <div className="flex justify-start md:justify-end gap-4">
-          <div className="h-12 w-12 bg-gray-700 rounded-full"></div>
-          <div className="h-12 w-12 bg-gray-700 rounded-full"></div>
+          <div className="h-12 w-12 rounded-full shimmer"></div>
+          <div className="h-12 w-12 rounded-full shimmer"></div>
         </div>
       </div>
 
@@ -163,7 +181,7 @@ export default function Dashboard() {
             .map((_, i) => (
               <div
                 key={i}
-                className="h-24 sm:h-28 bg-gray-800/60 rounded-xl animate-pulse border border-gray-700"
+                className="h-24 sm:h-28 rounded-xl border border-gray-700 shimmer"
               ></div>
             ))}
         </div>

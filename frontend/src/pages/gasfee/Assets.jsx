@@ -1,83 +1,40 @@
-import React from "react";
-import { useEffect, useRef, useState, useCallback, useMemo, Component } from "react";
-import { Link } from "react-router-dom";
-import { ArrowUpRight, ArrowDown } from "lucide-react";
+import React, { useEffect, useRef, useState, useCallback, useMemo, Component } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowUpRight, ArrowDown, Search } from "lucide-react";
 import client from "../../api/client";
 import PropTypes from "prop-types";
 
 // ✅ Error Boundary for AssetCard
 class AssetCardErrorBoundary extends Component {
   state = { hasError: false };
-
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError() {
     return { hasError: true };
   }
-
   componentDidCatch(error, errorInfo) {
     console.error("Error in AssetCard:", error, errorInfo);
   }
-
   render() {
     if (this.state.hasError) {
-      return (
-        <div className="p-5 rounded-xl bg-gray-900/80 text-red-400">
-          Error rendering asset. Please try again.
-        </div>
-      );
+      return <div className="p-5 rounded-xl bg-gray-900/80 text-red-400">Error rendering asset.</div>;
     }
     return this.props.children;
   }
 }
+AssetCardErrorBoundary.propTypes = { children: PropTypes.node.isRequired };
 
-AssetCardErrorBoundary.propTypes = {
-  children: PropTypes.node.isRequired,
-};
-
-// ✅ Sparkline component (memoized for performance)
+// ✅ Sparkline Component
 const Sparkline = React.memo(({ points = [], color = "#10B981", width = 120, height = 40 }) => {
   if (!points || points.length === 0) return <svg width={width} height={height} />;
-
   const min = Math.min(...points);
   const max = Math.max(...points);
   const range = max - min || 1;
   const stride = width / Math.max(1, points.length - 1);
-
-  const coords = points.map((p, i) => {
-    const x = i * stride;
-    const y = height - ((p - min) / range) * (height - 6) - 3;
-    return `${x},${y}`;
-  });
-
+  const coords = points.map((p, i) => `${i * stride},${height - ((p - min) / range) * (height - 6) - 3}`);
   const path = `M ${coords.join(" L ")}`;
-
   return (
-    <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      className="drop-shadow-md"
-      aria-label="Price trend sparkline"
-    >
-      <defs>
-        <linearGradient id="spark" x1="0" x2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.2" />
-          <stop offset="100%" stopColor={color} stopOpacity="0.8" />
-        </linearGradient>
-      </defs>
-      <path
-        d={path}
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      <circle
-        cx={coords[coords.length - 1].split(",")[0]}
-        cy={coords[coords.length - 1].split(",")[1]}
-        r="3"
-        fill={color}
-      />
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="drop-shadow-md">
+      <path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={coords[coords.length - 1].split(",")[0]} cy={coords[coords.length - 1].split(",")[1]} r="3" fill={color} />
     </svg>
   );
 });
@@ -94,48 +51,28 @@ function makeInitialPoints(price, count = 12) {
   return points;
 }
 
-// ✅ AssetCard component with fixed logoSrc
-const AssetCard = ({ asset }) => {
-  // Define logoSrc before usage
-  const logoSrc = (url) => {
-    if (!url) return null;
-    if (/^https?:\/\//i.test(url)) return url;
-    return `${window.location.origin}${url}`;
+// ✅ AssetCard
+const AssetCard = ({ asset, onView }) => {
+  const navigate = useNavigate();
+  const handleClick = () => {
+    onView(asset);
+    navigate(`/buy-crypto/${asset.id}`);
   };
-
-  const formatCurrency = (v) => {
-    if (!v) return "—";
-    return `$${Number(v).toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  };
-
+  const logo = asset.logo_url?.startsWith("http") ? asset.logo_url : `${window.location.origin}${asset.logo_url || ""}`;
   const change = Number(asset.changePct || 0);
-  const changePositive = change >= 0;
-  const changeColor = changePositive ? "text-green-400" : "text-red-400";
-  const logo = asset.logo_url ? logoSrc(asset.logo_url) : null;
-
+  const changeColor = change >= 0 ? "text-green-400" : "text-red-400";
   return (
     <AssetCardErrorBoundary>
-      <Link
-        to={`/buy-crypto/${asset.id}`}
-        className="flex items-center justify-between p-5 rounded-xl backdrop-blur-md border border-indigo-600/20 hover:bg-gray-800/70 transition-all duration-300 shadow-lg hover:shadow-xl"
-        aria-label={`View details for ${asset.name}`}
+      <div
+        onClick={handleClick}
+        className="flex items-center justify-between p-5 rounded-xl backdrop-blur-md border border-indigo-600/20 hover:bg-gray-800/70 transition-all duration-300 shadow-lg hover:shadow-xl cursor-pointer"
       >
-        {/* Left: Logo + name */}
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 flex items-center justify-center rounded-full overflow-hidden border border-gray-700">
+          <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-700 flex items-center justify-center">
             {logo ? (
-              <img
-                src={logo}
-                alt={`${asset.name} logo`}
-                className="w-full h-full object-cover"
-              />
+              <img src={logo} alt={asset.name} className="w-full h-full object-cover" />
             ) : (
-              <span className="text-lg font-semibold text-gray-300">
-                {asset.symbol?.slice(0, 3)}
-              </span>
+              <span className="text-gray-400 font-semibold">{asset.symbol?.slice(0, 3)}</span>
             )}
           </div>
           <div>
@@ -144,146 +81,87 @@ const AssetCard = ({ asset }) => {
           </div>
         </div>
 
-        {/* Middle: Sparkline */}
         <div className="flex-shrink-0 mx-6">
-          <Sparkline
-            points={asset.points}
-            color={changePositive ? "#10B981" : "#EF4444"}
-            width={120}
-            height={40}
-          />
+          <Sparkline points={asset.points} color={change >= 0 ? "#10B981" : "#EF4444"} />
         </div>
 
-        {/* Right: Price + % */}
         <div className="text-right">
-          <div className="text-lg font-mono text-white">{formatCurrency(asset.price)}</div>
-          <div className={`text-sm font-medium ${changeColor} flex items-center gap-1`}>
-            {changePositive ? (
-              <ArrowUpRight className="w-4 h-4" />
-            ) : (
-              <ArrowDown className="w-4 h-4" />
-            )}
-            {change.toFixed(2)}%
+          <div className="text-lg font-mono text-white">${Number(asset.price).toLocaleString()}</div>
+          <div className={`text-sm font-medium flex items-center gap-1 ${changeColor}`}>
+            {change >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />} {change.toFixed(2)}%
           </div>
         </div>
-      </Link>
+      </div>
     </AssetCardErrorBoundary>
   );
 };
 
-AssetCard.propTypes = {
-  asset: PropTypes.shape({
-    id: PropTypes.string.isRequired,
-    name: PropTypes.string.isRequired,
-    symbol: PropTypes.string,
-    price: PropTypes.number,
-    changePct: PropTypes.number,
-    points: PropTypes.arrayOf(PropTypes.number),
-    logo_url: PropTypes.string,
-  }).isRequired,
-};
-
+// ✅ Assets Page
 export default function Assets() {
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [sortBy, setSortBy] = useState("name");
-  const [sortOrder, setSortOrder] = useState("asc");
+  const [search, setSearch] = useState("");
+  const [recentViewed, setRecentViewed] = useState([]);
   const retryCountRef = useRef(0);
   const maxRetries = 3;
-  const pollingIntervalRef = useRef(null);
 
-  // ✅ Fetch assets with retry logic and auth token
   const fetchAssets = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-
-      // Assuming access token is stored in localStorage after login
-      const accessToken = localStorage.getItem("accessToken");
-      const config = accessToken
-        ? { headers: { Authorization: `Bearer ${accessToken}` } }
-        : {};
-
+      const token = localStorage.getItem("accessToken");
+      const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
       const res = await client.get("/assets/", config);
       const cryptos = res.data.cryptos || [];
-
       const enriched = cryptos.map((c) => {
         const price = Number(c.price || 0);
         const points = makeInitialPoints(price, 12);
-        const first = points[0] || price || 0;
-        const last = points[points.length - 1] || price || 0;
+        const first = points[0];
+        const last = points[points.length - 1];
         const changePct = first === 0 ? 0 : ((last - first) / first) * 100;
-        return {
-          ...c,
-          price,
-          points,
-          changePct,
-          logo_url: c.logo_url || null,
-        };
+        return { ...c, price, points, changePct };
       });
-
       setAssets(enriched);
-      retryCountRef.current = 0;
     } catch (err) {
-      console.error("❌ Failed to fetch assets:", err.response?.data || err.message);
-      if (err.response?.status === 401) {
-        setError("Unauthorized. Please log in again.");
-      } else if (retryCountRef.current < maxRetries) {
+      console.error("Failed to fetch assets:", err);
+      if (retryCountRef.current < maxRetries) {
         retryCountRef.current += 1;
-        setTimeout(fetchAssets, 2000 * retryCountRef.current);
+        setTimeout(fetchAssets, 1500 * retryCountRef.current);
       } else {
-        setError("Failed to load assets. Please try again later.");
+        setError("Failed to load assets.");
       }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // ✅ Polling for pseudo-real-time updates
   useEffect(() => {
     fetchAssets();
-
-    // Poll every 30 seconds
-    pollingIntervalRef.current = setInterval(() => {
-      fetchAssets();
-    }, 30000);
-
-    return () => {
-      clearInterval(pollingIntervalRef.current);
-    };
   }, [fetchAssets]);
 
-  // ✅ Sorting logic
-  const sortedAssets = useMemo(() => {
-    return [...assets].sort((a, b) => {
-      const multiplier = sortOrder === "asc" ? 1 : -1;
-      if (sortBy === "name") return multiplier * a.name.localeCompare(b.name);
-      if (sortBy === "price") return multiplier * (a.price - b.price);
-      if (sortBy === "change") return multiplier * (a.changePct - b.changePct);
-      return 0;
-    });
-  }, [assets, sortBy, sortOrder]);
+  const filteredAssets = useMemo(() => {
+    return assets.filter(
+      (a) =>
+        a.name.toLowerCase().includes(search.toLowerCase()) ||
+        a.symbol.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [assets, search]);
 
-  // ✅ Sort handler
-  const handleSort = (key) => {
-    if (sortBy === key) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortBy(key);
-      setSortOrder("asc");
-    }
+  const handleView = (asset) => {
+    setRecentViewed((prev) => {
+      const exists = prev.find((a) => a.id === asset.id);
+      if (exists) return prev;
+      const updated = [asset, ...prev];
+      return updated.slice(0, 6);
+    });
   };
 
-  // ✅ Loading skeleton
   const renderSkeleton = () =>
     Array(5)
       .fill()
       .map((_, i) => (
-        <div
-          key={i}
-          className="flex items-center justify-between p-5 rounded-xl bg-gray-900/80 animate-pulse"
-        >
+        <div key={i} className="flex items-center justify-between p-5 rounded-xl bg-gray-900/80 animate-pulse">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-full bg-gray-700" />
             <div>
@@ -292,68 +170,64 @@ export default function Assets() {
             </div>
           </div>
           <div className="w-24 h-10 bg-gray-700 rounded" />
-          <div className="text-right">
-            <div className="h-5 w-20 bg-gray-700 rounded mb-2" />
-            <div className="h-4 w-16 bg-gray-700 rounded" />
-          </div>
         </div>
       ));
 
-  if (error) {
+  if (error)
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-indigo-900 to-gray-800 text-white pt-16">
-        <div className="max-w-5xl mx-auto p-6">
-          <p className="text-center p-6 text-red-400">{error}</p>
-          <button
-            onClick={fetchAssets}
-            className="mx-auto block px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-500"
-            aria-label="Retry loading assets"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
+      <div className="min-h-screen flex items-center justify-center text-red-400">{error}</div>
     );
-  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-indigo-900 to-gray-800 text-white pt-16">
-      <div className="max-w-5xl mx-auto p-6">
-        <h2 className="text-3xl font-bold mb-6 text-white">Supported Assets</h2>
-
-        {/* Sort Controls */}
-        <div className="flex gap-4 mb-6">
-          <button
-            onClick={() => handleSort("name")}
-            className={`px-4 py-2 rounded ${sortBy === "name" ? "bg-indigo-600" : "bg-gray-700"}`}
-            aria-label="Sort by name"
-          >
-            Name {sortBy === "name" && (sortOrder === "asc" ? "↑" : "↓")}
-          </button>
-          <button
-            onClick={() => handleSort("price")}
-            className={`px-4 py-2 rounded ${sortBy === "price" ? "bg-indigo-600" : "bg-gray-700"}`}
-            aria-label="Sort by price"
-          >
-            Price {sortBy === "price" && (sortOrder === "asc" ? "↑" : "↓")}
-          </button>
-          <button
-            onClick={() => handleSort("change")}
-            className={`px-4 py-2 rounded ${sortBy === "change" ? "bg-indigo-600" : "bg-gray-700"}`}
-            aria-label="Sort by change percentage"
-          >
-            Change {sortBy === "change" && (sortOrder === "asc" ? "↑" : "↓")}
-          </button>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-indigo-900 to-gray-800 text-white">
+      <div className="max-w-6xl mx-auto p-6 space-y-6">
+        {/* 🔍 Search Bar */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="relative w-full md:w-1/2">
+            <Search className="absolute left-3 top-3 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search assets..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-gray-800 pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+            />
+          </div>
         </div>
 
+        {/* 🌀 Recently Viewed */}
+        {recentViewed.length > 0 && (
+          <div>
+            <p className="text-sm text-gray-400 mb-2">Recently Viewed</p>
+            <div className="flex overflow-x-auto gap-4 pb-2 hide-scroll-bar">
+              {recentViewed.map((asset) => (
+                <button
+                  key={asset.id}
+                  onClick={() => (window.location.href = `/buy-crypto/${asset.id}`)}
+                  className="flex-shrink-0 flex items-center gap-2 bg-gray-800/60 px-4 py-2 rounded-full border border-gray-700 hover:bg-indigo-600/20 transition"
+                >
+                  <img
+                    src={asset.logo_url}
+                    alt={asset.name}
+                    className="w-6 h-6 rounded-full object-cover"
+                  />
+                  <span className="text-sm font-medium">{asset.symbol}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 💰 Assets List */}
+        <h2 className="text-3xl font-bold mb-4">Supported Assets</h2>
         {loading ? (
           <div className="space-y-4">{renderSkeleton()}</div>
-        ) : sortedAssets.length === 0 ? (
-          <p className="text-center p-6 text-gray-400">No assets available.</p>
+        ) : filteredAssets.length === 0 ? (
+          <p className="text-gray-400 text-center">No assets found.</p>
         ) : (
           <div className="space-y-4">
-            {sortedAssets.map((asset) => (
-              <AssetCard key={asset.id} asset={asset} />
+            {filteredAssets.map((asset) => (
+              <AssetCard key={asset.id} asset={asset} onView={handleView} />
             ))}
           </div>
         )}
