@@ -12,16 +12,24 @@ NEAR_RPC_URL = get_env_var("NEAR_RPC_URL", required=True)  # e.g., "https://rpc.
 NEAR_PRIVATE_KEY = get_env_var("NEAR_PRIVATE_KEY", required=True).strip('"')
 NEAR_ACCOUNT_ID = get_env_var("NEAR_ACCOUNT_ID", required=True)
 
-# Single event loop for the application
-loop = asyncio.get_event_loop()
 
+# ✅ SAFE EVENT LOOP RUNNER
 def run_async(coro):
-    """Run an asynchronous coroutine using the application's event loop."""
+    """Run an async coroutine safely, creating an event loop if needed."""
     try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If we're already inside a running loop (e.g., ASGI context)
+            return asyncio.ensure_future(coro)
         return loop.run_until_complete(coro)
-    except RuntimeError as e:
-        logger.error(f"Event loop error: {e}")
-        raise
+    except RuntimeError:
+        # No event loop — create one manually
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(coro)
+        loop.close()
+        return result
+
 
 def check_near_balance(account_id: str) -> float:
     """Check the NEAR balance of an account."""
@@ -46,21 +54,21 @@ def validate_near_account_id(account_id: str) -> bool:
     if not account_id:
         return False
 
-    # Check length (2 to 64 characters for both formats)
     if len(account_id) < 2 or len(account_id) > 64:
         return False
 
-    # Case 1: Implicit address (64-character hexadecimal)
+    # Case 1: Implicit address (64-character hex)
     if len(account_id) == 64 and re.match(r'^[0-9a-fA-F]{64}$', account_id):
         return True
 
-    # Case 2: Human-readable account
+    # Case 2: Human-readable
     if not all(c.isalnum() or c in ['.', '_', '-'] for c in account_id):
         return False
     if not (account_id.endswith(".near") or account_id.endswith(".tg")):
         return False
 
     return True
+
 
 def send_near(receiver_account_id: str, amount_near: float, order_id=None) -> str:
     """Send NEAR to the receiver account and return the transaction hash."""

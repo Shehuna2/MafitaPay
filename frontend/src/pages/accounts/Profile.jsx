@@ -15,7 +15,7 @@ import "react-toastify/dist/ReactToastify.css";
 // ✅ Automatically choose base URL depending on environment
 const BASE_URL = window.location.hostname.includes("localhost")
   ? "http://127.0.0.1:8000"
-  : "https://zunhub.digital";
+  : "https://mafitapay.com";
 
 export default function Profile() {
   const [user, setUser] = useState(null);

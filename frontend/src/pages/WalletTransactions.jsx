@@ -9,6 +9,7 @@ export default function WalletTransactions() {
   const [loading, setLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
   const [error, setError] = useState(null);
+  const [isScrolled, setIsScrolled] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
     category: "",
@@ -23,11 +24,18 @@ export default function WalletTransactions() {
     page: 1,
   });
 
+  // 🌀 Scroll listener for sticky bar animation
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   async function fetchTransactions(url = null) {
     if (transactions.length > 0) setReloading(true);
     else setLoading(true);
-
     setError(null);
+
     try {
       const query = new URLSearchParams(
         Object.fromEntries(Object.entries(filters).filter(([_, v]) => v))
@@ -37,11 +45,8 @@ export default function WalletTransactions() {
       const data = res.data;
 
       let items = [];
-      if (Array.isArray(data)) {
-        items = data;
-      } else if (Array.isArray(data.results)) {
-        items = data.results;
-      }
+      if (Array.isArray(data)) items = data;
+      else if (Array.isArray(data.results)) items = data.results;
 
       setTransactions(items);
       setPagination({
@@ -63,11 +68,10 @@ export default function WalletTransactions() {
     fetchTransactions();
   }, [filters]);
 
-  const handleFilterChange = (e) => {
+  const handleFilterChange = (e) =>
     setFilters({ ...filters, [e.target.name]: e.target.value });
-  };
 
-  const clearFilters = () => {
+  const clearFilters = () =>
     setFilters({
       search: "",
       category: "",
@@ -75,7 +79,6 @@ export default function WalletTransactions() {
       start_date: "",
       end_date: "",
     });
-  };
 
   const getPageNumber = (url) => {
     if (!url) return 1;
@@ -134,12 +137,22 @@ export default function WalletTransactions() {
           </button>
         </div>
 
-        {/* Sticky Filter Bar */}
+        {/* Sticky Filter Bar with scroll animation */}
         <motion.div
-          initial={{ y: -20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.4 }}
-          className="sticky top-0 z-40 bg-indigo-600/30 backdrop-blur-lg border border-indigo-600/20 rounded-xl p-6 shadow-lg"
+          initial={{ scale: 1, boxShadow: "0 0 0 rgba(0,0,0,0)" }}
+          animate={{
+            scale: isScrolled ? 0.98 : 1,
+            boxShadow: isScrolled
+              ? "0 4px 25px rgba(99,102,241,0.2)"
+              : "0 0 0 rgba(0,0,0,0)",
+            backdropFilter: "blur(12px)",
+          }}
+          transition={{ duration: 0.4, ease: "easeInOut" }}
+          className={`sticky top-0 z-40 border border-indigo-600/20 rounded-xl p-6 shadow-lg transition-all ${
+            isScrolled
+              ? "bg-indigo-600/40"
+              : "bg-indigo-600/20"
+          }`}
         >
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <input
