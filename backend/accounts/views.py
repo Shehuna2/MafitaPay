@@ -1,4 +1,5 @@
 import re
+import sys
 import logging
 
 from datetime import timedelta
@@ -174,3 +175,20 @@ class PasswordResetConfirmView(APIView):
             return Response({"message": "Password reset successfully."}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({"error": "Invalid reset token."}, status=status.HTTP_400_BAD_REQUEST)
+            
+
+class ReferralListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        referrals = request.user.referrals.all().values("email", "date_joined")
+        referral_code = request.user.referral_code
+        total_referrals = referrals.count()
+        total_bonus = total_referrals * 200  # adjust if you want dynamic bonuses
+
+        return Response({
+            "referral_code": referral_code,
+            "total_referrals": total_referrals,
+            "total_bonus": total_bonus,
+            "referred_users": list(referrals),
+        })

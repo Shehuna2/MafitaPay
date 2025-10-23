@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import WalletTransaction, Wallet
+from .models import WalletTransaction, Wallet, Notification
 
 
 class WalletTransactionSerializer(serializers.ModelSerializer):
@@ -29,3 +29,10 @@ class WalletSerializer(serializers.ModelSerializer):
             "van_bank_name",
             "van_provider",
         ]
+
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ["id", "message", "is_read", "created_at"]

@@ -11,6 +11,7 @@ export default function Navbar() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [profileImage, setProfileImage] = useState(null);
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
 
   const notificationRef = useRef(null);
   const userRef = useRef(null);
@@ -19,16 +20,61 @@ export default function Navbar() {
     ? "http://127.0.0.1:8000"
     : "https://zunhub.digital";
 
-  // ✅ Mock notifications
-  useEffect(() => {
-    setNotifications([
-      { id: 1, message: "Your P2P order has been confirmed" },
-      { id: 2, message: "New deposit offer available" },
-      { id: 3, message: "Withdrawal request approved" },
-    ]);
-  }, []);
+  // Fetch notifications from backend
+  const fetchNotifications = async () => {
+    try {
+      setLoadingNotifs(true);
+      const res = await client.get("notifications/");
+      if (import.meta.env.DEV) {
+        console.log("Notifications response:", res.data);
+      }
+      const data = Array.isArray(res.data) ? res.data : [];
+      setNotifications(data);
+    } catch (err) {
+      console.warn("Failed to fetch notifications:", err.response?.data || err.message);
+      setNotifications([]);
+    } finally {
+      setLoadingNotifs(false);
+    }
+  };
 
-  // ✅ Fetch user profile image when logged in
+  useEffect(() => {
+    if (!access) return;
+
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000);
+
+    // Listen for transaction completion to fetch notifications immediately
+    const handleTransactionCompleted = () => {
+      fetchNotifications();
+    };
+    window.addEventListener("transactionCompleted", handleTransactionCompleted);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("transactionCompleted", handleTransactionCompleted);
+    };
+  }, [access]);
+
+  // Mark as read when dropdown is opened
+  const handleToggleNotifications = async () => {
+    const newState = !showNotifications;
+    setShowNotifications(newState);
+    setShowUserMenu(false);
+
+    if (newState && notifications.some((n) => !n.is_read)) {
+      try {
+        await client.post("notifications/mark-read/");
+        setNotifications((prev) =>
+          prev.map((n) => ({ ...n, is_read: true }))
+        );
+      } catch (err) {
+        console.warn("Failed to mark notifications as read");
+      }
+    }
+  };
+
+  // Fetch profile image
   useEffect(() => {
     if (!access) return;
 
@@ -43,7 +89,7 @@ export default function Navbar() {
 
         setProfileImage(img);
         localStorage.setItem("profile_image", img);
-      } catch (err) {
+      } catch {
         console.warn("Failed to fetch profile image");
       }
     };
@@ -51,7 +97,7 @@ export default function Navbar() {
     fetchProfileImage();
   }, [access]);
 
-  // ✅ Listen for profile image update event
+  // Listen for profile updates
   useEffect(() => {
     const handleProfileImageUpdate = (e) => {
       const { profile_image } = e.detail;
@@ -61,22 +107,12 @@ export default function Navbar() {
       setProfileImage(fullUrl);
       localStorage.setItem("profile_image", fullUrl);
     };
-
     window.addEventListener("profileImageUpdated", handleProfileImageUpdate);
     return () =>
       window.removeEventListener("profileImageUpdated", handleProfileImageUpdate);
   }, []);
 
-  const unreadCount = notifications.length;
-
-  const handleLogout = () => {
-    localStorage.removeItem("access");
-    localStorage.removeItem("refresh");
-    localStorage.removeItem("profile_image");
-    navigate("/login");
-  };
-
-  // ✅ Close dropdowns on outside click
+  // Click outside close
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (
@@ -87,14 +123,21 @@ export default function Navbar() {
       setShowNotifications(false);
       setShowUserMenu(false);
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ✅ Open WhatsApp link
+  const unreadCount = Array.isArray(notifications) ? notifications.filter((n) => !n.is_read).length : 0;
+
+  const handleLogout = () => {
+    localStorage.removeItem("access");
+    localStorage.removeItem("refresh");
+    localStorage.removeItem("profile_image");
+    navigate("/login");
+  };
+
   const openWhatsApp = () => {
-    const phone = "2348168623961"; // <-- replace with your WhatsApp number
+    const phone = "2348168623961";
     const message = encodeURIComponent("Hello, I need help with ......");
     window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
   };
@@ -102,22 +145,14 @@ export default function Navbar() {
   return (
     <nav className="fixed top-0 left-0 w-full bg-gray-950/40 backdrop-blur-md border-b border-gray-800 z-50">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-        {/* Brand */}
         <Link to="/dashboard" className="text-xl font-bold text-gray-200">
           Mafita<span className="text-green-400">Pay</span>
         </Link>
 
-        {/* Right Section */}
         <div className="flex items-center gap-5 relative">
           {/* Notifications */}
           <div className="relative" ref={notificationRef}>
-            <button
-              onClick={() => {
-                setShowNotifications(!showNotifications);
-                setShowUserMenu(false);
-              }}
-              className="relative"
-            >
+            <button onClick={handleToggleNotifications} className="relative">
               <Bell
                 size={22}
                 className={`text-gray-300 hover:text-green-400 transition ${
@@ -131,7 +166,6 @@ export default function Navbar() {
               )}
             </button>
 
-            {/* Dropdown */}
             {showNotifications && (
               <div className="absolute right-0 mt-3 w-72 bg-gray-900/90 backdrop-blur-xl rounded-xl shadow-lg border border-gray-800 overflow-hidden animate-fadeIn">
                 <div className="flex justify-between items-center px-4 py-2 border-b border-gray-800">
@@ -145,12 +179,19 @@ export default function Navbar() {
                     <X size={16} />
                   </button>
                 </div>
+
                 <ul className="max-h-60 overflow-y-auto">
-                  {notifications.length > 0 ? (
+                  {loadingNotifs ? (
+                    <li className="px-4 py-3 text-sm text-gray-400 text-center">
+                      Loading...
+                    </li>
+                  ) : notifications.length > 0 ? (
                     notifications.map((n) => (
                       <li
                         key={n.id}
-                        className="px-4 py-3 text-sm text-gray-300 border-b border-gray-800 hover:bg-gray-800/60 cursor-pointer"
+                        className={`px-4 py-3 text-sm border-b border-gray-800 hover:bg-gray-800/60 cursor-pointer ${
+                          n.is_read ? "text-gray-400" : "text-gray-200"
+                        }`}
                       >
                         {n.message}
                       </li>
@@ -165,15 +206,15 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Customer Support (WhatsApp) */}
-          <button onClick={openWhatsApp} className="relative">
+          {/* WhatsApp */}
+          <button onClick={openWhatsApp}>
             <Headphones
               size={22}
-              className="text-gray-300 hover:text-green-400 cursor-pointer transition"
+              className="text-gray-300 hover:text-green-400 transition"
             />
           </button>
 
-          {/* Auth Section */}
+          {/* Auth */}
           {access ? (
             <div className="relative" ref={userRef}>
               <button
@@ -224,16 +265,10 @@ export default function Navbar() {
             </div>
           ) : (
             <div className="flex items-center gap-3">
-              <Link
-                to="/login"
-                className="text-sm text-gray-300 hover:text-green-400"
-              >
+              <Link to="/login" className="text-sm text-gray-300 hover:text-green-400">
                 Login
               </Link>
-              <Link
-                to="/register"
-                className="text-sm text-gray-300 hover:text-green-400"
-              >
+              <Link to="/register" className="text-sm text-gray-300 hover:text-green-400">
                 Register
               </Link>
             </div>

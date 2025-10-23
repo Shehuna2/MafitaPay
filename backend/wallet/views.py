@@ -9,9 +9,10 @@ from datetime import datetime
 from rest_framework import generics, permissions
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from .models import Wallet, WalletTransaction
-from .serializers import WalletTransactionSerializer, WalletSerializer
+from .models import Wallet, WalletTransaction, Notification
+from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer
 
 User = get_user_model()
 
@@ -87,3 +88,17 @@ class WalletTransactionListView(generics.ListAPIView):
             print(f"Error in get_queryset: {str(e)}")
             raise
 
+class NotificationListView(generics.ListAPIView):
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
+
+    def get_queryset(self):
+        return Notification.objects.filter(user=self.request.user)
+
+class NotificationMarkReadView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        return Response({"detail": "All notifications marked as read"})

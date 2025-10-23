@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { SiEthereum, SiGooglecloudspanner } from "react-icons/si";
 import { useMemo, useState, useEffect } from "react";
+import client from "../api/client"; // Import the Axios client
 
 export default function Layout({ children }) {
   const location = useLocation();
@@ -30,27 +31,25 @@ export default function Layout({ children }) {
     }
   }
 
-  // ✅ Fetch user profile from backend if outdated or missing
+  // Fetch user profile from backend if outdated or missing
   async function refreshUserProfile() {
     try {
       const token = localStorage.getItem("access");
       if (!token) return;
 
-      const response = await fetch("/api/profile-api/", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem("user", JSON.stringify(data));
-        localStorage.setItem("last_user_fetch", Date.now().toString());
-        setUser(data);
+      if (import.meta.env.DEV) {
+        console.log("Axios baseURL:", client.defaults.baseURL);
       }
+
+      const response = await client.get("profile-api/");
+      if (import.meta.env.DEV) {
+        console.log("Profile response:", response.data);
+      }
+      localStorage.setItem("user", JSON.stringify(response.data));
+      localStorage.setItem("last_user_fetch", Date.now().toString());
+      setUser(response.data);
     } catch (error) {
-      console.error("Profile refresh failed:", error);
+      console.error("Profile refresh failed:", error.response?.data || error.message);
     }
   }
 
@@ -130,10 +129,11 @@ export default function Layout({ children }) {
               <div key={item.label}>
                 <button
                   onClick={() => setP2POpen(!p2pOpen)}
-                  className={`flex items-center justify-between w-full px-3 py-2 rounded-lg transition ${location.pathname.startsWith("/p2p")
+                  className={`flex items-center justify-between w-full px-3 py-2 rounded-lg transition ${
+                    location.pathname.startsWith("/p2p")
                       ? "bg-indigo-600 text-white"
                       : "text-gray-400 hover:bg-gray-700 hover:text-white"
-                    }`}
+                  }`}
                 >
                   <div className="flex items-center gap-3">
                     {item.icon}
@@ -148,10 +148,11 @@ export default function Layout({ children }) {
                       <Link
                         key={child.to}
                         to={child.to}
-                        className={`block px-2 py-1.5 rounded-md text-sm transition ${location.pathname === child.to
+                        className={`block px-2 py-1.5 rounded-md text-sm transition ${
+                          location.pathname === child.to
                             ? "bg-indigo-500 text-white"
                             : "text-gray-400 hover:text-white hover:bg-gray-700"
-                          }`}
+                        }`}
                       >
                         {child.label}
                       </Link>
@@ -163,10 +164,11 @@ export default function Layout({ children }) {
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition ${location.pathname.startsWith(item.to)
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition ${
+                  location.pathname.startsWith(item.to)
                     ? "bg-indigo-600 text-white"
                     : "text-gray-400 hover:bg-gray-700 hover:text-white"
-                  }`}
+                }`}
               >
                 {item.icon}
                 <span>{item.label}</span>
@@ -185,33 +187,35 @@ export default function Layout({ children }) {
       <nav className="fixed bottom-0 left-0 w-full bg-gray-800 border-t border-gray-700 flex justify-around p-3 lg:hidden z-30">
         {location.pathname.startsWith("/p2p")
           ? p2pNavItem.children.map((child) => (
-            <Link
-              key={child.to}
-              to={child.to}
-              className={`flex flex-col items-center text-sm ${location.pathname === child.to
-                  ? "text-indigo-400"
-                  : "text-gray-400 hover:text-white"
-                }`}
-            >
-              {child.icon}
-              <span>{child.label}</span>
-            </Link>
-          ))
-          : navItems
-            .filter((item) => !item.isGroup && item.to !== "/referral")
-            .map((item) => (
               <Link
-                key={item.to}
-                to={item.to}
-                className={`flex flex-col items-center text-sm ${location.pathname.startsWith(item.to)
+                key={child.to}
+                to={child.to}
+                className={`flex flex-col items-center text-sm ${
+                  location.pathname === child.to
                     ? "text-indigo-400"
                     : "text-gray-400 hover:text-white"
-                  }`}
+                }`}
               >
-                {item.icon}
-                <span>{item.label}</span>
+                {child.icon}
+                <span>{child.label}</span>
               </Link>
-            ))}
+            ))
+          : navItems
+              .filter((item) => !item.isGroup && item.to !== "/referral")
+              .map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={`flex flex-col items-center text-sm ${
+                    location.pathname.startsWith(item.to)
+                      ? "text-indigo-400"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </Link>
+              ))}
       </nav>
     </div>
   );

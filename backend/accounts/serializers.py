@@ -66,23 +66,44 @@ class RegisterSerializer(serializers.ModelSerializer):
         password2 = validated_data.pop("password2")
         full_name = validated_data.pop("full_name", None)
         phone_number = validated_data.pop("phone_number", None)
+
+        request = self.context.get("request")
+        referral_code = None
+        if request:
+            referral_code = request.data.get("referral_code") or request.query_params.get("ref")
+
         user = User.objects.create_user(
             email=validated_data["email"],
             password=validated_data["password"],
         )
+
+        # 🔹 Handle referral
+        if referral_code:
+            try:
+                referrer = User.objects.get(referral_code=referral_code)
+                user.referred_by = referrer
+                user.save(update_fields=["referred_by"])
+                logger.info(f"{user.email} registered via referral from {referrer.email}")
+            except User.DoesNotExist:
+                logger.warning(f"Invalid referral code used: {referral_code}")
+
         verification_token = get_random_string(32)
         user.verification_token = verification_token
         user.save()
+
         profile, _ = UserProfile.objects.get_or_create(user=user)
         if full_name:
             profile.full_name = full_name
         if phone_number:
             profile.phone_number = phone_number
         profile.save()
+
         verification_url = f"{settings.BASE_URL}/api/verify-email/{verification_token}/"
-        send_verification_email.delay(user.email, verification_url, full_name=full_name)  # Correct call
+        send_verification_email.delay(user.email, verification_url, full_name=full_name)
+
         logger.debug(f"Registration completed for {user.email} in {time.time() - start_time:.2f} seconds")
         return user
+
         
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -188,3 +209,40 @@ class UserProfileSerializer(serializers.ModelSerializer):
         if value and value.size > 5 * 1024 * 1024:
             raise serializers.ValidationError("ID document must be less than 5MB.")
         return value
+
+
+class ReferralSerializer(serializers.ModelSerializer):
+    total_referrals = serializers.SerializerMethodField()
+    total_bonus = serializers.SerializerMethodField()
+    referred_users = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "email",
+            "referral_code",
+            "total_referrals",
+            "total_bonus",
+            "referred_users",
+        ]
+
+    def get_total_referrals(self, obj):
+        return obj.referrals.count()
+
+    def get_total_bonus(self, obj):
+        # If you track bonuses in wallet transactions
+        wallet = getattr(obj, "wallet", None)
+        if not wallet:
+            return 0
+        return wallet.transactions.filter(category="referral", tx_type="credit").aggregate(
+            total=models.Sum("amount")
+        )["total"] or 0
+
+    def get_referred_users(self, obj):
+        return [
+            {
+                "email": u.email,
+                "date_joined": u.date_joined,
+            }
+            for u in obj.referrals.all()
+        ]

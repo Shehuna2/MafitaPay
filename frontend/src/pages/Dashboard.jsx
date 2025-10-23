@@ -1,4 +1,3 @@
-// src/pages/Dashboard.jsx
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -59,11 +58,13 @@ export default function Dashboard() {
       const res = await client.get("wallet/", {
         params: { t: new Date().getTime() },
       });
-      console.log("Wallet fetch response:", {
-        status: res.status,
-        data: res.data,
-        timestamp: new Date().toISOString(),
-      });
+      if (import.meta.env.DEV) {
+        console.log("Wallet fetch response:", {
+          status: res.status,
+          data: JSON.stringify(res.data, null, 2),
+          timestamp: new Date().toISOString(),
+        });
+      }
       setWallet(res.data);
       setLoading(false);
       setBalanceLoading(false);
@@ -86,11 +87,13 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    console.log("Location state:", location.state, "Pathname:", location.pathname);
+    if (import.meta.env.DEV) {
+      console.log("Location:", { state: location.state, pathname: location.pathname });
+    }
     fetchWallet();
     setRecentTransaction(true); // Aggressive polling on mount to catch admin funding
 
-    let walletPollInterval = setInterval(fetchWallet, 8000);
+    let walletPollInterval = setInterval(fetchWallet, 10000); // Adjusted to 10 seconds for efficiency
 
     const fromTransactionRoute =
       transactionRoutes.some((route) => location.pathname.startsWith(route)) ||
@@ -101,14 +104,13 @@ export default function Dashboard() {
       setRecentTransaction(true);
       toast.success("Transaction processed! Updating balance...");
       fetchWallet();
-    }
-
-    if (recentTransaction) {
+      // Dispatch event to trigger notification fetch in Navbar
+      window.dispatchEvent(new Event("transactionCompleted"));
       clearInterval(walletPollInterval);
-      walletPollInterval = setInterval(fetchWallet, 3000); // Poll every 3 seconds
+      walletPollInterval = setInterval(fetchWallet, 5000); // Aggressive polling every 5 seconds
       setTimeout(() => {
         clearInterval(walletPollInterval);
-        walletPollInterval = setInterval(fetchWallet, 8000); // Revert to 8 seconds
+        walletPollInterval = setInterval(fetchWallet, 10000); // Revert to 10 seconds
         setRecentTransaction(false);
       }, 30000); // Stop aggressive polling after 30 seconds
     }
@@ -127,75 +129,75 @@ export default function Dashboard() {
     setShowDepositModal(false);
     setRecentTransaction(true);
     fetchWallet();
+    // Dispatch event to trigger notification fetch in Navbar
+    window.dispatchEvent(new Event("transactionCompleted"));
   };
 
   if (loading) {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white px-4 py-10">
-      {/* Shimmer animation keyframes */}
-      <style>{`
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-        .shimmer {
-          background: linear-gradient(
-            110deg,
-            rgba(55, 65, 81, 0.3) 8%,
-            rgba(147, 197, 253, 0.2) 18%,
-            rgba(55, 65, 81, 0.3) 33%
-          );
-          background-size: 200% 100%;
-          animation: shimmer 2.2s infinite linear;
-        }
-      `}</style>
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white px-4 py-10">
+        {/* Shimmer animation keyframes */}
+        <style>{`
+          @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+          .shimmer {
+            background: linear-gradient(
+              110deg,
+              rgba(55, 65, 81, 0.3) 8%,
+              rgba(147, 197, 253, 0.2) 18%,
+              rgba(55, 65, 81, 0.3) 33%
+            );
+            background-size: 200% 100%;
+            animation: shimmer 2.2s infinite linear;
+          }
+        `}</style>
 
-      {/* Wallet Card Skeleton */}
-      <div className="w-full max-w-3xl bg-gray-800/80 rounded-2xl p-8 shadow-xl border border-gray-700">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-6 h-6 bg-gray-700 rounded-full shimmer"></div>
-            <div className="h-5 w-32 rounded shimmer"></div>
+        {/* Wallet Card Skeleton */}
+        <div className="w-full max-w-3xl bg-gray-800/80 rounded-2xl p-8 shadow-xl border border-gray-700">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 bg-gray-700 rounded-full shimmer"></div>
+              <div className="h-5 w-32 rounded shimmer"></div>
+            </div>
+            <div className="flex gap-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="w-8 h-8 rounded-full shimmer"></div>
+              ))}
+            </div>
           </div>
-          <div className="flex gap-3">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="w-8 h-8 rounded-full shimmer"></div>
-            ))}
+
+          <div className="h-12 rounded-lg mb-3 w-2/3 md:w-1/2 shimmer"></div>
+          <div className="h-4 rounded w-1/4 mb-8 shimmer"></div>
+
+          <div className="flex justify-start md:justify-end gap-4">
+            <div className="h-12 w-12 rounded-full shimmer"></div>
+            <div className="h-12 w-12 rounded-full shimmer"></div>
           </div>
         </div>
 
-        <div className="h-12 rounded-lg mb-3 w-2/3 md:w-1/2 shimmer"></div>
-        <div className="h-4 rounded w-1/4 mb-8 shimmer"></div>
-
-        <div className="flex justify-start md:justify-end gap-4">
-          <div className="h-12 w-12 rounded-full shimmer"></div>
-          <div className="h-12 w-12 rounded-full shimmer"></div>
+        {/* Service Grid Skeleton */}
+        <div className="w-full max-w-5xl mt-10 px-2 sm:px-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
+            {Array(8)
+              .fill()
+              .map((_, i) => (
+                <div
+                  key={i}
+                  className="h-24 sm:h-28 rounded-xl border border-gray-700 shimmer"
+                ></div>
+              ))}
+          </div>
         </div>
+
+        {/* Loading Text */}
+        <p className="text-gray-400 mt-10 text-sm md:text-base animate-pulse text-center">
+          Fetching your wallet data securely...
+        </p>
       </div>
-
-      {/* Service Grid Skeleton */}
-      <div className="w-full max-w-5xl mt-10 px-2 sm:px-6">
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
-          {Array(8)
-            .fill()
-            .map((_, i) => (
-              <div
-                key={i}
-                className="h-24 sm:h-28 rounded-xl border border-gray-700 shimmer"
-              ></div>
-            ))}
-        </div>
-      </div>
-
-      {/* Loading Text */}
-      <p className="text-gray-400 mt-10 text-sm md:text-base animate-pulse text-center">
-        Fetching your wallet data securely...
-      </p>
-    </div>
-  );
-}
-
-
+    );
+  }
 
   const renderBalance = () => {
     if (!showBalance) {
@@ -323,6 +325,8 @@ export default function Dashboard() {
                 onClick={() => {
                   toast.info("Processing transaction...");
                   setRecentTransaction(true);
+                  // Dispatch event to trigger notification fetch in Navbar
+                  window.dispatchEvent(new Event("transactionCompleted"));
                 }}
               >
                 {action.icon}

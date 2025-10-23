@@ -5,6 +5,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from wallet.models import Wallet
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class CustomUserManager(BaseUserManager):
             raise ValueError("Superuser must have is_superuser=True.")
         return self.create_user(email, password, **extra_fields)
 
+
 class User(AbstractUser):
     username = None
     email = models.EmailField(unique=True)
@@ -38,14 +40,29 @@ class User(AbstractUser):
     reset_token_expiry = models.DateTimeField(null=True, blank=True)  
     two_factor_code = models.CharField(max_length=6, blank=True, null=True)
 
+    # 🔹 New fields
+    referral_code = models.CharField(max_length=10, unique=True, blank=True, null=True)
+    referred_by = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="referrals"
+    )
+
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
     objects = CustomUserManager()
 
+    def save(self, *args, **kwargs):
+        # Generate referral code if missing
+        if not self.referral_code:
+            base_code = self.username[:3].upper() if self.username else "MAF"
+            unique_part = uuid.uuid4().hex[:5].upper()
+            self.referral_code = f"{base_code}{unique_part}"
+        super().save(*args, **kwargs)
+
     def __str__(self):
         role = "Merchant" if self.is_merchant else "Regular User"
         return f"{self.email} - {role}"
+        
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
