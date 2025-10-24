@@ -36,7 +36,6 @@ export default function Dashboard() {
   const [wallet, setWallet] = useState(null);
   const [loading, setLoading] = useState(true);
   const [balanceLoading, setBalanceLoading] = useState(false);
-  const [recentTransaction, setRecentTransaction] = useState(false);
   const [showBalance, setShowBalance] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [currentEventIndex, setCurrentEventIndex] = useState(0);
@@ -52,12 +51,10 @@ export default function Dashboard() {
     "/referral",
   ];
 
-  const fetchWallet = async (retryCount = 0, maxRetries = 5) => {
+  const fetchWallet = async () => {
     setBalanceLoading(true);
     try {
-      const res = await client.get("wallet/", {
-        params: { t: new Date().getTime() },
-      });
+      const res = await client.get("wallet/");
       if (import.meta.env.DEV) {
         console.log("Wallet fetch response:", {
           status: res.status,
@@ -75,25 +72,14 @@ export default function Dashboard() {
         message: err.message,
         timestamp: new Date().toISOString(),
       });
-      if (retryCount < maxRetries && err.response?.status !== 401) {
-        console.log(`Retrying wallet fetch (${retryCount + 1}/${maxRetries})...`);
-        setTimeout(() => fetchWallet(retryCount + 1, maxRetries), 1000);
-      } else {
-        toast.error("Failed to load wallet data. Please try again.");
-        setLoading(false);
-        setBalanceLoading(false);
-      }
+      toast.error("Failed to load wallet data. Please try again.");
+      setLoading(false);
+      setBalanceLoading(false);
     }
   };
 
   useEffect(() => {
-    if (import.meta.env.DEV) {
-      console.log("Location:", { state: location.state, pathname: location.pathname });
-    }
     fetchWallet();
-    setRecentTransaction(true); // Aggressive polling on mount to catch admin funding
-
-    let walletPollInterval = setInterval(fetchWallet, 10000); // Adjusted to 10 seconds for efficiency
 
     const fromTransactionRoute =
       transactionRoutes.some((route) => location.pathname.startsWith(route)) ||
@@ -101,19 +87,20 @@ export default function Dashboard() {
       location.state?.fromTransaction;
 
     if (fromTransactionRoute) {
-      setRecentTransaction(true);
       toast.success("Transaction processed! Updating balance...");
       fetchWallet();
-      // Dispatch event to trigger notification fetch in Navbar
       window.dispatchEvent(new Event("transactionCompleted"));
-      clearInterval(walletPollInterval);
-      walletPollInterval = setInterval(fetchWallet, 5000); // Aggressive polling every 5 seconds
-      setTimeout(() => {
-        clearInterval(walletPollInterval);
-        walletPollInterval = setInterval(fetchWallet, 10000); // Revert to 10 seconds
-        setRecentTransaction(false);
-      }, 30000); // Stop aggressive polling after 30 seconds
     }
+
+    // Poll wallet every 15 seconds (aligned with Layout.jsx)
+    const walletPollInterval = setInterval(fetchWallet, 15000);
+
+    // Event listener for transaction updates
+    const handleTransactionCompleted = () => {
+      fetchWallet();
+      toast.info("Transaction detected, refreshing balance...");
+    };
+    window.addEventListener("transactionCompleted", handleTransactionCompleted);
 
     const eventInterval = setInterval(() => {
       setCurrentEventIndex((prevIndex) => (prevIndex === 2 ? 0 : prevIndex + 1));
@@ -122,21 +109,19 @@ export default function Dashboard() {
     return () => {
       clearInterval(walletPollInterval);
       clearInterval(eventInterval);
+      window.removeEventListener("transactionCompleted", handleTransactionCompleted);
     };
   }, [location]);
 
   const handleCloseDepositModal = () => {
     setShowDepositModal(false);
-    setRecentTransaction(true);
     fetchWallet();
-    // Dispatch event to trigger notification fetch in Navbar
     window.dispatchEvent(new Event("transactionCompleted"));
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white px-4 py-10">
-        {/* Shimmer animation keyframes */}
         <style>{`
           @keyframes shimmer {
             0% { background-position: -200% 0; }
@@ -153,8 +138,6 @@ export default function Dashboard() {
             animation: shimmer 2.2s infinite linear;
           }
         `}</style>
-
-        {/* Wallet Card Skeleton */}
         <div className="w-full max-w-3xl bg-gray-800/80 rounded-2xl p-8 shadow-xl border border-gray-700">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
             <div className="flex items-center gap-3">
@@ -167,17 +150,13 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
-
           <div className="h-12 rounded-lg mb-3 w-2/3 md:w-1/2 shimmer"></div>
           <div className="h-4 rounded w-1/4 mb-8 shimmer"></div>
-
           <div className="flex justify-start md:justify-end gap-4">
             <div className="h-12 w-12 rounded-full shimmer"></div>
             <div className="h-12 w-12 rounded-full shimmer"></div>
           </div>
         </div>
-
-        {/* Service Grid Skeleton */}
         <div className="w-full max-w-5xl mt-10 px-2 sm:px-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
             {Array(8)
@@ -190,8 +169,6 @@ export default function Dashboard() {
               ))}
           </div>
         </div>
-
-        {/* Loading Text */}
         <p className="text-gray-400 mt-10 text-sm md:text-base animate-pulse text-center">
           Fetching your wallet data securely...
         </p>
@@ -324,8 +301,7 @@ export default function Dashboard() {
                 className="flex flex-col items-center justify-center hover:bg-gray-700 p-4 rounded-lg transition"
                 onClick={() => {
                   toast.info("Processing transaction...");
-                  setRecentTransaction(true);
-                  // Dispatch event to trigger notification fetch in Navbar
+                  fetchWallet();
                   window.dispatchEvent(new Event("transactionCompleted"));
                 }}
               >

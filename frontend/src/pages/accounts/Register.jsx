@@ -1,6 +1,6 @@
 // File: src/pages/Register.jsx
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import client from "../../api/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast, ToastContainer } from "react-toastify";
@@ -9,9 +9,25 @@ import "react-toastify/dist/ReactToastify.css";
 
 export default function Register() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: "", password: "", password2: "", full_name: "", phone_number: "" });
+  const location = useLocation();
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+    password2: "",
+    full_name: "",
+    phone_number: "",
+    referral_code: "",
+  });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const ref = params.get("ref");
+    if (ref) {
+      setForm((prev) => ({ ...prev, referral_code: ref }));
+    }
+  }, [location.search]);
 
   useEffect(() => {
     const token = localStorage.getItem("access");
@@ -28,25 +44,35 @@ export default function Register() {
     setLoading(true);
     try {
       const res = await client.post("register/", form);
-      toast.success("Registration successful! Please check your email to verify your account.", {
-        position: "top-right",
-        autoClose: 3000,
-      });
-
-      // redirect to verify page
-      setTimeout(() => navigate("/verify-email", { state: { email: form.email } }), 0);
-
+      // If backend returns tokens, store them
+      if (res.data.access && res.data.refresh) {
+        localStorage.setItem("access", res.data.access);
+        localStorage.setItem("refresh", res.data.refresh);
+        toast.success("Registration successful! Redirecting to dashboard...", {
+          position: "top-right",
+          autoClose: 3000,
+        });
+        setTimeout(() => navigate("/dashboard"), 3000);
+      } else {
+        toast.success("Registration successful! Please check your email to verify your account.", {
+          position: "top-right",
+          autoClose: 3000,
+        });
+        setTimeout(() => navigate("/verify-email", { state: { email: form.email } }), 3000);
+      }
     } catch (err) {
       console.error("❌ Registration error:", err.response?.data || err.message);
       const errors = err.response?.data?.errors || {};
-      setError(
+      const errorMessage =
         errors.email?.[0] ||
         errors.password?.[0] ||
         errors.password2?.[0] ||
         errors.phone_number?.[0] ||
+        errors.referral_code?.[0] ||
         err.response?.data?.detail ||
-        "Registration failed"
-      );
+        "Registration failed";
+      toast.error(errorMessage, { position: "top-right", autoClose: 3000 });
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -123,6 +149,16 @@ export default function Register() {
               required={true}
               placeholder="Whatsapp Number (e.g., +2341234567890)"
               value={form.phone_number}
+              onChange={handleChange}
+              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
+            />
+          </motion.div>
+          <motion.div variants={inputVariants}>
+            <input
+              name="referral_code"
+              type="text"
+              placeholder="Referral Code (optional)"
+              value={form.referral_code}
               onChange={handleChange}
               className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
             />

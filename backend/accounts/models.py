@@ -54,9 +54,16 @@ class User(AbstractUser):
     def save(self, *args, **kwargs):
         # Generate referral code if missing
         if not self.referral_code:
-            base_code = self.username[:3].upper() if self.username else "MAF"
-            unique_part = uuid.uuid4().hex[:5].upper()
-            self.referral_code = f"{base_code}{unique_part}"
+            base_code = "MAF"  # Since username is always None
+            max_attempts = 10  # Prevent infinite loops
+            for _ in range(max_attempts):
+                unique_part = uuid.uuid4().hex[:5].upper()
+                referral_code = f"{base_code}{unique_part}"
+                if not User.objects.filter(referral_code=referral_code).exists():
+                    self.referral_code = referral_code
+                    break
+            else:
+                raise ValueError("Unable to generate a unique referral code after multiple attempts")
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -94,8 +101,7 @@ def manage_user_profile(sender, instance, created, **kwargs):
 @receiver(post_save, sender=User)
 def create_wallet_for_new_user(sender, instance, created, **kwargs):
     if created:
-        wallet, created_wallet = Wallet.objects.get_or_create(user=instance, defaults={'balance': 200})
+        wallet, created_wallet = Wallet.objects.get_or_create(user=instance, defaults={'balance': 0})
         if created_wallet:
-            wallet.balance = 200
             wallet.save()
-            logger.info(f"Wallet created with ₦200 bonus for {instance.email}")
+            logger.info(f"Wallet created for {instance.email}")

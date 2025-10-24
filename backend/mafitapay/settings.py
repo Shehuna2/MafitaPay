@@ -78,6 +78,10 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')  # Use app password for G
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
 FRONTEND_URL = 'http://localhost:5173'  # Update for production
 
+REFERRER_BONUS = "200.00"
+NEW_USER_BONUS = "100.00"
+NON_REFERRED_BONUS = "0.00"  # No bonus for non-referred users
+
 
 
 # JWT settings

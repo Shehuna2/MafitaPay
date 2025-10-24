@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { SiEthereum, SiGooglecloudspanner } from "react-icons/si";
 import { useMemo, useState, useEffect } from "react";
-import client from "../api/client"; // Import the Axios client
+import client from "../api/client";
 
 export default function Layout({ children }) {
   const location = useLocation();
@@ -31,7 +31,6 @@ export default function Layout({ children }) {
     }
   }
 
-  // Fetch user profile from backend if outdated or missing
   async function refreshUserProfile() {
     try {
       const token = localStorage.getItem("access");
@@ -44,6 +43,10 @@ export default function Layout({ children }) {
       const response = await client.get("profile-api/");
       if (import.meta.env.DEV) {
         console.log("Profile response:", response.data);
+        console.log("User is_staff:", response.data.is_staff);
+      }
+      if (typeof response.data.is_staff === "undefined") {
+        console.warn("Profile response missing is_staff field");
       }
       localStorage.setItem("user", JSON.stringify(response.data));
       localStorage.setItem("last_user_fetch", Date.now().toString());
@@ -55,19 +58,28 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     const lastFetch = parseInt(localStorage.getItem("last_user_fetch") || "0");
-    const minutesSinceLastFetch = (Date.now() - lastFetch) / 60000;
-
-    // Fetch on mount if user is missing or data is stale
-    if (!user || minutesSinceLastFetch > 2) {
+    const now = Date.now();
+    if (now - lastFetch > 5 * 60 * 1000) {
       refreshUserProfile();
     }
+    // Force refresh on mount to ensure latest user data
+    refreshUserProfile();
 
-    // Also listen for userUpdated events
-    const handleUserUpdate = () => setUser(getStoredUser());
+    // Poll every 15 seconds to catch role changes
+    const interval = setInterval(refreshUserProfile, 15000);
+
+    const handleUserUpdate = () => {
+      const updatedUser = getStoredUser();
+      if (import.meta.env.DEV) {
+        console.log("User updated via event:", updatedUser);
+      }
+      setUser(updatedUser);
+    };
     window.addEventListener("userUpdated", handleUserUpdate);
     window.addEventListener("storage", handleUserUpdate);
 
     return () => {
+      clearInterval(interval);
       window.removeEventListener("userUpdated", handleUserUpdate);
       window.removeEventListener("storage", handleUserUpdate);
     };
@@ -78,6 +90,9 @@ export default function Layout({ children }) {
   }, [location.pathname]);
 
   const navItems = useMemo(() => {
+    if (import.meta.env.DEV) {
+      console.log("Nav items computed with user:", user);
+    }
     const items = [
       { to: "/dashboard", label: "Home", icon: <Home className="w-6 h-6" /> },
       {
@@ -100,7 +115,12 @@ export default function Layout({ children }) {
       { to: "/sell-crypto", label: "Sell", icon: <Banknote className="w-6 h-6" /> },
       { to: "/referral", label: "Referral", icon: <Users className="w-6 h-6" /> },
       { to: "/settings", label: "Settings", icon: <Settings className="w-6 h-6" /> },
-      { to: "/admin/sell-orders", label: "Admin", icon: <SiGooglecloudspanner className="w-6 h-6" /> },
+      {
+        to: "/admin/sell-orders",
+        label: "Admin",
+        icon: <SiGooglecloudspanner className="w-6 h-6" />,
+        adminOnly: true,
+      },
     ];
 
     return items.map((item) => {
@@ -113,14 +133,15 @@ export default function Layout({ children }) {
         };
       }
       return item;
-    });
+    }).filter(
+      (item) => !item.adminOnly || user?.is_staff
+    );
   }, [user]);
 
   const p2pNavItem = navItems.find((item) => item.label === "P2P Market");
 
   return (
     <div className="flex min-h-screen bg-gray-900 text-white">
-      {/* Sidebar */}
       <aside className="hidden lg:flex flex-col w-60 bg-gray-800 border-r border-gray-700 p-4 fixed top-0 left-0 h-screen overflow-y-auto">
         <h1 className="text-xl font-bold mb-10 mt-2">Zunhub</h1>
         <nav className="space-y-2">
@@ -141,7 +162,6 @@ export default function Layout({ children }) {
                   </div>
                   {p2pOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 </button>
-
                 {p2pOpen && (
                   <div className="ml-8 mt-2 space-y-1">
                     {item.children.map((child) => (
@@ -177,13 +197,9 @@ export default function Layout({ children }) {
           )}
         </nav>
       </aside>
-
-      {/* Main content */}
       <div className="flex-1 lg:ml-60 flex flex-col">
         <main className="flex-1">{children || <Outlet />}</main>
       </div>
-
-      {/* Mobile nav */}
       <nav className="fixed bottom-0 left-0 w-full bg-gray-800 border-t border-gray-700 flex justify-around p-3 lg:hidden z-30">
         {location.pathname.startsWith("/p2p")
           ? p2pNavItem.children.map((child) => (

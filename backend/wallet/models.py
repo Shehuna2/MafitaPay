@@ -114,12 +114,12 @@ class Wallet(models.Model):
         return f"{self.user.email} - Balance: ₦{self.balance}, Locked: ₦{self.locked_balance}"
 
 
-    @receiver(post_save, sender=settings.AUTH_USER_MODEL)
-    def create_wallet(sender, instance, created, **kwargs):
-        """Automatically create a wallet and assign a PalmPay VAN on signup"""
-        if created:
-            wallet = Wallet.objects.create(user=instance, balance=200.00)
-            logger.info(f"Wallet created with ₦200 bonus for {instance.email}")
+    # @receiver(post_save, sender=settings.AUTH_USER_MODEL)
+    # def create_wallet(sender, instance, created, **kwargs):
+    #     """Automatically create a wallet and assign a PalmPay VAN on signup"""
+    #     if created:
+    #         wallet = Wallet.objects.create(user=instance)
+    #         logger.info(f"Wallet created for {instance.email}")
 
 
 class WalletTransaction(models.Model):

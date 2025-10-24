@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import client from "../api/client";
 import { Copy, Users } from "lucide-react";
 
 export default function Referral() {
@@ -9,13 +9,22 @@ export default function Referral() {
   useEffect(() => {
     const fetchReferralData = async () => {
       try {
-        const token = localStorage.getItem("access"); // adjust if needed
-        const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/referrals/`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const token = localStorage.getItem("access");
+        console.log("Access Token:", token);
+        if (!token) {
+          throw new Error("No access token found");
+        }
+        console.log("API URL:", `${client.defaults.baseURL}/referrals/`);
+        const res = await client.get("/referrals/");
+        console.log("API Response:", res.data);
         setData(res.data);
+        console.log("Set Data:", res.data);
       } catch (err) {
-        console.error("Error fetching referral data:", err);
+        console.error("Error fetching referral data:", {
+          message: err.message,
+          response: err.response?.data,
+          status: err.response?.status,
+        });
         setData({ referral_code: null, total_referrals: 0, total_bonus: 0, referred_users: [] });
       }
     };
@@ -30,12 +39,56 @@ export default function Referral() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (!data)
+  if (!data) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400">
-        Loading referral data...
+      <div className="bg-gray-900 text-white p-6 rounded-2xl shadow-lg space-y-6">
+        {/* Header Skeleton */}
+        <div className="space-y-3">
+          <div className="h-8 w-1/3 skeleton rounded"></div>
+          <div className="h-5 w-2/3 skeleton rounded"></div>
+        </div>
+
+        {/* Referral Code Section Skeleton */}
+        <div className="mt-4 p-4 bg-gray-800 rounded-xl flex justify-between items-center">
+          <div className="space-y-2">
+            <div className="h-4 w-24 skeleton rounded"></div>
+            <div className="h-6 w-32 skeleton rounded"></div>
+          </div>
+          <div className="h-10 w-28 skeleton rounded-lg"></div>
+        </div>
+
+        {/* Referral Stats Skeleton */}
+        <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="bg-gray-800 p-4 rounded-xl text-center space-y-2">
+            <div className="h-4 w-20 mx-auto skeleton rounded"></div>
+            <div className="h-8 w-16 mx-auto skeleton rounded"></div>
+          </div>
+          <div className="bg-gray-800 p-4 rounded-xl text-center space-y-2">
+            <div className="h-4 w-20 mx-auto skeleton rounded"></div>
+            <div className="h-8 w-16 mx-auto skeleton rounded"></div>
+          </div>
+        </div>
+
+        {/* Referred Users List Skeleton */}
+        <div className="mt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="h-5 w-5 skeleton rounded-full"></div>
+            <div className="h-5 w-28 skeleton rounded"></div>
+          </div>
+          <div className="space-y-2">
+            <div className="bg-gray-800 p-3 rounded-xl flex justify-between">
+              <div className="h-4 w-1/2 skeleton rounded"></div>
+              <div className="h-4 w-1/4 skeleton rounded"></div>
+            </div>
+            <div className="bg-gray-800 p-3 rounded-xl flex justify-between">
+              <div className="h-4 w-1/2 skeleton rounded"></div>
+              <div className="h-4 w-1/4 skeleton rounded"></div>
+            </div>
+          </div>
+        </div>
       </div>
     );
+  }
 
   const referredUsers = data.referred_users || [];
 

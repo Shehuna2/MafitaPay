@@ -1,22 +1,18 @@
+# backend/accounts/serializers.py
 import re
 import time
 import logging
-
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils.crypto import get_random_string
 from django.contrib.auth import get_user_model, authenticate
-
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
-
 from .models import UserProfile
 from .tasks import send_verification_email
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
-
-
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -28,10 +24,11 @@ class RegisterSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(write_only=True)
     full_name = serializers.CharField(max_length=100, required=False)
     phone_number = serializers.CharField(max_length=15, required=False)
+    referral_code = serializers.CharField(max_length=10, required=False)
 
     class Meta:
         model = User
-        fields = ["email", "password", "password2", "full_name", "phone_number"]
+        fields = ["email", "password", "password2", "full_name", "phone_number", "referral_code"]
 
     def validate_email(self, value):
         value = value.lower().strip()
@@ -55,6 +52,17 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Phone number must be 10-15 digits, optionally starting with '+'.")
         return value
 
+    def validate_referral_code(self, value):
+        if not value:
+            return value
+        try:
+            referrer = User.objects.get(referral_code=value)
+            if referrer.email == self.initial_data.get("email", "").lower().strip():
+                raise serializers.ValidationError("You cannot use your own referral code.")
+            return value
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Invalid referral code.")
+
     def validate(self, data):
         if data["password"] != data["password2"]:
             raise serializers.ValidationError({"password2": "Passwords do not match."})
@@ -66,26 +74,24 @@ class RegisterSerializer(serializers.ModelSerializer):
         password2 = validated_data.pop("password2")
         full_name = validated_data.pop("full_name", None)
         phone_number = validated_data.pop("phone_number", None)
-
-        request = self.context.get("request")
-        referral_code = None
-        if request:
-            referral_code = request.data.get("referral_code") or request.query_params.get("ref")
+        referral_code = validated_data.pop("referral_code", None)
 
         user = User.objects.create_user(
             email=validated_data["email"],
             password=validated_data["password"],
         )
 
-        # 🔹 Handle referral
         if referral_code:
             try:
                 referrer = User.objects.get(referral_code=referral_code)
                 user.referred_by = referrer
-                user.save(update_fields=["referred_by"])
+                user.save(update_fields=["referred_by", "referral_code"])
                 logger.info(f"{user.email} registered via referral from {referrer.email}")
             except User.DoesNotExist:
                 logger.warning(f"Invalid referral code used: {referral_code}")
+                user.save(update_fields=["referral_code"])
+        else:
+            user.save(update_fields=["referral_code"])
 
         verification_token = get_random_string(32)
         user.verification_token = verification_token
@@ -104,7 +110,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         logger.debug(f"Registration completed for {user.email} in {time.time() - start_time:.2f} seconds")
         return user
 
-        
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
@@ -118,20 +123,17 @@ class LoginSerializer(serializers.Serializer):
         request = self.context.get("request")
         logger.debug(f"Attempting login with email: {email}")
 
-        # Check if user exists
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
             logger.error(f"User with email {email} does not exist")
             raise serializers.ValidationError({"detail": "No account found with this email."})
 
-        # Authenticate user
         user = authenticate(request=request, email=email, password=password)
         if not user:
             logger.error(f"Authentication failed for email: {email}")
             raise serializers.ValidationError({"detail": "Invalid email or password."})
 
-        # Check email verification
         if not user.is_email_verified:
             logger.warning(f"Unverified email attempted login: {email}")
             raise serializers.ValidationError({
@@ -139,13 +141,12 @@ class LoginSerializer(serializers.Serializer):
                 "action": "resend_verification"
             })
 
-        # Handle 2FA if enabled
         if user.two_factor_enabled and not two_factor_code:
             two_factor_code = get_random_string(6, allowed_chars="0123456789")
             user.two_factor_code = two_factor_code
             user.save()
             send_mail(
-                subject="Zunhub 2FA Code",
+                subject="MafitaPay 2FA Code",
                 message=f"Your 2FA code is: {two_factor_code}",
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
@@ -155,7 +156,6 @@ class LoginSerializer(serializers.Serializer):
         if user.two_factor_enabled and two_factor_code != user.two_factor_code:
             raise serializers.ValidationError({"two_factor_code": "Invalid 2FA code."})
 
-        # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
         refresh_token = str(refresh)
         access_token = str(refresh.access_token)
@@ -178,6 +178,7 @@ class LoginSerializer(serializers.Serializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", read_only=True)
     is_merchant = serializers.BooleanField(source="user.is_merchant", read_only=True)
+    is_staff = serializers.BooleanField(source="user.is_staff", read_only=True)
     profile_image = serializers.ImageField(allow_null=True, required=False)
     id_document = serializers.FileField(allow_null=True, required=False)
 
@@ -186,7 +187,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = [
             "email", "is_merchant", "full_name", "phone_number", "date_of_birth",
             "account_no", "bank_name", "total_trades", "successful_trades",
-            "success_rate", "profile_image", "id_document"
+            "success_rate", "profile_image", "id_document", "is_staff"
         ]
         read_only_fields = ["total_trades", "successful_trades", "success_rate"]
 
@@ -210,6 +211,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("ID document must be less than 5MB.")
         return value
 
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        logger.debug(f"Profile serialized for {ret['email']}: is_staff={ret['is_staff']}")
+        return ret
 
 class ReferralSerializer(serializers.ModelSerializer):
     total_referrals = serializers.SerializerMethodField()
@@ -230,7 +235,6 @@ class ReferralSerializer(serializers.ModelSerializer):
         return obj.referrals.count()
 
     def get_total_bonus(self, obj):
-        # If you track bonuses in wallet transactions
         wallet = getattr(obj, "wallet", None)
         if not wallet:
             return 0

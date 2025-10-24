@@ -21,7 +21,7 @@ class UserProfileAdmin(admin.ModelAdmin):
 
 class CustomUserAdmin(UserAdmin):
     model = User
-    list_display = ('email', 'is_merchant', 'is_staff', 'is_superuser')
+    list_display = ('email', 'is_merchant', 'is_staff', 'is_superuser', 'referral_code', 'referred_by')
     list_filter = ('is_merchant', 'is_staff', 'is_superuser')
     search_fields = ('email',)
     ordering = ('email',)

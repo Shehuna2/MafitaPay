@@ -428,7 +428,6 @@ class AdminUpdateSellOrderAPI(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request, order_id):
-        """Admin approves, cancels, or reverses a sell order."""
         order = get_object_or_404(AssetSellOrder, order_id=order_id)
         new_status = request.data.get("status")
 
@@ -438,12 +437,18 @@ class AdminUpdateSellOrderAPI(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # ✅ Handle approve
+        # Create notification
+        def create_notification(message):
+            Notification.objects.create(
+                user=order.user,
+                message=message,
+                is_read=False
+            )
+
         if new_status == "completed" and order.status == "proof_submitted":
             try:
                 with transaction.atomic():
                     wallet = Wallet.objects.select_for_update().get(user=order.user)
-
                     balance_before = wallet.balance
                     wallet.balance += order.amount_ngn
                     wallet.save(update_fields=["balance"])
@@ -463,16 +468,17 @@ class AdminUpdateSellOrderAPI(APIView):
 
                     order.status = "completed"
                     order.save(update_fields=["status", "updated_at"])
+                    create_notification(f"Sell order {order.order_id} approved and wallet credited.")
+                return Response(
+                    {"success": True, "message": "Order approved and wallet credited"},
+                    status=status.HTTP_200_OK,
+                )
             except Exception as e:
                 logger.error(f"Failed to credit wallet for order {order.order_id}: {e}", exc_info=True)
                 return Response(
                     {"success": False, "message": "Error crediting wallet"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
-            return Response(
-                {"success": True, "message": "Order approved and wallet credited"},
-                status=status.HTTP_200_OK,
-            )
 
         # ✅ Handle cancel
         elif new_status == "cancelled" and order.status in ["pending_payment", "proof_submitted"]:
