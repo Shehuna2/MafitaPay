@@ -176,18 +176,24 @@ class LoginSerializer(serializers.Serializer):
         }
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    full_name = serializers.CharField(source="user.profile.full_name", allow_blank=True, required=False)
+    phone_number = serializers.CharField(source="user.profile.phone_number", allow_blank=True, required=False)
+    date_of_birth = serializers.DateField(source="user.profile.date_of_birth", allow_null=True, required=False)
+    account_no = serializers.CharField(source="user.profile.account_no", allow_blank=True, required=False)
+    bank_name = serializers.CharField(source="user.profile.bank_name", allow_blank=True, required=False)
     email = serializers.EmailField(source="user.email", read_only=True)
     is_merchant = serializers.BooleanField(source="user.is_merchant", read_only=True)
     is_staff = serializers.BooleanField(source="user.is_staff", read_only=True)
     profile_image = serializers.ImageField(allow_null=True, required=False)
     id_document = serializers.FileField(allow_null=True, required=False)
+    id = serializers.IntegerField(source="user.id", read_only=True)
 
     class Meta:
         model = UserProfile
         fields = [
             "email", "is_merchant", "full_name", "phone_number", "date_of_birth",
             "account_no", "bank_name", "total_trades", "successful_trades",
-            "success_rate", "profile_image", "id_document", "is_staff"
+            "success_rate", "profile_image", "id_document", "is_staff", "id",
         ]
         read_only_fields = ["total_trades", "successful_trades", "success_rate"]
 

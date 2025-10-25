@@ -141,6 +141,7 @@ LOGGING = {
     },
     'loggers': {
         'p2p.services.palmpay': {'level': 'DEBUG', 'handlers': ['console', 'file'], 'propagate': False},
+        'p2p': {'level': 'DEBUG', 'handlers': ['console', 'file'], 'propagate': False},
     },
 }
 
@@ -152,6 +153,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
+    'daphne',
     'accounts',
     'referrals',
     'wallet',
@@ -174,13 +177,22 @@ REST_FRAMEWORK = {
 }
 
 # Tell Django to use ASGI instead of WSGI.
-ASGI_APPLICATION = "zunhub.asgi.application"
+ASGI_APPLICATION = "mafitapay.asgi.application"
 
 # Configure channel layers (Redis backend):
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels.layers.InMemoryChannelLayer"
+#     }
+# }
+
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"
-    }
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
 }
 
 MIDDLEWARE = [
