@@ -89,35 +89,28 @@ class DepositOfferListCreateAPIView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         merchant = self.request.user
         wallet = Wallet.objects.select_for_update().get(user=merchant)
-        amount_available = serializer.validated_data["amount_available"]
-        min_amount = serializer.validated_data["min_amount"]
-        max_amount = serializer.validated_data["max_amount"]
+        amount_available = Decimal(str(serializer.validated_data["amount_available"]))
+        min_amount = Decimal(str(serializer.validated_data["min_amount"]))
+        max_amount = Decimal(str(serializer.validated_data["max_amount"]))
 
         with transaction.atomic():
-            # Validate available balance
             available_balance = wallet.available_balance()
             if amount_available > available_balance:
-                raise serializers.ValidationError(
-                    {"error": "Insufficient available balance to lock this offer amount."}
-                )
+                logger.error(f"Insufficient balance for offer: merchant {merchant.id}, required={amount_available}, available={available_balance}")
+                raise serializers.ValidationError({"error": "Insufficient available balance to lock this offer amount."})
             if max_amount > available_balance:
-                raise serializers.ValidationError(
-                    {"error": "Max amount exceeds available balance."}
-                )
+                logger.error(f"Max amount exceeds balance: merchant {merchant.id}, max_amount={max_amount}, available={available_balance}")
+                raise serializers.ValidationError({"error": "Max amount exceeds available balance."})
             if min_amount > max_amount or min_amount > amount_available:
-                raise serializers.ValidationError(
-                    {"error": "Min amount must be less than or equal to max amount and amount available."}
-                )
+                logger.error(f"Invalid min/max amounts: min_amount={min_amount}, max_amount={max_amount}, amount_available={amount_available}")
+                raise serializers.ValidationError({"error": "Min amount must be less than or equal to max amount and amount available."})
 
-            # Lock the funds
-            locked = wallet.lock_funds(amount_available)
-            if not locked:
-                raise serializers.ValidationError(
-                    {"error": "Unable to lock funds. Please try again."}
-                )
+            if not wallet.lock_funds(amount_available):
+                logger.error(f"Failed to lock funds for merchant {merchant.id}: amount={amount_available}")
+                raise serializers.ValidationError({"error": "Unable to lock funds. Please try again."})
 
-            # Save the offer
             serializer.save(merchant=merchant)
+            logger.info(f"Offer created by merchant {merchant.id}: amount_available={amount_available}")
             
 class CreateDepositOrderAPIView(APIView):
     """Buyer creates a P2P deposit order."""
@@ -229,64 +222,82 @@ class MerchantDepositOrdersAPIView(generics.ListAPIView):
 
 class ConfirmDepositOrderAPIView(APIView):
     """Merchant confirms buyer’s payment → funds are released from merchant's locked balance to buyer’s wallet."""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, order_id):
-        order = get_object_or_404(DepositOrder, id=order_id)
-        merchant = request.user
+        try:
+            order = get_object_or_404(DepositOrder, id=order_id)
+            merchant = request.user
 
-        # Validate access
-        if order.sell_offer.merchant != merchant:
-            return Response({"error": "You are not authorized to confirm this order."}, status=403)
+            # Validate access
+            if order.sell_offer.merchant != merchant:
+                logger.warning(f"Unauthorized attempt to confirm order {order_id} by user {merchant.id}")
+                return Response({"error": "You are not authorized to confirm this order."}, status=status.HTTP_403_FORBIDDEN)
 
-        if order.status not in ["paid"]:
-            return Response({"error": "Only paid orders can be confirmed."}, status=400)
+            if order.status != "paid":
+                logger.warning(f"Invalid order status for confirmation: order {order_id}, status {order.status}")
+                return Response({"error": "Only paid orders can be confirmed."}, status=status.HTTP_400_BAD_REQUEST)
 
-        buyer_wallet = get_object_or_404(Wallet, user=order.buyer)
-        merchant_wallet = get_object_or_404(Wallet, user=merchant)
+            # Validate wallets
+            if not hasattr(order.buyer, 'wallet') or not hasattr(merchant, 'wallet'):
+                logger.error(f"Wallet missing for buyer {order.buyer.id} or merchant {merchant.id} in order {order_id}")
+                return Response({"error": "Wallet not found for user or merchant"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Process transaction atomically
-        with transaction.atomic():
-            amount = Decimal(order.amount_requested)
+            buyer_wallet = get_object_or_404(Wallet, user=order.buyer)
+            merchant_wallet = get_object_or_404(Wallet, user=merchant)
 
-            # Debit merchant's locked balance
-            if not merchant_wallet.release_funds(amount):  # Removes from locked_balance
-                return Response({"error": "Insufficient locked funds for merchant."}, status=500)
+            with transaction.atomic():
+                amount = Decimal(str(order.amount_requested))  # Ensure Decimal
+                if amount <= 0:
+                    logger.error(f"Invalid amount for order {order_id}: {amount}")
+                    return Response({"error": "Invalid order amount"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Credit buyer's wallet
-            credited = buyer_wallet.deposit(
-                amount,
-                reference=f"p2p-deposit-{order.id}",
-                metadata={
-                    "type": "p2p_deposit",
-                    "merchant_id": merchant.id,
-                    "offer_id": order.sell_offer.id,
-                    "order_id": order.id,
-                },
-            )
+                logger.debug(f"Confirming order {order_id}: amount={amount}, merchant_wallet_locked_balance={merchant_wallet.locked_balance}, buyer_id={order.buyer.id}")
 
-            if not credited:
-                # Rollback: Refund locked funds back to merchant's locked_balance
-                merchant_wallet.lock_funds(amount)  # Re-lock the funds
-                return Response({"error": "Failed to credit buyer wallet."}, status=500)
+                # Check and release merchant's locked funds
+                if not merchant_wallet.release_funds(amount):
+                    logger.error(f"Insufficient locked funds for merchant {merchant.id}: required={amount}, available={merchant_wallet.locked_balance}")
+                    return Response({"error": f"Insufficient locked funds to release. Required: ₦{amount}, Available: ₦{merchant_wallet.locked_balance}"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Update order status
-            order.status = "completed"
-            order.save(update_fields=["status"])
+                # Credit buyer's wallet
+                credited = buyer_wallet.deposit(
+                    amount,
+                    reference=f"p2p-deposit-{order.id}",
+                    metadata={
+                        "type": "p2p_deposit",
+                        "merchant_id": merchant.id,
+                        "offer_id": order.sell_offer.id,
+                        "order_id": order.id,
+                    },
+                )
 
-            # Update merchant trade stats
-            merchant_profile = merchant.profile
-            merchant_profile.total_trades += 1
-            merchant_profile.successful_trades += 1
-            merchant_profile.save(update_fields=["total_trades", "successful_trades"])
+                if not credited:
+                    logger.error(f"Failed to credit buyer wallet {order.buyer.id} for order {order_id}")
+                    merchant_wallet.lock_funds(amount)  # Rollback
+                    return Response({"error": "Failed to credit buyer wallet."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Success response
-        return Response({
-            "success": True,
-            "message": "Funds released successfully. Buyer wallet credited, merchant locked funds deducted.",
-            "order_id": order.id,
-            "status": order.status,
-        }, status=200)
+                # Update order status
+                order.status = "completed"
+                order.save(update_fields=["status"])
+
+                # Update merchant trade stats
+                merchant_profile = merchant.profile
+                merchant_profile.total_trades += 1
+                merchant_profile.successful_trades += 1
+                merchant_profile.save(update_fields=["total_trades", "successful_trades"])
+
+            logger.info(f"Order {order_id} confirmed successfully: buyer {order.buyer.id}, merchant {merchant.id}")
+            return Response({
+                "success": True,
+                "message": "Funds released successfully. Buyer wallet credited, merchant locked funds deducted.",
+                "order_id": order.id,
+                "status": order.status,
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Unexpected error in ConfirmDepositOrderAPIView for order {order_id}: {str(e)}", exc_info=True)
+            return Response({"error": "Internal server error, please try again later"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class CancelDepositOrderAPIView(APIView):
     """Buyer or merchant can cancel pending order."""

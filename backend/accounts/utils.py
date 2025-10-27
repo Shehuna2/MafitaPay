@@ -52,3 +52,32 @@ def get_user_wallet(user):
     """
     wallet, _ = Wallet.objects.get_or_create(user=user)
     return wallet
+
+
+# accounts/utils.py
+def get_paystack_user_details(user):
+    """Prepare valid user details for Paystack customer/DVA creation."""
+    profile = getattr(user, "profile", None)
+    
+    full_name = (
+        profile.full_name.strip() if profile and profile.full_name else ""
+    )
+    parts = full_name.split()
+    first_name = user.first_name or (parts[0] if len(parts) > 0 else "")
+    last_name = user.last_name or (parts[1] if len(parts) > 1 else "Account")
+
+    # Ensure both names are filled for Paystack
+    first_name = first_name or user.email.split("@")[0].capitalize()
+    last_name = last_name or "User"
+
+    phone = None
+    if profile and profile.phone_number:
+        phone = profile.phone_number
+    else:
+        phone = "+2340000000000"  # fallback safe placeholder
+
+    return {
+        "first_name": first_name,
+        "last_name": last_name,
+        "phone": phone,
+    }

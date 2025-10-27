@@ -22,13 +22,14 @@ class UserSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     password2 = serializers.CharField(write_only=True)
-    full_name = serializers.CharField(max_length=100, required=False)
+    first_name = serializers.CharField(max_length=50, required=False)
+    last_name = serializers.CharField(max_length=50, required=False)
     phone_number = serializers.CharField(max_length=15, required=False)
     referral_code = serializers.CharField(max_length=10, required=False)
 
     class Meta:
         model = User
-        fields = ["email", "password", "password2", "full_name", "phone_number", "referral_code"]
+        fields = ["email", "password", "password2", "first_name", "last_name", "phone_number", "referral_code"]
 
     def validate_email(self, value):
         value = value.lower().strip()
@@ -72,7 +73,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         logger.debug(f"Starting registration for email: {validated_data['email']}")
         start_time = time.time()
         password2 = validated_data.pop("password2")
-        full_name = validated_data.pop("full_name", None)
+        first_name = validated_data.pop("first_name", None)
+        last_name = validated_data.pop("last_name", None)
         phone_number = validated_data.pop("phone_number", None)
         referral_code = validated_data.pop("referral_code", None)
 
@@ -98,14 +100,16 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.save()
 
         profile, _ = UserProfile.objects.get_or_create(user=user)
-        if full_name:
-            profile.full_name = full_name
+        if first_name:
+            profile.first_name = first_name
+        if last_name:
+            profile.last_name = last_name
         if phone_number:
             profile.phone_number = phone_number
         profile.save()
 
         verification_url = f"{settings.BASE_URL}/api/verify-email/{verification_token}/"
-        send_verification_email.delay(user.email, verification_url, full_name=full_name)
+        send_verification_email.delay(user.email, verification_url, first_name=first_name, last_name=last_name)
 
         logger.debug(f"Registration completed for {user.email} in {time.time() - start_time:.2f} seconds")
         return user
@@ -176,7 +180,8 @@ class LoginSerializer(serializers.Serializer):
         }
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    full_name = serializers.CharField(source="user.profile.full_name", allow_blank=True, required=False)
+    first_name = serializers.CharField(source="user.profile.first_name", allow_blank=True, required=False)
+    last_name = serializers.CharField(source="user.profile.last_name", allow_blank=True, required=False)
     phone_number = serializers.CharField(source="user.profile.phone_number", allow_blank=True, required=False)
     date_of_birth = serializers.DateField(source="user.profile.date_of_birth", allow_null=True, required=False)
     account_no = serializers.CharField(source="user.profile.account_no", allow_blank=True, required=False)
@@ -191,7 +196,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = [
-            "email", "is_merchant", "full_name", "phone_number", "date_of_birth",
+            "email", "is_merchant", "first_name", "last_name", "phone_number", "date_of_birth",
             "account_no", "bank_name", "total_trades", "successful_trades",
             "success_rate", "profile_image", "id_document", "is_staff", "id",
         ]

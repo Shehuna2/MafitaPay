@@ -33,6 +33,10 @@ FLUTTERWAVE_PUBLIC_KEY = os.getenv("FLUTTERWAVE_PUBLIC_KEY")
 FLUTTERWAVE_SECRET_KEY = os.getenv("FLUTTERWAVE_SECRET_KEY")
 FLUTTERWAVE_HASH_KEY = os.getenv("FLUTTERWAVE_HASH_KEY")
 
+# Paystack configuration
+PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')  
+PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY') 
+
 PALMPAY_MERCHANT_ID = os.getenv("PALMPAY_MERCHANT_ID")
 PALMPAY_PUBLIC_KEY = os.getenv("PALMPAY_PUBLIC_KEY")
 PALMPAY_PRIVATE_KEY = os.getenv("PALMPAY_PRIVATE_KEY")
@@ -142,11 +146,13 @@ LOGGING = {
     'loggers': {
         'p2p.services.palmpay': {'level': 'DEBUG', 'handlers': ['console', 'file'], 'propagate': False},
         'p2p': {'level': 'DEBUG', 'handlers': ['console', 'file'], 'propagate': False},
+        '': {'handlers': ['console', 'file'], 'level': 'DEBUG', 'propagate': True},
     },
 }
 
 # Application definition
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -154,7 +160,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'channels',
-    'daphne',
     'accounts',
     'referrals',
     'wallet',
@@ -163,7 +168,6 @@ INSTALLED_APPS = [
     'bills',
     'rest_framework',
     "rest_framework_simplejwt",
-    # 'widget_tweaks',
     "corsheaders",
 ]
 

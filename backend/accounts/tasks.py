@@ -10,18 +10,19 @@ logger = logging.getLogger(__name__)
 
 # In accounts/tasks.py
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
-def send_verification_email(self, email, verification_url, full_name=None):
+def send_verification_email(self, email, verification_url, first_name=None, last_name=None):
     try:
         logger.debug(f"Sending verification email to {email}")
         html_message = render_to_string(
             'emails/verification_email.html',
             {
-                'full_name': full_name or "there",
+                'first_name': first_name or "there",
+                'last_name': last_name or "there",
                 'verification_url': verification_url,
                 'unsubscribe_url': f"{settings.BASE_URL}/unsubscribe/",
             }
         )
-        plain_message = strip_tags(html_message).replace('{{ full_name }}', full_name or "there")
+        plain_message = strip_tags(html_message).replace('{{ first_name }}', first_name or "there").replace('{{ last_name }}', last_name or "there")
         response = send_mail(
             subject="Verify Your MafitaPay Account",
             message=plain_message,
@@ -38,18 +39,19 @@ def send_verification_email(self, email, verification_url, full_name=None):
         
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
-def send_reset_email(self, email, reset_url, full_name=None):
+def send_reset_email(self, email, reset_url, first_name=None, last_name=None):
     try:
         logger.debug(f"Sending password reset email to {email}")
         html_message = render_to_string(
             'emails/password_reset_email.html',
             {
-                'full_name': full_name or "there",
+                'first_name': first_name or "there",
+                'last_name': last_name or "there",
                 'reset_url': reset_url,
                 'unsubscribe_url': f"{settings.BASE_URL}/unsubscribe/",
             }
         )
-        plain_message = strip_tags(html_message).replace('{{ full_name }}', full_name or "there")
+        plain_message = strip_tags(html_message).replace('{{ first_name }}', first_name or "there").replace('{{ last_name }}', last_name or "there")
         response = send_mail(
             subject="Reset Your MafitaPay Password",
             message=plain_message,
