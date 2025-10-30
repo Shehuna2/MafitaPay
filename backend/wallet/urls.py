@@ -1,14 +1,18 @@
 from django.urls import path
 from .views import (
     WalletView, WalletTransactionListView, NotificationListView, NotificationMarkReadView,
-    GenerateDVAAPIView, RequeryDVAAPIView, PaystackDVAWebhookAPIView
+    GenerateDVAAPIView, RequeryDVAAPIView # PaystackDVAWebhookAPIView
 )
+from .webhooks import paystack_webhook, psb_webhook
 urlpatterns = [
     path("wallet/", WalletView.as_view(), name="wallet"),
 
     path('wallet/dva/generate/', GenerateDVAAPIView.as_view(), name='generate-dva'),
     path('wallet/dva/requery/', RequeryDVAAPIView.as_view(), name='requery-dva'),
-    path('webhook/paystack-dva/', PaystackDVAWebhookAPIView.as_view(), name='paystack-dva-webhook'),
+    
+    path("paystack/webhook/", paystack_webhook, name="paystack_webhook"),
+    path("9psb/webhook/", psb_webhook, name="9psb-webhook"),
+
 
     path("api/wallet/transactions/", WalletTransactionListView.as_view(), name="wallet-transactions"),
 

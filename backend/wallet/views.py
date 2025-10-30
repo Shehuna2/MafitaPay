@@ -13,7 +13,7 @@ import paystack
 from paystack import DedicatedVirtualAccount
 from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit
 from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer
-# from accounts.utils import get_paystack_user_details
+
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q
@@ -41,7 +41,7 @@ class WalletView(generics.GenericAPIView):
         try:
             wallet = Wallet.objects.get(user=request.user)
             wallet.refresh_from_db()
-            serializer = WalletSerializer(wallet)
+            serializer = WalletSerializer(wallet, context={"request": request})
             return Response(serializer.data)
         except Wallet.DoesNotExist:
             return Response({
@@ -52,131 +52,163 @@ class WalletView(generics.GenericAPIView):
                 "van_provider": None,
             })
 
-# wallet/views.py
 
 
 class GenerateDVAAPIView(APIView):
-    """Generate a Dedicated Virtual Account (DVA) for the user with Paystack."""
+    """Generate a Dedicated Virtual Account (DVA) for the user with Paystack or 9PSB."""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         user = request.user
+        provider = request.data.get("provider", "paystack").lower()
 
         try:
-            # 🔹 1. Check for existing Paystack DVA
-            existing_va = VirtualAccount.objects.filter(
-                user=user, provider="paystack", assigned=True
-            ).first()
+            # =============== 9PSB DVA FLOW ===============
+            if provider == "9psb":
+                from .services.psb_service import NinePSBService
+                psb = NinePSBService()
 
-            if existing_va:
-                logger.info(f"✅ DVA already exists for user {user.id}: {existing_va.account_number}")
+                # 1️⃣ Check if 9PSB account already exists
+                existing_va = VirtualAccount.objects.filter(
+                    user=user, provider="9psb", assigned=True
+                ).first()
+                if existing_va:
+                    return Response({
+                        "success": True,
+                        "message": "9PSB virtual account already exists.",
+                        "account_number": existing_va.account_number,
+                        "bank_name": existing_va.bank_name,
+                        "account_name": existing_va.account_name,
+                    }, status=status.HTTP_200_OK)
+
+                # 2️⃣ Request new DVA from 9PSB API
+                response = psb.create_virtual_account(user)
+                if not response:
+                    return Response(
+                        {"error": "Failed to generate 9PSB virtual account."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # 3️⃣ Save new Virtual Account
+                va = VirtualAccount.objects.create(
+                    user=user,
+                    provider="9psb",
+                    provider_account_id=response.get("provider_id"),
+                    account_number=response.get("account_number"),
+                    bank_name=response.get("bank_name"),
+                    account_name=response.get("account_name"),
+                    metadata={"raw_response": response},
+                    assigned=True,
+                )
+
+                # 4️⃣ Update Wallet and Profile
+                wallet, _ = Wallet.objects.get_or_create(user=user)
+                wallet.van_account_number = va.account_number
+                wallet.van_bank_name = va.bank_name
+                wallet.van_provider = "9psb"
+                wallet.save()
+
+                profile = getattr(user, "profile", None)
+                if profile:
+                    profile.account_no = va.account_number
+                    profile.bank_name = va.bank_name
+                    profile.save()
+
                 return Response({
                     "success": True,
-                    "message": "Virtual account already assigned.",
-                    "account_number": existing_va.account_number,
-                    "bank_name": existing_va.bank_name,
-                    "account_name": existing_va.account_name,
-                }, status=status.HTTP_200_OK)
+                    "message": "9PSB virtual account generated successfully.",
+                    "account_number": va.account_number,
+                    "bank_name": va.bank_name,
+                    "account_name": va.account_name,
+                }, status=status.HTTP_201_CREATED)
 
-            # 🔹 2. Safely extract user profile details
-            profile = getattr(user, "profile", None)
-            first_name = getattr(profile, "first_name", None) or user.first_name or "User"
-            last_name = getattr(profile, "last_name", None) or user.last_name or "Account"
-            phone_number = getattr(profile, "phone_number", None) or "+2340000000000"
-
-            logger.info(f"🧩 Creating Paystack customer for {user.email}")
-
-            # 🔹 3. Create or fetch Paystack Customer
-            customer_response = paystack.Customer.create(
-                email=user.email,
-                first_name=first_name,
-                last_name=last_name,
-                phone=phone_number
-            )
-
-            # Handle possible response shapes
-            if hasattr(customer_response, "json"):
-                customer_data = customer_response.json()
-            elif hasattr(customer_response, "data"):
-                customer_data = customer_response.data
+            # =============== PAYSTACK DVA FLOW ===============
             else:
-                customer_data = customer_response
+                existing_va = VirtualAccount.objects.filter(
+                    user=user, provider="paystack", assigned=True
+                ).first()
+                if existing_va:
+                    return Response({
+                        "success": True,
+                        "message": "Paystack virtual account already assigned.",
+                        "account_number": existing_va.account_number,
+                        "bank_name": existing_va.bank_name,
+                        "account_name": existing_va.account_name,
+                    }, status=status.HTTP_200_OK)
 
-            logger.debug(f"📦 Paystack customer response: {customer_data}")
+                profile = getattr(user, "profile", None)
+                first_name = getattr(profile, "first_name", None) or user.first_name or "User"
+                last_name = getattr(profile, "last_name", None) or user.last_name or "Account"
+                phone_number = getattr(profile, "phone_number", None) or "+2340000000000"
 
-            # 🔹 4. Extract Customer Code
-            customer_id = (
-                customer_data.get("customer_code")
-                or customer_data.get("data", {}).get("customer_code")
-            )
+                # Create or fetch Paystack customer
+                customer_response = paystack.Customer.create(
+                    email=user.email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    phone=phone_number,
+                )
 
-            if not customer_id:
-                error_msg = customer_data.get("message", "Failed to create customer.")
-                logger.error(f"❌ Customer creation failed for {user.id}: {error_msg}")
-                return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
+                customer_data = (
+                    customer_response.json()
+                    if hasattr(customer_response, "json")
+                    else getattr(customer_response, "data", customer_response)
+                )
+                customer_id = (
+                    customer_data.get("customer_code")
+                    or customer_data.get("data", {}).get("customer_code")
+                )
 
-            # 🔹 5. Create Dedicated Virtual Account
-            preferred_bank = request.data.get("preferred_bank", "wema-bank")
-            logger.info(f"🏦 Creating Paystack DVA for {user.id} on {preferred_bank}")
+                if not customer_id:
+                    return Response(
+                        {"error": "Failed to create Paystack customer."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-            # ⚠️ NOTE: Do NOT include unsupported params like first_name here.
-            dva_response = DedicatedVirtualAccount.create(
-                customer=customer_id,
-                preferred_bank=preferred_bank,
-            )
+                preferred_bank = request.data.get("preferred_bank", "wema-bank")
+                dva_response = DedicatedVirtualAccount.create(
+                    customer=customer_id,
+                    preferred_bank=preferred_bank,
+                )
 
-            # Handle possible response formats
-            if hasattr(dva_response, "json"):
-                dva_data = dva_response.json()
-            elif hasattr(dva_response, "data"):
-                dva_data = dva_response.data
-            else:
-                dva_data = dva_response
+                dva_data = (
+                    dva_response.json()
+                    if hasattr(dva_response, "json")
+                    else getattr(dva_response, "data", dva_response)
+                )
+                dva_payload = dva_data.get("data", dva_data)
 
-            logger.debug(f"📦 Paystack DVA response: {dva_data}")
+                va = VirtualAccount.objects.create(
+                    user=user,
+                    provider="paystack",
+                    provider_account_id=dva_payload.get("id"),
+                    account_number=dva_payload.get("account_number"),
+                    bank_name=dva_payload.get("bank", {}).get("name"),
+                    account_name=dva_payload.get("account_name", user.email),
+                    metadata={"paystack_response": dva_payload},
+                    assigned=True,
+                )
 
-            # 🔹 6. Validate DVA response
-            if not isinstance(dva_data, dict):
-                logger.error(f"Unexpected DVA response type: {type(dva_data)}")
-                return Response({"error": "Invalid DVA response format"}, status=500)
+                profile = getattr(user, "profile", None)
+                if profile:
+                    profile.account_no = va.account_number
+                    profile.bank_name = va.bank_name
+                    profile.save()
 
-            dva_payload = dva_data.get("data", dva_data)
-
-            if not dva_data.get("status", True) and "data" not in dva_data:
-                error_msg = dva_data.get("message", "Unknown DVA creation error.")
-                logger.error(f"❌ DVA creation failed: {error_msg}")
-                return Response({"error": error_msg}, status=400)
-
-            # 🔹 7. Save Virtual Account to DB
-            va = VirtualAccount.objects.create(
-                user=user,
-                provider="paystack",
-                provider_account_id=dva_payload.get("id"),
-                account_number=dva_payload.get("account_number"),
-                bank_name=dva_payload.get("bank", {}).get("name"),
-                account_name=dva_payload.get("account_name", user.email),
-                metadata={"paystack_response": dva_payload},
-                assigned=True,
-            )
-
-            logger.info(f"✅ DVA created for user {user.id}: {va.account_number} ({va.bank_name})")
-
-            # 🔹 8. Return success response
-            return Response({
-                "success": True,
-                "message": "Virtual account generated successfully.",
-                "account_number": va.account_number,
-                "bank_name": va.bank_name,
-                "account_name": va.account_name,
-            }, status=status.HTTP_201_CREATED)
+                return Response({
+                    "success": True,
+                    "message": "Paystack virtual account generated successfully.",
+                    "account_number": va.account_number,
+                    "bank_name": va.bank_name,
+                    "account_name": va.account_name,
+                }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            logger.error(f"❌ Error generating DVA for user {user.id}: {str(e)}", exc_info=True)
+            logger.error(f"❌ Error generating DVA for {user.email}: {str(e)}", exc_info=True)
             return Response(
                 {"error": f"Failed to generate virtual account: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
 
 
 class RequeryDVAAPIView(APIView):
@@ -261,67 +293,6 @@ class RequeryDVAAPIView(APIView):
             logger.error(f"Error requerying DVA for user {request.user.id}: {str(e)}", exc_info=True)
             return Response({"error": f"Failed to check transfers: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class PaystackDVAWebhookAPIView(APIView):
-    """Handle Paystack DVA webhook events."""
-    permission_classes = []
-
-    def post(self, request):
-        try:
-            # Verify webhook signature
-            signature = request.headers.get('x-paystack-signature')
-            if signature:
-                body = json.dumps(request.data)
-                computed_signature = hmac.new(
-                    settings.PAYSTACK_SECRET_KEY.encode(),
-                    body.encode(),
-                    hashlib.sha512
-                ).hexdigest()
-                if not hmac.compare_digest(signature, computed_signature):
-                    logger.error("Invalid webhook signature")
-                    return Response({"error": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
-
-            event = request.data.get('event')
-            data = request.data.get('data')
-            if event == 'transfer.success':
-                transfer = data[0]
-                reference = transfer['reference']
-                amount = Decimal(str(transfer['amount'] / 100))
-                account_number = transfer['recipient']['details']['account_number']
-                va = get_object_or_404(VirtualAccount, provider="paystack", account_number=account_number)
-                user = va.user
-                wallet = get_object_or_404(Wallet, user=user)
-
-                if not Deposit.objects.filter(provider_reference=reference).exists():
-                    fee = min(amount * Decimal('0.01'), Decimal('300'))
-                    net_amount = amount - fee
-                    with transaction.atomic():
-                        deposit = Deposit.objects.create(
-                            user=user,
-                            virtual_account=va,
-                            amount=amount,
-                            provider_reference=reference,
-                            status="credited",
-                            raw=transfer
-                        )
-                        wallet.deposit(
-                            amount=net_amount,
-                            reference=reference,
-                            metadata={
-                                "type": "dva_deposit",
-                                "provider": "paystack",
-                                "provider_reference": reference,
-                                "account_number": account_number,
-                                "transfer_code": transfer['transfer_code']
-                            }
-                        )
-                        logger.info(f"Webhook DVA transfer credited: user {user.id}, amount={net_amount}, reference={reference}")
-                else:
-                    logger.warning(f"Duplicate webhook for reference {reference}")
-            return Response({"status": "success"}, status=status.HTTP_200_OK)
-        except Exception as e:
-            logger.error(f"Error handling DVA webhook: {str(e)}", exc_info=True)
-            return Response({"error": f"Webhook processing failed: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
-
 class WalletTransactionListView(generics.ListAPIView):
     serializer_class = WalletTransactionSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -382,3 +353,4 @@ class NotificationMarkReadView(APIView):
     def post(self, request):
         Notification.objects.filter(user=self.request.user, is_read=False).update(is_read=True)
         return Response({"detail": "All notifications marked as read"})
+

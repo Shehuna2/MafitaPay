@@ -6,8 +6,6 @@ from datetime import timedelta
 from django.core.serializers.json import DjangoJSONEncoder
 
 
-
-
 load_dotenv()  # Load environment variables from .env file
 
 BYBIT_RECEIVE_DETAILS = json.loads(os.getenv("BYBIT_RECEIVE_DETAILS", "{}"))
@@ -28,7 +26,6 @@ BSC_SENDER_PRIVATE_KEY = os.getenv("BSC_SENDER_PRIVATE_KEY")
 BSC_RPC_URL = os.getenv("BSC_RPC_URL")
 
 
-
 FLUTTERWAVE_PUBLIC_KEY = os.getenv("FLUTTERWAVE_PUBLIC_KEY")
 FLUTTERWAVE_SECRET_KEY = os.getenv("FLUTTERWAVE_SECRET_KEY")
 FLUTTERWAVE_HASH_KEY = os.getenv("FLUTTERWAVE_HASH_KEY")
@@ -36,6 +33,12 @@ FLUTTERWAVE_HASH_KEY = os.getenv("FLUTTERWAVE_HASH_KEY")
 # Paystack configuration
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')  
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY') 
+
+NINE_PSB_CLIENT_ID = os.getenv("NINE_PSB_CLIENT_ID")
+NINE_PSB_API_KEY = os.getenv("NINE_PSB_API_KEY")
+NINE_PSB_API_BASE_URL = os.getenv("NINE_PSB_API_BASE_URL", "https://api.9psb.com.ng/api/v1")
+NINE_PSB_WEBHOOK_SECRET = os.getenv("NINE_PSB_WEBHOOK_SECRET", "")
+
 
 PALMPAY_MERCHANT_ID = os.getenv("PALMPAY_MERCHANT_ID")
 PALMPAY_PUBLIC_KEY = os.getenv("PALMPAY_PUBLIC_KEY")
@@ -45,6 +48,7 @@ PALMPAY_BASE_URL = os.getenv("PALMPAY_BASE_URL")  # Default to sandbox
 VTPASS_API_KEY       = os.getenv("VTPASS_API_KEY", "")
 VTPASS_SECRET_KEY    = os.getenv("VTPASS_SECRET_KEY", "")
 VTPASS_SANDBOX_URL   = os.getenv("VTPASS_SANDBOX_URL", "")
+VTPASS_LIVE_URL      = os.getenv("VTPASS_LIVE_URL", "")
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -60,7 +64,13 @@ SECRET_KEY = 'django-insecure-(976%ewd0y!1xwz1m^a7o2vxwi80f#2r&lk0a)&=*oltl@70+s
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    'mafitapay.com',
+]
+ALLOWED_HOSTS += [h for h in os.getenv('NGROK_HOST', '').split(',') if h]
+
 
 AUTH_USER_MODEL = 'accounts.User'
 
@@ -141,14 +151,37 @@ LOGGING = {
     },
     "root": {
         "handlers": ["console", "file"],
-        "level": "DEBUG",  # 👈 make sure it's DEBUG
+        "level": "DEBUG",
     },
-    'loggers': {
-        'p2p.services.palmpay': {'level': 'DEBUG', 'handlers': ['console', 'file'], 'propagate': False},
-        'p2p': {'level': 'DEBUG', 'handlers': ['console', 'file'], 'propagate': False},
-        '': {'handlers': ['console', 'file'], 'level': 'DEBUG', 'propagate': True},
+    "loggers": {
+        "p2p.services.palmpay": {
+            "level": "DEBUG",
+            "handlers": ["console", "file"],
+            "propagate": False,
+        },
+        "p2p": {
+            "level": "DEBUG",
+            "handlers": ["console", "file"],
+            "propagate": False,
+        },
+        "wallet.webhooks": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "paystack": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "": {  # root logger
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": True,
+        },
     },
 }
+
 
 # Application definition
 INSTALLED_APPS = [
@@ -212,10 +245,19 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # Keep for fallback if port changes
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:8000",
 ]
 
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.ngrok\.io$",
+]
+
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
 
 ROOT_URLCONF = 'mafitapay.urls'
 
