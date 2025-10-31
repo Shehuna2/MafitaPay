@@ -1,4 +1,4 @@
-// File: src/pages/p2p/BaseOrderDetails.jsx
+// src/pages/p2p/BaseOrderDetails.jsx
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Dialog } from "@headlessui/react";
@@ -13,7 +13,7 @@ import {
   AlertCircle,
   Copy,
   RefreshCcw,
-  MessageCircle, // Added for WhatsApp
+  MessageCircle,
 } from "lucide-react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -31,7 +31,13 @@ export default function BaseOrderDetails({ type }) {
 
   const basePath = type === "withdraw" ? "p2p/withdraw-orders" : "p2p/orders";
 
-  // --- Helpers ---
+  // WebSocket URL (protocol-aware)
+  const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+  const wsBase = `${wsProtocol}://${window.location.host}`;
+  const wsUrl = `${wsBase}/ws/order/${
+    type === "withdraw" ? "withdraw-order" : "order"
+  }/${orderId}/`;
+
   const calculateTimeLeft = (createdAt) => {
     if (!createdAt) return 900;
     const created = new Date(createdAt);
@@ -44,78 +50,94 @@ export default function BaseOrderDetails({ type }) {
   const getStoredUser = () => {
     try {
       const raw = localStorage.getItem("user");
-      return raw ? JSON.parse(raw) : null;
+      const user = raw ? JSON.parse(raw) : null;
+      if (!user?.email || !user?.id || user?.is_merchant === undefined) {
+        console.warn("Invalid user data in localStorage:", user);
+        return null;
+      }
+      return user;
     } catch {
+      console.warn("Failed to parse user data from localStorage");
+      return null;
+    }
+  };
+
+  const refreshAccessToken = async () => {
+    try {
+      const refresh = localStorage.getItem("refresh");
+      if (!refresh) throw new Error("No refresh token");
+      const res = await client.post("/auth/token/refresh/", { refresh });
+      localStorage.setItem("access", res.data.access);
+      console.debug("Access token refreshed:", res.data.access);
+      return res.data.access;
+    } catch (err) {
+      console.error("Token refresh failed:", err.response?.data || err.message);
+      localStorage.clear();
+      window.location.href = "/login";
       return null;
     }
   };
 
   const detectRole = (o, user, t, fallbackRole) => {
     if (!o) return fallbackRole || null;
-    if (user?.is_merchant) return "merchant";
+    if (!user) return null;
+
+    const merchantId =
+      o.buyer_offer_detail?.merchant ?? o.sell_offer_detail?.merchant;
+    if (merchantId && String(merchantId) === String(user.id)) return "merchant";
+    if (user.is_merchant) return "merchant";
 
     const sellerEmail = o.seller_email?.toLowerCase();
     const buyerEmail = o.buyer_email?.toLowerCase();
-    const userEmail = user?.email?.toLowerCase();
+    const userEmail = user.email?.toLowerCase();
 
-    if (sellerEmail && userEmail && sellerEmail === userEmail) return "seller";
-    if (buyerEmail && userEmail && buyerEmail === userEmail) return "buyer";
-
-    const merchantId = o.buyer_offer_detail?.merchant ?? o.sell_offer_detail?.merchant;
-    if (merchantId != null && user?.id != null) {
-      if (String(merchantId) === String(user.id)) return "merchant";
-    }
-
+    if (sellerEmail === userEmail) return "seller";
+    if (buyerEmail === userEmail) return "buyer";
     return fallbackRole || null;
   };
 
   const chooseDetail = (o, t) =>
     t === "withdraw" ? o?.buyer_offer_detail : o?.sell_offer_detail;
 
+  // IMPORTANT: use the fields that exist on your UserProfile:
+  // full_name, bank_name, account_no (not account_number/account_name)
   const chooseBank = (o, detail, t) => {
     if (t === "withdraw") {
       return o?.seller_profile || detail?.seller_profile || {};
     }
-    return detail?.merchant_profile || {};
+    return detail?.merchant_profile || o?.seller_profile || {};
   };
 
-  // WhatsApp link
   const getWhatsAppLink = () => {
     if (!order) return null;
     let phoneNumber;
-    let contactRole;
 
     if (type === "withdraw") {
-      // Withdraw: Merchant contacts seller, seller contacts merchant
-      phoneNumber = role === "merchant"
-        ? order.seller_profile?.phone_number
-        : order.buyer_offer_detail?.merchant_profile?.phone_number;
-      contactRole = role === "merchant" ? "seller" : "merchant";
+      phoneNumber =
+        role === "merchant"
+          ? order.seller_profile?.phone_number
+          : order.buyer_offer_detail?.merchant_profile?.phone_number;
     } else {
-      // Deposit: Buyer contacts merchant, merchant contacts buyer
-      phoneNumber = role === "merchant"
-        ? order.buyer_profile?.phone_number
-        : order.sell_offer_detail?.merchant_profile?.phone_number;
-      contactRole = role === "merchant" ? "buyer" : "merchant";
+      phoneNumber =
+        role === "merchant"
+          ? order.buyer_profile?.phone_number
+          : order.sell_offer_detail?.merchant_profile?.phone_number;
     }
-
     if (!phoneNumber) return null;
-
-    // Ensure phone number is in international format (assume Nigerian numbers)
-    const formattedPhone = phoneNumber.startsWith("+") ? phoneNumber : `+234${phoneNumber.replace(/^0/, "")}`;
+    const formattedPhone = phoneNumber.startsWith("+")
+      ? phoneNumber
+      : `+234${phoneNumber.replace(/^0/, "")}`;
     const pretext = encodeURIComponent(
       `Hi, I'm contacting you regarding P2P ${type} order #${order.id}.`
     );
     return `https://wa.me/${formattedPhone}?text=${pretext}`;
   };
 
-  // --- Fetch ---
   const fetchOrder = useCallback(
     async (isManual = false) => {
       if (!orderId) {
-        if (isManual) {
+        if (isManual)
           toast.error("Invalid order ID", { position: "top-right", autoClose: 3000 });
-        }
         setLoading(false);
         setPolling(false);
         return;
@@ -127,33 +149,24 @@ export default function BaseOrderDetails({ type }) {
         const res = await client.get(`${basePath}/${orderId}/`);
         const data = res.data;
         setOrder(data);
-
         if (data.status === "pending" && data.created_at) {
           setTimeLeft(calculateTimeLeft(data.created_at));
         }
-
-        const user = getStoredUser();
+        let user = getStoredUser();
+        if (!user) {
+          const profileRes = await client.get(`/profile-api/?t=${Date.now()}`);
+          user = profileRes.data;
+          localStorage.setItem("user", JSON.stringify(user));
+        }
         const detected = detectRole(data, user, type, type === "withdraw" ? "seller" : "buyer");
         setRole(detected);
-
-        console.debug("Role detected:", detected);
-        console.debug("Order debug:", {
-          buyer_email: data.buyer_email,
-          seller_email: data.seller_email,
-          buyer_offer_detail: data.buyer_offer_detail,
-          sell_offer_detail: data.sell_offer_detail,
-          seller_profile: data.seller_profile,
-          buyer_profile: data.buyer_profile,
-          user,
-        });
       } catch (err) {
         const msg =
           err.response?.data?.detail ||
           err.response?.data?.error ||
           "Failed to load order";
-        if (isManual) {
-          toast.error(msg, { position: "top-right", autoClose: 3000 });
-        }
+        if (isManual) toast.error(msg, { position: "top-right", autoClose: 3000 });
+        console.error("Fetch order error:", err.response?.data || err.message);
       } finally {
         setLoading(false);
         setPolling(false);
@@ -164,12 +177,99 @@ export default function BaseOrderDetails({ type }) {
 
   useEffect(() => {
     if (!orderId) return;
-    fetchOrder();
-    const interval = setInterval(() => fetchOrder(false), 5000);
-    return () => clearInterval(interval);
-  }, [orderId, fetchOrder]);
 
-  // Countdown and auto-cancel
+    fetchOrder();
+    let ws = null;
+    let reconnectTimer = null;
+
+    const connectWebSocket = async () => {
+      let access = localStorage.getItem("access");
+      if (!access) return;
+      try {
+        const payload = JSON.parse(atob(access.split(".")[1]));
+        if (Date.now() >= payload.exp * 1000) {
+          access = await refreshAccessToken();
+          if (!access) return;
+        }
+      } catch (err) {
+        console.error("Failed to decode token:", err);
+        return;
+      }
+
+      const wsUrlWithToken = `${wsUrl}?token=${encodeURIComponent(access)}`;
+      ws = new WebSocket(wsUrlWithToken);
+
+      ws.onopen = () => console.debug("WebSocket connected:", wsUrlWithToken);
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === "order_update") {
+          console.debug("WebSocket order update:", data.data);
+          setOrder(data.data);
+          setTimeLeft(calculateTimeLeft(data.data.created_at));
+          const user = getStoredUser();
+          const detected = detectRole(data.data, user, type, type === "withdraw" ? "seller" : "buyer");
+          setRole(detected);
+          toast.dismiss();
+          toast.info("Order updated!", { autoClose: 2000 });
+        }
+      };
+
+      ws.onclose = (e) => {
+        console.warn("Order WebSocket closed:", wsUrlWithToken, "Code:", e.code, "Reason:", e.reason);
+        if (!e.wasClean && navigator.onLine) {
+          reconnectTimer = setTimeout(connectWebSocket, 5000);
+        }
+      };
+
+      ws.onerror = (err) => console.error("WebSocket error:", err);
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (ws) ws.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
+  }, [orderId, fetchOrder, type]);
+
+  useEffect(() => {
+    if (!orderId) return;
+
+    let pollTimer = null;
+    const POLL_INTERVAL = 10000; // 10 seconds
+
+    // Polling function
+    const pollOrder = async () => {
+      if (!order) return;
+      if (["completed", "cancelled"].includes(order.status)) {
+        clearInterval(pollTimer);
+        return;
+      }
+      try {
+        const res = await client.get(`${basePath}/${orderId}/`);
+        if (res.data.status !== order.status) {
+          console.debug("Polling detected order update:", res.data.status);
+          setOrder(res.data);
+          toast.info(`Order updated to ${res.data.status}`, { autoClose: 2000 });
+        }
+      } catch (err) {
+        console.warn("Polling failed:", err.message);
+      }
+    };
+
+    // Start polling only when active order
+    if (order && ["pending", "paid"].includes(order.status)) {
+      pollTimer = setInterval(pollOrder, POLL_INTERVAL);
+    }
+
+    // Cleanup
+    return () => {
+      if (pollTimer) clearInterval(pollTimer);
+    };
+  }, [order?.status, orderId]);
+
+
   useEffect(() => {
     if (!order || order.status !== "pending") return;
     const cancelRole = type === "withdraw" ? "merchant" : "buyer";
@@ -189,19 +289,15 @@ export default function BaseOrderDetails({ type }) {
     return () => clearInterval(timer);
   }, [order?.status, role, type]);
 
-  // --- Actions ---
   const handleMarkPaid = async () => {
     if (loadingAction) return;
     setLoadingAction(true);
     try {
       await client.post(`${basePath}/${orderId}/mark-paid/`);
-      toast.success("Marked as paid!", { position: "top-right", autoClose: 3000 });
+      toast.success("Marked as paid!", { autoClose: 3000 });
       await fetchOrder(true);
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed to update status", {
-        position: "top-right",
-        autoClose: 3000,
-      });
+      toast.error(err.response?.data?.detail || "Failed to update status");
     } finally {
       setLoadingAction(false);
     }
@@ -212,13 +308,10 @@ export default function BaseOrderDetails({ type }) {
     setLoadingAction(true);
     try {
       await client.post(`${basePath}/${orderId}/confirm/`);
-      toast.success("Funds released successfully!", { position: "top-right", autoClose: 3000 });
+      toast.success("Funds released successfully!", { autoClose: 3000 });
       await fetchOrder(true);
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed to confirm release", {
-        position: "top-right",
-        autoClose: 3000,
-      });
+      toast.error(err.response?.data?.detail || "Failed to confirm release");
     } finally {
       setLoadingAction(false);
     }
@@ -230,13 +323,10 @@ export default function BaseOrderDetails({ type }) {
       setLoadingAction(true);
       try {
         await client.post(`${basePath}/${orderId}/cancel/`);
-        toast.info("Order cancelled due to timeout!", { position: "top-right", autoClose: 3000 });
+        toast.info("Order cancelled due to timeout!", { autoClose: 3000 });
         await fetchOrder(true);
       } catch (err) {
-        toast.error(err?.response?.data?.detail || "Failed to cancel order", {
-          position: "top-right",
-          autoClose: 3000,
-        });
+        toast.error(err?.response?.data?.detail || "Failed to cancel order");
       } finally {
         setLoadingAction(false);
       }
@@ -250,13 +340,10 @@ export default function BaseOrderDetails({ type }) {
     setLoadingAction(true);
     try {
       await client.post(`${basePath}/${orderId}/cancel/`);
-      toast.info("Order cancelled!", { position: "top-right", autoClose: 3000 });
+      toast.info("Order cancelled!", { autoClose: 3000 });
       await fetchOrder(true);
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Failed to cancel order", {
-        position: "top-right",
-        autoClose: 3000,
-      });
+      toast.error(err?.response?.data?.detail || "Failed to cancel order");
     } finally {
       setShowCancelModal(false);
       setLoadingAction(false);
@@ -264,6 +351,7 @@ export default function BaseOrderDetails({ type }) {
   };
 
   const copyToClipboard = (text) => {
+    if (!text) return;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -275,7 +363,6 @@ export default function BaseOrderDetails({ type }) {
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  // --- Render guards ---
   if (loading)
     return (
       <div className="flex justify-center mt-16 text-gray-400">
@@ -283,21 +370,12 @@ export default function BaseOrderDetails({ type }) {
       </div>
     );
 
-  if (!order)
-    return <p className="text-center text-gray-400 mt-16">Order not found.</p>;
+  if (!order) return <p className="text-center text-gray-400 mt-16">Order not found.</p>;
 
-  // --- Data plumbing for render ---
-  const {
-    amount_requested,
-    status,
-    total_price,
-    created_at,
-    buyer_email,
-    seller_email,
-  } = order;
-
+  // Keep original email vars
+  const { amount_requested, status, total_price, created_at, buyer_email, seller_email } = order;
   const detail = chooseDetail(order, type);
-  const bank = chooseBank(order, detail, type);
+  const bank = chooseBank(order, detail, type); // bank uses full_name, bank_name, account_no
 
   const renderStatusBadge = () => {
     const map = {
@@ -383,19 +461,16 @@ export default function BaseOrderDetails({ type }) {
                   <span className="text-gray-400">Amount:</span>
                   <span className="text-lg">₦{amount_requested?.toLocaleString()}</span>
                 </div>
-
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Rate:</span>
-                  <span className="text-lg">
-                    ₦{detail?.price_per_unit?.toLocaleString() ?? "N/A"}
-                  </span>
+                  <span className="text-lg">{detail?.price_per_unit?.toLocaleString() ?? "N/A"}</span>
                 </div>
-
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Total:</span>
                   <span className="text-lg">₦{total_price?.toLocaleString()}</span>
                 </div>
 
+                {/* keep the original role/email logic */}
                 {role === "buyer" && (
                   <div className="flex justify-between items-center">
                     <span className="text-gray-400">{type === "withdraw" ? "Seller" : "Merchant"}:</span>
@@ -431,21 +506,22 @@ export default function BaseOrderDetails({ type }) {
                 <User className="w-5 h-5 text-indigo-400" /> Receiving Details
               </h3>
               <div className="bg-gray-800 p-4 rounded-xl space-y-2">
+                {/* **CORRECT FIELDS** from UserProfile */}
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Name:</span>
-                  <span className="text-lg">{bank.full_name || "N/A"}</span>
+                  <span className="text-lg">{bank?.full_name || "N/A"}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Bank:</span>
-                  <span className="text-lg">{bank.bank_name || detail?.bank_name || "N/A"}</span>
+                  <span className="text-lg">{bank?.bank_name || detail?.bank_name || "N/A"}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Account No:</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">{bank.account_no || "Unavailable"}</span>
+                    <span className="text-lg">{bank?.account_no || "Unavailable"}</span>
                     <button
                       onClick={() =>
-                        bank.account_no
+                        bank?.account_no
                           ? copyToClipboard(bank.account_no)
                           : toast.error("Account number unavailable", { position: "top-right", autoClose: 3000 })
                       }
@@ -457,6 +533,7 @@ export default function BaseOrderDetails({ type }) {
                     {copied && <span className="text-xs text-green-400">Copied!</span>}
                   </div>
                 </div>
+
                 {getWhatsAppLink() && (
                   <div className="flex justify-between items-center">
                     <span className="text-gray-400">Contact:</span>
@@ -465,10 +542,9 @@ export default function BaseOrderDetails({ type }) {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="bg-green-600 hover:bg-green-700 px-4 py-1 rounded-lg text-sm flex items-center gap-1"
-                      aria-label={`Contact ${role === "merchant" ? (type === "withdraw" ? "seller" : "buyer") : "merchant"} via WhatsApp`}
                     >
                       <MessageCircle size={14} />
-                      Contact {role === "merchant" ? (type === "withdraw" ? "Seller" : "Buyer") : "Merchant"}
+                      Contact
                     </a>
                   </div>
                 )}
@@ -486,7 +562,6 @@ export default function BaseOrderDetails({ type }) {
                 {loadingAction ? <Loader2 className="w-5 h-5 animate-spin" /> : "I’ve Paid"}
               </button>
             )}
-
             {canConfirmRelease && (
               <button
                 onClick={handleConfirmRelease}
@@ -496,7 +571,6 @@ export default function BaseOrderDetails({ type }) {
                 {loadingAction ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirm Release"}
               </button>
             )}
-
             {canCancel && (
               <button
                 onClick={() => setShowCancelModal(true)}
@@ -505,7 +579,6 @@ export default function BaseOrderDetails({ type }) {
                 Cancel
               </button>
             )}
-
             {status === "completed" && (
               <div className="flex items-center text-green-400 gap-2">
                 <CheckCircle className="w-5 h-5" /> Completed Successfully

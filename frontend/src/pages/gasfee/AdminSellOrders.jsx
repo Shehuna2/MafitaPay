@@ -162,6 +162,63 @@ export default function AdminSellOrders() {
     setTimeout(() => setToast(null), 4000);
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white px-4 py-10">
+        <style>{`
+          @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+          .shimmer {
+            background: linear-gradient(
+              110deg,
+              rgba(55, 65, 81, 0.3) 8%,
+              rgba(147, 197, 253, 0.2) 18%,
+              rgba(55, 65, 81, 0.3) 33%
+            );
+            background-size: 200% 100%;
+            animation: shimmer 2.2s infinite linear;
+          }
+        `}</style>
+        <div className="w-full max-w-3xl bg-gray-800/80 rounded-2xl p-8 shadow-xl border border-gray-700">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 bg-gray-700 rounded-full shimmer"></div>
+              <div className="h-5 w-32 rounded shimmer"></div>
+            </div>
+            <div className="flex gap-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="w-8 h-8 rounded-full shimmer"></div>
+              ))}
+            </div>
+          </div>
+          <div className="h-12 rounded-lg mb-3 w-2/3 md:w-1/2 shimmer"></div>
+          <div className="h-4 rounded w-1/4 mb-8 shimmer"></div>
+          <div className="flex justify-start md:justify-end gap-4">
+            <div className="h-12 w-12 rounded-full shimmer"></div>
+            <div className="h-12 w-12 rounded-full shimmer"></div>
+          </div>
+        </div>
+        <div className="w-full max-w-5xl mt-10 px-2 sm:px-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
+            {Array(8)
+              .fill()
+              .map((_, i) => (
+                <div
+                  key={i}
+                  className="h-24 sm:h-28 rounded-xl border border-gray-700 shimmer"
+                ></div>
+              ))}
+          </div>
+        </div>
+        <p className="text-gray-400 mt-10 text-sm md:text-base animate-pulse text-center">
+          Fetching your data securely...
+        </p>
+      </div>
+    );
+  }
+  
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-white">
       <div className="max-w-7xl mx-auto p-6">

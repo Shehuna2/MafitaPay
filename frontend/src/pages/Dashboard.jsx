@@ -246,7 +246,7 @@ export default function Dashboard() {
               <ArrowDownLeft className="w-6 h-6" />
             </button>
             <Link
-              to="/withdraw"
+              to="/deposit"
               className="bg-indigo-600/80 text-white px-4 py-2 rounded-full text-sm hover:bg-indigo-700 transition"
             >
               <ArrowUpRight className="w-6 h-6" />
@@ -289,9 +289,9 @@ export default function Dashboard() {
               { to: "/buy-data", label: "Data", icon: <Globe className="w-6 h-6 text-indigo-600/80" /> },
               { to: "/assets", label: "Gas fee", icon: <Fuel className="w-6 h-6 text-indigo-600/80" /> },
               { to: "/sell-crypto", label: "Sell", icon: <Repeat className="w-6 h-6 text-indigo-600/80" /> },
-              { to: "/cable-tv", label: "Cable", icon: <Tv className="w-6 h-6 text-indigo-600/80" /> },
-              { to: "/electricity", label: "Electricity", icon: <Zap className="w-6 h-6 text-indigo-600/80" /> },
-              { to: "/education", label: "Education", icon: <Book className="w-6 h-6 text-indigo-600/80" /> },
+              { to: "/buy-cable-tv", label: "Cable", icon: <Tv className="w-6 h-6 text-indigo-600/80" /> },
+              { to: "/buy-electricity", label: "Electricity", icon: <Zap className="w-6 h-6 text-indigo-600/80" /> },
+              { to: "/buy-education", label: "Education", icon: <Book className="w-6 h-6 text-indigo-600/80" /> },
               { to: "/referral", label: "Referral", icon: <Users className="w-6 h-6 text-indigo-600/80" /> },
             ].map((action, i) => (
               <Link

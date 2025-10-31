@@ -9,6 +9,7 @@ import Home from "./pages/Home";
 import About from "./pages/About";
 import Referral from "./pages/Referral";
 import Dashboard from "./pages/Dashboard";
+import Deposit from "./pages/wallet/Deposit";
 import WalletTransactions from "./pages/WalletTransactions";
 
 import Login from "./pages/accounts/Login";
@@ -22,6 +23,10 @@ import ResetPasswordRequest from "./pages/accounts/ResetPasswordRequest";
 
 import BuyData from "./pages/bills/BuyData";
 import BuyAirtime from "./pages/bills/BuyAirtime";
+import BuyCableTV from "./pages/bills/BuyCableTV";
+import BuyElectricity from "./pages/bills/BuyElectricity";
+import BuyEducation from "./pages/bills/BuyEducation";
+// import DataPlans from "./pages/bills/DataPlans";
 
 import Assets from "./pages/gasfee/Assets";
 import BuyCrypto from "./pages/gasfee/BuyCrypto";
@@ -67,6 +72,12 @@ function App() {
                             <Route path="/dashboard" element={<PrivateRoute><Layout><Dashboard /></Layout></PrivateRoute>} />
                             <Route path="/buy-airtime" element={<PrivateRoute><Layout><BuyAirtime /></Layout></PrivateRoute>} />
                             <Route path="/buy-data" element={<PrivateRoute><Layout><BuyData /></Layout></PrivateRoute>} />
+                            <Route path="/buy-cable-tv" element={<PrivateRoute><Layout><BuyCableTV /></Layout></PrivateRoute>} />
+                            <Route path="/buy-electricity" element={<PrivateRoute><Layout><BuyElectricity /></Layout></PrivateRoute>} />
+                            <Route path="/buy-education" element={<PrivateRoute><Layout><BuyEducation /></Layout></PrivateRoute>} />
+                            {/* <Route path="/data-plans" element={<PrivateRoute><Layout><DataPlans /></Layout></PrivateRoute>} /> */}
+
+                            <Route path="/deposit" element={<PrivateRoute><Layout><Deposit /></Layout></PrivateRoute>} />
                             <Route path="/wallet-transactions" element={<PrivateRoute><Layout><WalletTransactions /></Layout></PrivateRoute>} />
                             <Route path="/assets" element={<Layout><Assets /></Layout>} />
                             <Route path="/sell-crypto" element={<Layout><SellCrypto /></Layout>} />
