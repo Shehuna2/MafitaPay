@@ -151,6 +151,7 @@ wcwidth==0.2.14
 web3==7.14.0
 webencodings==0.5.1
 websockets==15.0.1
+whitenoise==6.7.0
 yarg==0.1.9
 yarl==1.22.0
 zope.interface==8.0.1
