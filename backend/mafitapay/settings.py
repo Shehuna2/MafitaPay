@@ -5,31 +5,42 @@ from datetime import timedelta
 from dotenv import load_dotenv
 import dj_database_url
 
-# Load .env (only for local dev)
-if os.getenv("RENDER") is None:
+# --------------------------------------------------
+# 1. ENVIRONMENT DETECTION
+# --------------------------------------------------
+if os.getenv("RENDER") is None and Path(".env").exists():
     load_dotenv()
 
+DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY
+# --------------------------------------------------
+# 2. SECURITY
+# --------------------------------------------------
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
-    raise ValueError("DJANGO_SECRET_KEY is required")
+    if DEBUG:
+        SECRET_KEY = "dev-insecure-change-me"
+    else:
+        raise ValueError("DJANGO_SECRET_KEY required in production")
 
-DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
+# --------------------------------------------------
+# 3. HOSTS
+# --------------------------------------------------
+_allowed = os.getenv("ALLOWED_HOSTS", "")
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(",") if h.strip()]
 
-# ALLOWED_HOSTS
-_allowed_hosts = os.getenv("ALLOWED_HOSTS", "")
-ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts.split(",") if h.strip()]
-if not ALLOWED_HOSTS:
-    raise ValueError("ALLOWED_HOSTS environment variable is required")
-
-# Add ngrok for local dev
 if DEBUG:
-    ngrok_host = os.getenv("NGROK_HOST", "")
-    ALLOWED_HOSTS += [h for h in ngrok_host.split(",") if h]
+    ALLOWED_HOSTS += ["localhost", "127.0.0.1"]
+    ngrok = os.getenv("NGROK_HOST", "")
+    ALLOWED_HOSTS += [h for h in ngrok.split(",") if h]
 
-# Application definition
+if not ALLOWED_HOSTS and not DEBUG:
+    raise ValueError("ALLOWED_HOSTS required in production")
+
+# --------------------------------------------------
+# 4. APPS & MIDDLEWARE
+# --------------------------------------------------
 INSTALLED_APPS = [
     "daphne",
     "django.contrib.admin",
@@ -38,6 +49,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "whitenoise.runserver_nostatic",          # <-- WhiteNoise static serving
     "channels",
     "corsheaders",
     "rest_framework",
@@ -51,8 +63,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",   # <-- WhiteNoise
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -61,11 +74,12 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# Remove cache middleware unless you really need it
-# 'django.middleware.cache.UpdateCacheMiddleware',
-# 'django.middleware.cache.FetchFromCacheMiddleware',
-
+# --------------------------------------------------
+# 5. URLS & TEMPLATES
+# --------------------------------------------------
 ROOT_URLCONF = "mafitapay.urls"
+WSGI_APPLICATION = "mafitapay.wsgi.application"
+ASGI_APPLICATION = "mafitapay.asgi.application"
 
 TEMPLATES = [
     {
@@ -83,50 +97,33 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "mafitapay.wsgi.application"
-ASGI_APPLICATION = "mafitapay.asgi.application"
-
-# Database
+# --------------------------------------------------
+# 6. DATABASE
+# --------------------------------------------------
 DATABASES = {
     "default": dj_database_url.config(
-        default=os.getenv("DATABASE_URL", "sqlite:///" + str(BASE_DIR / "db.sqlite3")),
+        default="sqlite:///" + str(BASE_DIR / "db.sqlite3"),
         conn_max_age=600,
         ssl_require=not DEBUG,
     )
 }
 
-# Password validation
-AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
-]
-
-# Internationalization
-LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
-USE_I18N = True
-USE_TZ = True
-
-# Static files
+# --------------------------------------------------
+# 7. STATIC & MEDIA
+# --------------------------------------------------
 STATIC_URL = "/static/"
+STATIC_ROOT = os.getenv("STATIC_ROOT", "/tmp/staticfiles")   # <-- writable on Render
 STATICFILES_DIRS = [BASE_DIR / "static"] if DEBUG else []
-STATIC_ROOT = "/app/staticfiles"  # Render's persistent volume
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-# CORS
+# --------------------------------------------------
+# 8. CORS
+# --------------------------------------------------
 CORS_ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
-    if origin.strip()
+    o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
 ]
-if not CORS_ALLOWED_ORIGINS and not DEBUG:
-    raise ValueError("CORS_ALLOWED_ORIGINS is required in production")
 
 if DEBUG:
     CORS_ALLOWED_ORIGINS += [
@@ -139,7 +136,9 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*\.onrender\.com$",
 ]
 
-# Security
+# --------------------------------------------------
+# 9. SECURITY HEADERS
+# --------------------------------------------------
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
@@ -148,14 +147,15 @@ SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
 SECURE_HSTS_PRELOAD = not DEBUG
 
-# Custom User
+# --------------------------------------------------
+# 10. AUTH & REST
+# --------------------------------------------------
 AUTH_USER_MODEL = "accounts.User"
 AUTHENTICATION_BACKENDS = [
     "accounts.backends.EmailBackend",
     "django.contrib.auth.backends.ModelBackend",
 ]
 
-# REST Framework
 REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "accounts.utils.custom_exception_handler",
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -165,14 +165,19 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 20,
 }
 
-# JWT
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 }
 
-# Email
-EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+# --------------------------------------------------
+# 11. EMAIL
+# --------------------------------------------------
+EMAIL_BACKEND = (
+    "django.core.mail.backends.console.EmailBackend"
+    if DEBUG
+    else os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+)
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
@@ -180,14 +185,17 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@mafitapay.com")
 
-# URLs
-BASE_URL = os.getenv("BASE_URL", "https://api.mafitapay.com")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://mafitapay.com")
+# --------------------------------------------------
+# 12. URLs
+# --------------------------------------------------
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
-# Redis URL (used by Celery, Channels, Cache)
+# --------------------------------------------------
+# 13. REDIS (Celery / Cache / Channels)
+# --------------------------------------------------
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
-# Celery
 CELERY_BROKER_URL = REDIS_URL + "/0"
 CELERY_RESULT_BACKEND = REDIS_URL + "/0"
 CELERY_ACCEPT_CONTENT = ["json"]
@@ -195,60 +203,45 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_BEAT_SCHEDULE = {
     "check-sell-orders-every-minute": {
         "task": "bills.tasks.check_sell_orders",
-        "schedule": 60.0,  # every minute
+        "schedule": 60.0,
     },
 }
 
-# Channel Layers
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [REDIS_URL + "/2"],  # Use db 2
+# Channel layers – in‑memory when debugging
+if DEBUG:
+    CHANNEL_LAYERS = {
+        "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [REDIS_URL + "/2"]},
         },
-    },
-}
+    }
 
-# Cache
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": REDIS_URL + "/1",
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        },
+        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
     }
 }
 CACHE_TTL = 300
 
-# Logging
+# --------------------------------------------------
+# 14. LOGGING
+# --------------------------------------------------
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "formatters": {
-        "verbose": {
-            "format": "{levelname} {asctime} {module} {message}",
-            "style": "{",
-        },
-    },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "verbose",
-        },
-    },
-    "root": {
-        "handlers": ["console"],
-        "level": "INFO",
-    },
-    "loggers": {
-        "django": {"level": "INFO", "propagate": True},
-        "p2p": {"level": "DEBUG", "handlers": ["console"], "propagate": False},
-        "wallet": {"level": "INFO", "handlers": ["console"], "propagate": False},
-    },
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "root": {"handlers": ["console"], "level": "INFO" if not DEBUG else "DEBUG"},
 }
 
-# Your API keys (safe to keep as-is, just ensure they're in Render env)
+# --------------------------------------------------
+# 15. ALL YOUR API KEYS / CUSTOM SETTINGS
+# --------------------------------------------------
 BYBIT_RECEIVE_DETAILS = json.loads(os.getenv("BYBIT_RECEIVE_DETAILS", "{}"))
 BITGET_RECEIVE_DETAILS = json.loads(os.getenv("BITGET_RECEIVE_DETAILS", "{}"))
 MEXC_RECEIVE_DETAILS = json.loads(os.getenv("MEXC_RECEIVE_DETAILS", "{}"))
@@ -294,3 +287,8 @@ NON_REFERRED_BONUS = os.getenv("NON_REFERRED_BONUS", "0.00")
 # TON
 TON_SEQNO_CHECK_INTERVAL = int(os.getenv("TON_SEQNO_CHECK_INTERVAL", "10"))
 TON_SEQNO_MAX_ATTEMPTS = int(os.getenv("TON_SEQNO_MAX_ATTEMPTS", "5"))
+
+# --------------------------------------------------
+# 16. DEFAULT AUTO FIELD
+# --------------------------------------------------
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
