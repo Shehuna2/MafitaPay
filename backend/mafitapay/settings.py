@@ -20,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
     if DEBUG:
-        SECRET_KEY = "dev-insecure-change-me"
+        SECRET_KEY = "django-insecure-(976%ewd0y!1xwz1m^a7o2vxwi80f#2r&lk0a)&=*oltl@70+s"
     else:
         raise ValueError("DJANGO_SECRET_KEY required in production")
 
@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "whitenoise.runserver_nostatic",          # <-- WhiteNoise static serving
+    "whitenoise.runserver_nostatic",
     "channels",
     "corsheaders",
     "rest_framework",
