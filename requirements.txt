@@ -117,6 +117,7 @@ redis==6.4.0
 referencing==0.37.0
 regex==2025.10.22
 psycopg[binary]==3.2.3
+whitenoise==6.7.0
 requests==2.32.5
 rlp==4.1.0
 rpds-py==0.27.1
