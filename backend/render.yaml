@@ -1,32 +1,33 @@
 services:
   - type: web
-    name: mafita-backend
+    name: mafitapay-backend
     env: python
-    region: oregon          # optional – change if you prefer another region
-    plan: free              # or starter/professional, etc.
-
-    # ---- IMPORTANT: lock the runtime ----
-    pythonVersion: "3.13"   # matches pillow-12.0.0-cp313 wheel
-
-    # ---- Simple, deterministic build ----
+    pythonVersion: "3.13"
     buildCommand: >-
       pip install --upgrade pip &&
       pip install -r requirements.txt
-
-    startCommand: gunicorn backend.wsgi:application
-
-    # ---- Environment variables ----
+    startCommand: >-
+      mkdir -p /tmp/staticfiles &&
+      python manage.py collectstatic --no-input --clear &&
+      python manage.py migrate --noinput &&
+      gunicorn mafitapay.wsgi:application
     envVars:
+      - key: DJANGO_DEBUG
+        value: "False"
       - key: DJANGO_SECRET_KEY
-        sync: false
+        generateValue: true
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: mafita-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: mafita-redis
+          type: redis
+          property: connectionString
       - key: ALLOWED_HOSTS
         value: mafitapay.com,api.mafitapay.com
-      - key: CSRF_TRUSTED_ORIGINS
-        value: https://mafitapay.com,https://api.mafitapay.com
-      - key: PYTHONUNBUFFERED
-        value: "1"          # nice for logs
-
-    # ---- Optional: health-check (recommended) ----
-    healthCheckPath: /healthz/
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://mafitapay.com
+      - key: STATIC_ROOT
+        value: /tmp/staticfiles
