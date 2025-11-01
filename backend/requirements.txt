@@ -1,6 +1,3 @@
-
-  Stack trace:
-
   11  /usr/lib/python3/dist-packages/clikit/console_application.py:123 in run
       io = io_factory(
 
