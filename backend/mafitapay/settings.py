@@ -191,11 +191,19 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@mafitapay.com")
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
+
 # --------------------------------------------------
 # 13. REDIS (Celery / Cache / Channels)
 # --------------------------------------------------
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
+ssl_options = {}
+if REDIS_URL.startswith("rediss://"):
+    ssl_options = {
+        "ssl_cert_reqs": None  # equivalent to CERT_NONE
+    }
+
+# --- Celery ---
 CELERY_BROKER_URL = REDIS_URL + "/0"
 CELERY_RESULT_BACKEND = REDIS_URL + "/0"
 CELERY_ACCEPT_CONTENT = ["json"]
@@ -207,7 +215,13 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-# Channel layers – in‑memory when debugging
+# Add SSL configuration for Celery
+if REDIS_URL.startswith("rediss://"):
+    CELERY_BROKER_USE_SSL = ssl_options
+    CELERY_RESULT_BACKEND_USE_SSL = ssl_options
+
+
+# --- Channels ---
 if DEBUG:
     CHANNEL_LAYERS = {
         "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
@@ -216,17 +230,27 @@ else:
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {"hosts": [REDIS_URL + "/2"]},
+            "CONFIG": {
+                "hosts": [{
+                    "address": REDIS_URL + "/2",
+                    **ssl_options,
+                }],
+            },
         },
     }
 
+# --- Cache ---
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": REDIS_URL + "/1",
-        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            **ssl_options,
+        },
     }
 }
+
 CACHE_TTL = 300
 
 # --------------------------------------------------
