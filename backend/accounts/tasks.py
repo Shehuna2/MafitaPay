@@ -6,7 +6,14 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 import logging
 
+from mafitapay.celery import app
+
 logger = logging.getLogger(__name__)
+
+@app.task
+def debug_task():
+    print("Celery is alive and working!")
+    return "pong"
 
 # In accounts/tasks.py
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
@@ -64,3 +71,4 @@ def send_reset_email(self, email, reset_url, first_name=None, last_name=None):
     except Exception as e:
         logger.error(f"Failed to send password reset email to {email}: {str(e)}")
         raise self.retry(exc=e)
+
