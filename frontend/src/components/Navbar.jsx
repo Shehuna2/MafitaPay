@@ -18,7 +18,7 @@ export default function Navbar() {
 
   const BASE_URL = window.location.hostname.includes("localhost")
     ? "http://127.0.0.1:8000"
-    : "https://zunhub.digital";
+    : "https://mafitapay.com";
 
   // Fetch notifications from backend
   const fetchNotifications = async () => {
@@ -182,7 +182,7 @@ export default function Navbar() {
 
                 <ul className="max-h-60 overflow-y-auto">
                   {loadingNotifs ? (
-                    <li className="px-4 py-3 text-sm text-gray-400 text-center">
+                    <li className="px-4 py-3 text-sm text-gray-400 text-right">
                       Loading...
                     </li>
                   ) : notifications.length > 0 ? (
@@ -197,7 +197,7 @@ export default function Navbar() {
                       </li>
                     ))
                   ) : (
-                    <li className="px-4 py-3 text-sm text-gray-400 text-center">
+                    <li className="px-4 py-3 text-sm text-gray-400 text-right">
                       No new notifications
                     </li>
                   )}
