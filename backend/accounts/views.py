@@ -192,8 +192,7 @@ class ResendVerificationEmailView(APIView):
             profile = user.profile  # Assuming related_name="profile"
             first_name = profile.first_name if profile else ""
             last_name = profile.last_name if profile else ""
-            full_name = f"{first_name} {last_name}".strip() or None
-            send_verification_email.delay(user.email, verification_url, full_name=full_name)
+            send_verification_email.delay(user.email, verification_url, first_name, last_name)
             return Response({"message": "Verification email resent successfully."}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({"error": "No account found with this email."}, status=status.HTTP_404_NOT_FOUND)
