@@ -190,7 +190,9 @@ class ResendVerificationEmailView(APIView):
             user.save()
             verification_url = f"{settings.BASE_URL}/api/verify-email/{verification_token}/"
             profile = user.profile  # Assuming related_name="profile"
-            full_name = profile.full_name if profile else None
+            first_name = profile.first_name if profile else ""
+            last_name = profile.last_name if profile else ""
+            full_name = f"{first_name} {last_name}".strip() or None
             send_verification_email.delay(user.email, verification_url, full_name=full_name)
             return Response({"message": "Verification email resent successfully."}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
