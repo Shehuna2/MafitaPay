@@ -201,7 +201,10 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 ssl_options = {}
 if REDIS_URL.startswith("rediss://"):
-    ssl_options = {"ssl_cert_reqs": ssl.CERT_NONE}
+    ssl_options = {
+        "ssl_cert_reqs": ssl.CERT_REQUIRED,
+        "ssl_ca_certs": "/etc/ssl/certs/ca-certificates.crt",
+    }
 
 
 # --- Celery ---
