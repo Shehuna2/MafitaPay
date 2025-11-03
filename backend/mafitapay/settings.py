@@ -1,4 +1,5 @@
 import os
+import ssl
 import json
 from pathlib import Path
 from datetime import timedelta
@@ -197,11 +198,11 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 # --------------------------------------------------
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
+
 ssl_options = {}
 if REDIS_URL.startswith("rediss://"):
-    ssl_options = {
-        "ssl_cert_reqs": None  # equivalent to CERT_NONE
-    }
+    ssl_options = {"ssl_cert_reqs": ssl.CERT_NONE}
+
 
 # --- Celery ---
 CELERY_BROKER_URL = REDIS_URL + "/0"
