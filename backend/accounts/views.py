@@ -33,11 +33,31 @@ class RegisterView(generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            user = serializer.save()
+
+            # Generate verification token
+            verification_token = get_random_string(32)
+            user.verification_token = verification_token
+            user.save()
+
+            # ✅ Use BACKEND_URL (not FRONTEND_URL) so Django handles token validation
+            backend_url = getattr(settings, "BACKEND_URL", settings.BASE_URL)
+            verification_url = f"{backend_url}/api/verify-email/{verification_token}/"
+
+            # Get user profile info
+            profile = getattr(user, "profile", None)
+            first_name = getattr(profile, "first_name", "")
+            last_name = getattr(profile, "last_name", "")
+
+            # Send verification email asynchronously
+            send_verification_email.delay(user.email, verification_url, first_name, last_name)
+
+            logger.info(f"Registration complete for {user.email}, verification sent to {verification_url}")
             return Response(
                 {"message": "Registration successful. Please verify your email."},
                 status=status.HTTP_201_CREATED,
             )
+
         return Response(
             {"errors": serializer.errors},
             status=status.HTTP_400_BAD_REQUEST,
@@ -78,102 +98,111 @@ class VerifyEmailView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, token):
+        logger.info(f"[VERIFY EMAIL] Request received | token={token}")
+
         try:
             user = User.objects.get(verification_token=token)
-            if not user.is_email_verified:
-                user.is_email_verified = True
-                user.verification_token = None
-                user.save()
-
-                # Award referral bonuses if user was referred
-                if user.referred_by:
-                    referrer = user.referred_by
-                    REFERRER_BONUS = Decimal(getattr(settings, "REFERRER_BONUS", "200.00"))
-                    NEW_USER_BONUS = Decimal(getattr(settings, "NEW_USER_BONUS", "100.00"))
-
-                    try:
-                        referrer_wallet = referrer.wallet
-                        new_user_wallet = user.wallet
-
-                        # Referrer bonus
-                        referrer_wallet.balance += REFERRER_BONUS
-                        referrer_wallet.save()
-                        WalletTransaction.objects.create(
-                            user=referrer,
-                            wallet=referrer_wallet,
-                            tx_type="credit",
-                            category="referral",
-                            amount=REFERRER_BONUS,
-                            balance_before=referrer_wallet.balance - REFERRER_BONUS,
-                            balance_after=referrer_wallet.balance,
-                            reference=f"Referral bonus for inviting {user.email}",
-                            status="success",
-                        )
-
-                        # New user bonus
-                        new_user_wallet.balance += NEW_USER_BONUS
-                        new_user_wallet.save()
-                        WalletTransaction.objects.create(
-                            user=user,
-                            wallet=new_user_wallet,
-                            tx_type="credit",
-                            category="referral",
-                            amount=NEW_USER_BONUS,
-                            balance_before=new_user_wallet.balance - NEW_USER_BONUS,
-                            balance_after=new_user_wallet.balance,
-                            reference="Signup bonus via referral",
-                            status="success",
-                        )
-
-                        # Notify users via email
-                        send_mail(
-                            subject="Referral Bonus Awarded",
-                            message=f"Congratulations! You've earned a ₦{REFERRER_BONUS} bonus for referring {user.email}.",
-                            from_email=settings.DEFAULT_FROM_EMAIL,
-                            recipient_list=[referrer.email],
-                        )
-                        send_mail(
-                            subject="Welcome to MafitaPay!",
-                            message=f"Welcome! You've received a ₦{NEW_USER_BONUS} signup bonus for joining via a referral.",
-                            from_email=settings.DEFAULT_FROM_EMAIL,
-                            recipient_list=[user.email],
-                        )
-
-                        logger.info(f"Referral bonuses awarded: ₦{REFERRER_BONUS} to {referrer.email}, ₦{NEW_USER_BONUS} to {user.email}")
-                    except Exception as e:
-                        logger.error(f"[Referral Bonus Error] Failed for {user.email}: {str(e)}")
-
-                # Optional: Bonus for non-referred users
-                else:
-                    NON_REFERRED_BONUS = Decimal(getattr(settings, "NON_REFERRED_BONUS", "0.00"))
-                    if NON_REFERRED_BONUS > 0:
-                        new_user_wallet = user.wallet
-                        new_user_wallet.balance += NON_REFERRED_BONUS
-                        new_user_wallet.save()
-                        WalletTransaction.objects.create(
-                            user=user,
-                            wallet=new_user_wallet,
-                            tx_type="credit",
-                            category="signup",
-                            amount=NON_REFERRED_BONUS,
-                            balance_before=new_user_wallet.balance - NON_REFERRED_BONUS,
-                            balance_after=new_user_wallet.balance,
-                            reference="Signup bonus for non-referred user",
-                            status="success",
-                        )
-                        send_mail(
-                            subject="Welcome to MafitaPay!",
-                            message=f"Welcome! You've received a ₦{NON_REFERRED_BONUS} signup bonus.",
-                            from_email=settings.DEFAULT_FROM_EMAIL,
-                            recipient_list=[user.email],
-                        )
-                        logger.info(f"Non-referred signup bonus awarded: ₦{NON_REFERRED_BONUS} to {user.email}")
-
-                logger.info(f"Email verified for {user.email}")
-            return HttpResponseRedirect(f"{settings.FRONTEND_URL}/verify-email?token={token}&verified=true")
         except User.DoesNotExist:
-            logger.error(f"Invalid verification token: {token}")
-            return HttpResponseRedirect(f"{settings.FRONTEND_URL}/verify-email?verified=false")
+            logger.warning(f"[VERIFY EMAIL] Invalid or unknown token: {token}")
+            return HttpResponseRedirect(f"{settings.FRONTEND_URL}/verify-email?verified=false&reason=invalid")
+
+        if user.is_email_verified:
+            logger.info(f"[VERIFY EMAIL] Token already used for {user.email}")
+            return HttpResponseRedirect(f"{settings.FRONTEND_URL}/verify-email?verified=true&reason=already_verified")
+
+        # ✅ Verify email
+        user.is_email_verified = True
+        user.verification_token = None
+        user.save()
+
+        logger.info(f"[VERIFY EMAIL] Email verified successfully for {user.email}")
+
+        # Handle referral bonuses safely
+        try:
+            if user.referred_by:
+                referrer = user.referred_by
+                REFERRER_BONUS = Decimal(getattr(settings, "REFERRER_BONUS", "200.00"))
+                NEW_USER_BONUS = Decimal(getattr(settings, "NEW_USER_BONUS", "100.00"))
+
+                referrer_wallet = referrer.wallet
+                new_user_wallet = user.wallet
+
+                # Referrer bonus
+                referrer_wallet.balance += REFERRER_BONUS
+                referrer_wallet.save()
+                WalletTransaction.objects.create(
+                    user=referrer,
+                    wallet=referrer_wallet,
+                    tx_type="credit",
+                    category="referral",
+                    amount=REFERRER_BONUS,
+                    balance_before=referrer_wallet.balance - REFERRER_BONUS,
+                    balance_after=referrer_wallet.balance,
+                    reference=f"Referral bonus for inviting {user.email}",
+                    status="success",
+                )
+
+                # New user bonus
+                new_user_wallet.balance += NEW_USER_BONUS
+                new_user_wallet.save()
+                WalletTransaction.objects.create(
+                    user=user,
+                    wallet=new_user_wallet,
+                    tx_type="credit",
+                    category="referral",
+                    amount=NEW_USER_BONUS,
+                    balance_before=new_user_wallet.balance - NEW_USER_BONUS,
+                    balance_after=new_user_wallet.balance,
+                    reference="Signup bonus via referral",
+                    status="success",
+                )
+
+                send_mail(
+                    subject="Referral Bonus Awarded",
+                    message=f"Congratulations! You've earned ₦{REFERRER_BONUS} for referring {user.email}.",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[referrer.email],
+                )
+                send_mail(
+                    subject="Welcome to MafitaPay!",
+                    message=f"Welcome! You've received ₦{NEW_USER_BONUS} signup bonus via referral.",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[user.email],
+                )
+
+                logger.info(f"[VERIFY EMAIL] Referral bonuses awarded: ₦{REFERRER_BONUS} to {referrer.email}, ₦{NEW_USER_BONUS} to {user.email}")
+
+            else:
+                # Non-referred user bonus
+                NON_REFERRED_BONUS = Decimal(getattr(settings, "NON_REFERRED_BONUS", "0.00"))
+                if NON_REFERRED_BONUS > 0:
+                    wallet = user.wallet
+                    wallet.balance += NON_REFERRED_BONUS
+                    wallet.save()
+                    WalletTransaction.objects.create(
+                        user=user,
+                        wallet=wallet,
+                        tx_type="credit",
+                        category="signup",
+                        amount=NON_REFERRED_BONUS,
+                        balance_before=wallet.balance - NON_REFERRED_BONUS,
+                        balance_after=wallet.balance,
+                        reference="Signup bonus for non-referred user",
+                        status="success",
+                    )
+                    send_mail(
+                        subject="Welcome to MafitaPay!",
+                        message=f"Welcome! You've received ₦{NON_REFERRED_BONUS} signup bonus.",
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[user.email],
+                    )
+                    logger.info(f"[VERIFY EMAIL] Non-referred signup bonus awarded to {user.email}")
+        except Exception as e:
+            logger.error(f"[VERIFY EMAIL] Bonus handling error for {user.email}: {str(e)}")
+
+        # ✅ Redirect user to frontend success page
+        return HttpResponseRedirect(f"{settings.FRONTEND_URL}/verify-email?verified=true&reason=success")
+
 
 
 class ResendVerificationEmailView(APIView):
@@ -185,18 +214,27 @@ class ResendVerificationEmailView(APIView):
             user = User.objects.get(email=email)
             if user.is_email_verified:
                 return Response({"message": "Email is already verified."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Generate new verification token
             verification_token = get_random_string(32)
             user.verification_token = verification_token
             user.save()
-            verification_url = f"{settings.BASE_URL}/verify-email/{verification_token}/"
-            profile = user.profile  # Assuming related_name="profile"
-            first_name = profile.first_name if profile else ""
-            last_name = profile.last_name if profile else ""
+
+            # ✅ Use BACKEND_URL here too
+            backend_url = getattr(settings, "BACKEND_URL", settings.BASE_URL)
+            verification_url = f"{backend_url}/api/verify-email/{verification_token}/"
+
+            profile = getattr(user, "profile", None)
+            first_name = getattr(profile, "first_name", "")
+            last_name = getattr(profile, "last_name", "")
+
             send_verification_email.delay(user.email, verification_url, first_name, last_name)
+
+            logger.info(f"Verification email resent to {email} with link {verification_url}")
             return Response({"message": "Verification email resent successfully."}, status=status.HTTP_200_OK)
+
         except User.DoesNotExist:
             return Response({"error": "No account found with this email."}, status=status.HTTP_404_NOT_FOUND)
-
 
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]

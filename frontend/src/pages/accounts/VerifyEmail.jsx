@@ -8,9 +8,11 @@ import "react-toastify/dist/ReactToastify.css";
 
 export default function VerifyEmail() {
   const location = useLocation();
+
   const email =
     location.state?.email || new URLSearchParams(location.search).get("email");
   const verified = new URLSearchParams(location.search).get("verified");
+  const reason = new URLSearchParams(location.search).get("reason"); // ✅ added reason param
 
   const COOLDOWN_DURATION = 60; // seconds
   const COOLDOWN_KEY = `verify_cooldown_${email || "unknown"}`;
@@ -78,14 +80,22 @@ export default function VerifyEmail() {
     </section>
   );
 
+  // ✅ Verified or Already Verified
   if (verified === "true") {
+    let message = "Your email has been successfully verified. You can now log in.";
+    let title = "✅ Email Verified";
+    let bg = "bg-gradient-to-br from-green-900 via-gray-900 to-green-800";
+
+    if (reason === "already_verified") {
+      message = "Your email is already verified. You can log in below.";
+      title = "ℹ️ Already Verified";
+      bg = "bg-gradient-to-br from-yellow-800 via-gray-900 to-yellow-700";
+    }
+
     return (
-      <Section bg="bg-gradient-to-br from-green-900 via-gray-900 to-green-800">
-        <h1 className="text-3xl font-bold mb-3 text-green-400">✅ Email Verified</h1>
-        <p className="text-gray-200 mb-6">
-          Your email has been successfully verified. You can now log in to your
-          account.
-        </p>
+      <Section bg={bg}>
+        <h1 className="text-3xl font-bold mb-3 text-green-400">{title}</h1>
+        <p className="text-gray-200 mb-6">{message}</p>
         <a
           href="/login"
           className="inline-block rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-3 font-semibold text-white shadow-md hover:from-green-600 hover:to-emerald-700 transition-all"
@@ -96,13 +106,17 @@ export default function VerifyEmail() {
     );
   }
 
+  // ❌ Invalid / Failed verification
   if (verified === "false") {
+    const reasonText =
+      reason === "invalid"
+        ? "Invalid or expired verification link. You can request a new one below."
+        : "Verification failed. Please request a new link.";
+
     return (
       <Section bg="bg-gradient-to-br from-red-900 via-gray-900 to-red-800">
         <h1 className="text-3xl font-bold mb-3 text-red-400">❌ Verification Failed</h1>
-        <p className="text-gray-200 mb-6">
-          Invalid or expired verification link. You can request a new one below.
-        </p>
+        <p className="text-gray-200 mb-6">{reasonText}</p>
         <MotionButton
           onClick={handleResend}
           disabled={resending || cooldown > 0}
@@ -121,6 +135,7 @@ export default function VerifyEmail() {
     );
   }
 
+  // 📩 Default: waiting for verification
   return (
     <Section bg="bg-gradient-to-br from-gray-900 via-indigo-900 to-purple-900">
       <h1 className="text-3xl font-bold mb-3 text-indigo-400">Verify Your Email</h1>
