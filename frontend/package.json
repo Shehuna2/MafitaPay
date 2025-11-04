@@ -1,5 +1,6 @@
 {
   "name": "mafitapay-frontend",
+  "homepage": "https://mafitapay.pages.dev",
   "private": true,
   "version": "0.0.0",
   "type": "module",

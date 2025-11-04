@@ -188,7 +188,7 @@ class ResendVerificationEmailView(APIView):
             verification_token = get_random_string(32)
             user.verification_token = verification_token
             user.save()
-            verification_url = f"{settings.BASE_URL}/api/verify-email/{verification_token}/"
+            verification_url = f"{settings.BASE_URL}/verify-email/{verification_token}/"
             profile = user.profile  # Assuming related_name="profile"
             first_name = profile.first_name if profile else ""
             last_name = profile.last_name if profile else ""
