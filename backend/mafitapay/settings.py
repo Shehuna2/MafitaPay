@@ -175,11 +175,17 @@ SIMPLE_JWT = {
 # --------------------------------------------------
 # 11. EMAIL
 # --------------------------------------------------
-EMAIL_BACKEND = (
-    "django.core.mail.backends.console.EmailBackend"
-    if DEBUG
-    else os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
-)
+# EMAIL_BACKEND = (
+#     "django.core.mail.backends.console.EmailBackend"
+#     if DEBUG
+#     else os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+# )
+
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+
+
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.sendgrid.net")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
@@ -321,3 +327,4 @@ TON_SEQNO_MAX_ATTEMPTS = int(os.getenv("TON_SEQNO_MAX_ATTEMPTS", "5"))
 # 16. DEFAULT AUTO FIELD
 # --------------------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
