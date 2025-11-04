@@ -6,6 +6,7 @@ from datetime import timedelta
 from dotenv import load_dotenv
 import dj_database_url
 
+
 # --------------------------------------------------
 # 1. ENVIRONMENT DETECTION
 # --------------------------------------------------

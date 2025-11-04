@@ -6,6 +6,7 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 import logging
 
+
 from mafitapay.celery import app
 
 logger = logging.getLogger(__name__)
