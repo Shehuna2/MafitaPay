@@ -170,8 +170,7 @@ class VerifyEmailView(APIView):
                         logger.info(f"Non-referred signup bonus awarded: ₦{NON_REFERRED_BONUS} to {user.email}")
 
                 logger.info(f"Email verified for {user.email}")
-            # return HttpResponseRedirect(f"{settings.FRONTEND_URL}/verify-email?token={token}&verified=true")
-            return HttpResponseRedirect(f"{settings.FRONTEND_URL}/verify-email?verified=true")
+            return HttpResponseRedirect(f"{settings.FRONTEND_URL}/verify-email?token={token}&verified=true")
         except User.DoesNotExist:
             logger.error(f"Invalid verification token: {token}")
             return HttpResponseRedirect(f"{settings.FRONTEND_URL}/verify-email?verified=false")
