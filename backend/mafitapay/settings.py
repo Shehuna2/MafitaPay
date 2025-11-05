@@ -233,9 +233,8 @@ CELERY_BEAT_SCHEDULE = {
 
 # Add SSL configuration for Celery
 if REDIS_URL.startswith("rediss://"):
-    CELERY_BROKER_USE_SSL = {"ssl_cert_reqs": CERT_NONE}
-    CELERY_RESULT_BACKEND_USE_SSL = {"ssl_cert_reqs": CERT_NONE}
-
+    CELERY_BROKER_USE_SSL = ssl_options
+    CELERY_RESULT_BACKEND_USE_SSL = ssl_options
 
 
 # --- Channels ---
