@@ -171,3 +171,47 @@ layer utilities {
     animation: slideUp 0.4s ease-out;
   }
 }
+
+/* ───────────────────────────────────────────────────────
+   RESPONSIVE HELPERS (add to the end of index.css)
+   ─────────────────────────────────────────────────────── */
+@layer utilities {
+  .grid-responsive {
+    @apply grid grid-cols-2 gap-4;
+  }
+  @screen sm {
+    .grid-responsive {
+      @apply grid-cols-3;
+    }
+  }
+  @screen md {
+    .grid-responsive {
+      @apply grid-cols-4;
+    }
+  }
+  @screen lg {
+    .grid-responsive {
+      @apply grid-cols-4;
+    }
+  }
+
+  /* Hide on mobile, show on md+ */
+  .hidden-md {
+    @apply hidden;
+  }
+  @screen md {
+    .hidden-md {
+      @apply block;
+    }
+  }
+
+  /* Show on mobile only */
+  .block-mobile {
+    @apply block;
+  }
+  @screen md {
+    .block-mobile {
+      @apply hidden;
+    }
+  }
+}
