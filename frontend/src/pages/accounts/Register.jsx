@@ -171,7 +171,7 @@ export default function Register() {
               name="referral_code"
               type="text"
               placeholder="Referral Code (optional)"
-              required={true}
+              required={false}
               value={form.referral_code}
               onChange={handleChange}
               className="w-full rounded-xl border border-gray-300 bg-gray-800 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"

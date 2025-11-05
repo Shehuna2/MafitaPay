@@ -2,11 +2,13 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Bell, Headphones, User, X, LogOut } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
+import { useAuth } from "../context/AuthContext"; // ✅ useAuth
 import client from "../api/client";
 
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAuthenticated, logout } = useAuth(); // ✅ useAuth
   const access = localStorage.getItem("access");
 
   const [notifications, setNotifications] = useState([]);
@@ -22,20 +24,29 @@ export default function Navbar() {
     ? "http://127.0.0.1:8000"
     : "https://mafitapay.com";
 
-  // Hide navbar on public routes
-  const hiddenRoutes = ["/login", "/register", "/verify-email", "/reset-password"];
+  // 🚫 Hide navbar on public pages
+  const hiddenRoutes = [
+    "/login",
+    "/register",
+    "/verify-email",
+    "/reset-password-request",
+    "/reset-password",
+  ];
   if (hiddenRoutes.some((r) => location.pathname.startsWith(r))) {
     return null;
   }
 
-  // Fetch notifications
+  // 🚫 Hide if not authenticated
+  if (!isAuthenticated || !access) return null;
+
+  // 🔔 Fetch notifications
   const fetchNotifications = async () => {
     try {
       setLoadingNotifs(true);
       const res = await client.get("notifications/");
       const data = Array.isArray(res.data) ? res.data : [];
       setNotifications(data);
-      localStorage.setItem("notifications", JSON.stringify(data)); // sync across tabs
+      localStorage.setItem("notifications", JSON.stringify(data));
     } catch (err) {
       console.warn("Failed to fetch notifications:", err.response?.data || err.message);
       setNotifications([]);
@@ -46,6 +57,7 @@ export default function Navbar() {
 
   useEffect(() => {
     if (!access) return;
+
     const cached = localStorage.getItem("notifications");
     if (cached) setNotifications(JSON.parse(cached));
 
@@ -61,7 +73,7 @@ export default function Navbar() {
     };
   }, [access]);
 
-  // Mark notifications as read
+  // 🟢 Mark notifications as read
   const handleToggleNotifications = async () => {
     const newState = !showNotifications;
     setShowNotifications(newState);
@@ -72,14 +84,14 @@ export default function Navbar() {
         await client.post("notifications/mark-read/");
         const updated = notifications.map((n) => ({ ...n, is_read: true }));
         setNotifications(updated);
-        localStorage.setItem("notifications", JSON.stringify(updated)); // sync
+        localStorage.setItem("notifications", JSON.stringify(updated));
       } catch {
         console.warn("Failed to mark notifications as read");
       }
     }
   };
 
-  // Fetch profile image
+  // 👤 Fetch profile image
   useEffect(() => {
     if (!access) return;
 
@@ -102,7 +114,7 @@ export default function Navbar() {
     fetchProfileImage();
   }, [access]);
 
-  // React to profile image updates within the app
+  // 🔄 React to profile image update within app
   useEffect(() => {
     const handleProfileImageUpdate = (e) => {
       const { profile_image } = e.detail;
@@ -116,7 +128,7 @@ export default function Navbar() {
     return () => window.removeEventListener("profileImageUpdated", handleProfileImageUpdate);
   }, []);
 
-  // ✅ Real-time sync across tabs (profile image + notifications)
+  // 🔄 Sync across tabs
   useEffect(() => {
     const handleStorageChange = (e) => {
       if (e.key === "profile_image" && e.newValue) {
@@ -130,7 +142,7 @@ export default function Navbar() {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  // Click outside close
+  // 🧠 Click outside close
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (
@@ -150,10 +162,7 @@ export default function Navbar() {
     : 0;
 
   const handleLogout = () => {
-    localStorage.removeItem("access");
-    localStorage.removeItem("refresh");
-    localStorage.removeItem("profile_image");
-    localStorage.removeItem("notifications");
+    logout(); // ✅ Use auth context logout
     navigate("/login");
   };
 
@@ -163,8 +172,7 @@ export default function Navbar() {
     window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
   };
 
-  if (!access) return null; // hide navbar if not logged in
-
+  // ✅ Navbar content
   return (
     <nav className="fixed top-0 left-0 w-full bg-gray-950/40 backdrop-blur-md border-b border-gray-800 z-50">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
@@ -173,7 +181,7 @@ export default function Navbar() {
         </Link>
 
         <div className="flex items-center gap-5 relative">
-          {/* Notifications */}
+          {/* 🔔 Notifications */}
           <div className="relative" ref={notificationRef}>
             <button onClick={handleToggleNotifications} className="relative">
               <Bell
@@ -205,9 +213,7 @@ export default function Navbar() {
 
                 <ul className="max-h-60 overflow-y-auto">
                   {loadingNotifs ? (
-                    <li className="px-4 py-3 text-sm text-gray-400 text-right">
-                      Loading...
-                    </li>
+                    <li className="px-4 py-3 text-sm text-gray-400 text-right">Loading...</li>
                   ) : notifications.length > 0 ? (
                     notifications.map((n) => (
                       <li
@@ -229,15 +235,12 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* WhatsApp */}
+          {/* 💬 WhatsApp */}
           <button onClick={openWhatsApp}>
-            <Headphones
-              size={22}
-              className="text-gray-300 hover:text-green-400 transition"
-            />
+            <Headphones size={22} className="text-gray-300 hover:text-green-400 transition" />
           </button>
 
-          {/* User Menu */}
+          {/* 👤 User Menu */}
           <div className="relative" ref={userRef}>
             <button
               onClick={() => {
