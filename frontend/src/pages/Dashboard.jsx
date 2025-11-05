@@ -167,11 +167,11 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen text-white overflow-x-hidden px-2 sm:px-4">
+    <div className="min-h-screen text-white overflow-x-hidden px-1 sm:px-2">
       <ToastContainer position="top-right" theme="dark" autoClose={3000} />
 
             {/* HERO WALLET CARD */}
-      <div className="relative mx-4 mt-4 sm:mt-6 mb-8 sm:mb-12">
+      <div className="relative mx-2 mt-4 sm:mt-6 mb-6 sm:mb-10">
         <div className="absolute inset-0 bg-card-glow rounded-3xl blur-3xl opacity-60" />
         <div
           className="relative bg-indigo-600/30 backdrop-blur-2xl p-6 sm:p-8 rounded-3xl shadow-wallet border border-indigo-600/20 transform transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl animate-float animate-pulse-glow"
