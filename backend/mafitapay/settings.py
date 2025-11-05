@@ -207,21 +207,17 @@ BACKEND_URL = os.getenv("BACKEND_URL", BASE_URL)
 # --------------------------------------------------
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
-
-
+# --- SSL for Upstash / Render ---
 ssl_options = {}
 if REDIS_URL.startswith("rediss://"):
     ssl_options = {
-        "SSL_CERT_REQS": CERT_NONE,  # ✅ fix: use correct key + constant
-        # optional CA certs if you really need validation
-        # "SSL_CA_CERTS": "/etc/ssl/certs/ca-certificates.crt",
+        # Upstash already manages certs; disabling strict validation prevents handshake errors
+        "SSL_CERT_REQS": CERT_NONE,
     }
 
-
-
 # --- Celery ---
-CELERY_BROKER_URL = REDIS_URL + "/0"
-CELERY_RESULT_BACKEND = REDIS_URL + "/0"
+CELERY_BROKER_URL = REDIS_URL  # Upstash only supports DB 0
+CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_BEAT_SCHEDULE = {
@@ -231,11 +227,10 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-# Add SSL configuration for Celery
+# Add SSL configuration for Celery (if rediss://)
 if REDIS_URL.startswith("rediss://"):
     CELERY_BROKER_USE_SSL = ssl_options
     CELERY_RESULT_BACKEND_USE_SSL = ssl_options
-
 
 # --- Channels ---
 if DEBUG:
@@ -248,7 +243,7 @@ else:
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
                 "hosts": [{
-                    "address": REDIS_URL + "/2",
+                    "address": REDIS_URL,  # ✅ no /1 or /2 for Upstash
                     **ssl_options,
                 }],
             },
@@ -259,7 +254,7 @@ else:
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL + "/1",
+        "LOCATION": REDIS_URL,  # ✅ no /1 or /2
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             **ssl_options,
@@ -268,6 +263,7 @@ CACHES = {
 }
 
 CACHE_TTL = 300
+
 
 # --------------------------------------------------
 # 14. LOGGING
