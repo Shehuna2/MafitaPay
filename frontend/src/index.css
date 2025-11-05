@@ -107,3 +107,67 @@ html, body, #root {
 .animate-slide-in-left {
   animation: slide-in-left 0.5s ease-out;
 }
+
+layer utilities {
+  /* Floating wallet card */
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50%      { transform: translateY(-8px) rotate(0.5deg); }
+  }
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  /* Soft inner glow for glass cards */
+  .shadow-wallet {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  /* Subtle background glow behind wallet card */
+  .bg-card-glow {
+    background: radial-gradient(circle at 30% 30%, rgba(99, 102, 241, 0.2), transparent 70%);
+  }
+}
+
+/* ───────────────────────────────────────────────────────
+   PREMIUM UPGRADE: Pulse Glow + Haptics + Mini Transactions
+   ─────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Breathing glow around wallet card */
+  .animate-pulse-glow {
+    animation: pulse-glow 2.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+        0 0 0 0 rgba(99, 102, 241, 0.3);
+    }
+    50% {
+      box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+        0 0 20px 8px rgba(99, 102, 241, 0.5);
+    }
+  }
+
+  /* Haptic feedback on mobile (via JS) */
+  .haptic-feedback {
+    transition: transform 0.1s;
+  }
+  .haptic-feedback:active {
+    transform: scale(0.95);
+  }
+
+  /* Mini transaction preview fade-in */
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out;
+  }
+}
