@@ -260,12 +260,7 @@ export default function Dashboard() {
           <div className="bg-gray-900 p-6 rounded-2xl shadow-xl w-96 relative">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/30 to-gray-900/10 pointer-events-none" />
             <div className="relative z-10">
-              <button
-                onClick={handleCloseDepositModal}
-                className="absolute top-4 right-4 text-gray-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              
               <h2 className="text-lg font-bold mb-4">Deposit via P2P</h2>
               <p className="text-sm text-gray-400">
                 Please create a P2P deposit order from the marketplace.
@@ -276,6 +271,12 @@ export default function Dashboard() {
               >
                 Go to P2P Marketplace
               </Link>
+              <button
+                onClick={handleCloseDepositModal}
+                className="absolute top-4 right-4 text-gray-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
           </div>
         </div>

@@ -110,10 +110,12 @@ export default function Assets() {
     try {
       setLoading(true);
       setError(null);
-      const token = localStorage.getItem("accessToken");
+      const token = localStorage.getItem("access");
       const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
       const res = await client.get("/assets/", config);
-      const cryptos = res.data.cryptos || [];
+      console.log("Assets response:", res.data);
+      const cryptos = res.data.cryptos || res.data || [];
+
       const enriched = cryptos.map((c) => {
         const price = Number(c.price || 0);
         const points = makeInitialPoints(price, 12);
@@ -179,7 +181,7 @@ export default function Assets() {
     );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-indigo-900 to-gray-800 text-white">
+    <div className="min-h-screen bg-gray-800 text-white">
       <div className="max-w-6xl mx-auto p-6 space-y-6">
         {/* 🔍 Search Bar */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
