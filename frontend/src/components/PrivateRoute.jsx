@@ -1,27 +1,28 @@
 // src/components/PrivateRoute.jsx
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
+import { useAuth } from "../context/AuthContext";
 
 export default function PrivateRoute({ children }) {
-  const access = localStorage.getItem("access");
-  const refresh = localStorage.getItem("refresh");
+  const { access, isAuthenticated, logout } = useAuth();
+  const location = useLocation();
 
-  if (!access || !refresh) {
-    return <Navigate to="/login" replace />;
+  if (!isAuthenticated || !access) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   try {
     const { exp } = jwtDecode(access);
 
-    // if token expired, wait for interceptor to handle refresh
+    // Check expiration and auto-logout if token truly invalid (not refreshable)
     if (Date.now() >= exp * 1000) {
-      // Don't redirect instantly — let interceptor handle auto-refresh
-      console.warn("Access token expired — waiting for refresh...");
-      return children;
+      console.warn("Access token expired — logging out...");
+      logout(); // clear tokens safely
+      return <Navigate to="/login" replace />;
     }
   } catch (e) {
-    localStorage.removeItem("access");
-    localStorage.removeItem("refresh");
+    console.warn("Invalid access token — logging out...");
+    logout();
     return <Navigate to="/login" replace />;
   }
 
