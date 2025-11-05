@@ -51,7 +51,7 @@ function App() {
                 <main className="flex-1 container mx-auto px-4 pt-20 pb-6">
                     <ErrorBoundary> {/* Wrap Routes with ErrorBoundary */}
                         <Routes>
-                            <Route path="/" element={<Home />} />
+                            <Route path="/dashboard" element={<Dashboard />} />
                             <Route path="/about" element={<About />} />
                             <Route path="/login" element={<Login />} />
                             <Route path="/register" element={<Register />} />

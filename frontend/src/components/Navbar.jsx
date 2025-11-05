@@ -1,16 +1,18 @@
-import { Link, useNavigate } from "react-router-dom";
+// File: src/components/Navbar.jsx
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Bell, Headphones, User, X, LogOut } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import client from "../api/client";
 
 export default function Navbar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const access = localStorage.getItem("access");
 
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [profileImage, setProfileImage] = useState(null);
+  const [profileImage, setProfileImage] = useState(localStorage.getItem("profile_image") || null);
   const [loadingNotifs, setLoadingNotifs] = useState(false);
 
   const notificationRef = useRef(null);
@@ -20,16 +22,20 @@ export default function Navbar() {
     ? "http://127.0.0.1:8000"
     : "https://mafitapay.com";
 
-  // Fetch notifications from backend
+  // Hide navbar on public routes
+  const hiddenRoutes = ["/login", "/register", "/verify-email", "/reset-password"];
+  if (hiddenRoutes.some((r) => location.pathname.startsWith(r))) {
+    return null;
+  }
+
+  // Fetch notifications
   const fetchNotifications = async () => {
     try {
       setLoadingNotifs(true);
       const res = await client.get("notifications/");
-      if (import.meta.env.DEV) {
-        console.log("Notifications response:", res.data);
-      }
       const data = Array.isArray(res.data) ? res.data : [];
       setNotifications(data);
+      localStorage.setItem("notifications", JSON.stringify(data)); // sync across tabs
     } catch (err) {
       console.warn("Failed to fetch notifications:", err.response?.data || err.message);
       setNotifications([]);
@@ -40,14 +46,13 @@ export default function Navbar() {
 
   useEffect(() => {
     if (!access) return;
+    const cached = localStorage.getItem("notifications");
+    if (cached) setNotifications(JSON.parse(cached));
 
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 30000);
 
-    // Listen for transaction completion to fetch notifications immediately
-    const handleTransactionCompleted = () => {
-      fetchNotifications();
-    };
+    const handleTransactionCompleted = () => fetchNotifications();
     window.addEventListener("transactionCompleted", handleTransactionCompleted);
 
     return () => {
@@ -56,7 +61,7 @@ export default function Navbar() {
     };
   }, [access]);
 
-  // Mark as read when dropdown is opened
+  // Mark notifications as read
   const handleToggleNotifications = async () => {
     const newState = !showNotifications;
     setShowNotifications(newState);
@@ -65,10 +70,10 @@ export default function Navbar() {
     if (newState && notifications.some((n) => !n.is_read)) {
       try {
         await client.post("notifications/mark-read/");
-        setNotifications((prev) =>
-          prev.map((n) => ({ ...n, is_read: true }))
-        );
-      } catch (err) {
+        const updated = notifications.map((n) => ({ ...n, is_read: true }));
+        setNotifications(updated);
+        localStorage.setItem("notifications", JSON.stringify(updated)); // sync
+      } catch {
         console.warn("Failed to mark notifications as read");
       }
     }
@@ -97,7 +102,7 @@ export default function Navbar() {
     fetchProfileImage();
   }, [access]);
 
-  // Listen for profile updates
+  // React to profile image updates within the app
   useEffect(() => {
     const handleProfileImageUpdate = (e) => {
       const { profile_image } = e.detail;
@@ -108,8 +113,21 @@ export default function Navbar() {
       localStorage.setItem("profile_image", fullUrl);
     };
     window.addEventListener("profileImageUpdated", handleProfileImageUpdate);
-    return () =>
-      window.removeEventListener("profileImageUpdated", handleProfileImageUpdate);
+    return () => window.removeEventListener("profileImageUpdated", handleProfileImageUpdate);
+  }, []);
+
+  // ✅ Real-time sync across tabs (profile image + notifications)
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === "profile_image" && e.newValue) {
+        setProfileImage(e.newValue);
+      }
+      if (e.key === "notifications" && e.newValue) {
+        setNotifications(JSON.parse(e.newValue));
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
   // Click outside close
@@ -127,12 +145,15 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const unreadCount = Array.isArray(notifications) ? notifications.filter((n) => !n.is_read).length : 0;
+  const unreadCount = Array.isArray(notifications)
+    ? notifications.filter((n) => !n.is_read).length
+    : 0;
 
   const handleLogout = () => {
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
     localStorage.removeItem("profile_image");
+    localStorage.removeItem("notifications");
     navigate("/login");
   };
 
@@ -141,6 +162,8 @@ export default function Navbar() {
     const message = encodeURIComponent("Hello, I need help with ......");
     window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
   };
+
+  if (!access) return null; // hide navbar if not logged in
 
   return (
     <nav className="fixed top-0 left-0 w-full bg-gray-950/40 backdrop-blur-md border-b border-gray-800 z-50">
@@ -214,65 +237,54 @@ export default function Navbar() {
             />
           </button>
 
-          {/* Auth */}
-          {access ? (
-            <div className="relative" ref={userRef}>
-              <button
-                onClick={() => {
-                  setShowUserMenu(!showUserMenu);
-                  setShowNotifications(false);
-                }}
-                className="flex items-center gap-2"
-              >
-                {profileImage ? (
-                  <img
-                    src={profileImage}
-                    alt="User"
-                    className="w-8 h-8 rounded-full border border-gray-700 object-cover hover:scale-105 transition"
-                  />
-                ) : (
-                  <User
-                    size={22}
-                    className={`text-gray-300 hover:text-green-400 transition ${
-                      showUserMenu ? "text-green-400" : ""
-                    }`}
-                  />
-                )}
-              </button>
-
-              {showUserMenu && (
-                <div className="absolute right-0 mt-3 w-52 bg-gray-900/90 backdrop-blur-xl rounded-xl shadow-lg border border-gray-800 overflow-hidden animate-fadeIn">
-                  <ul className="text-sm text-gray-300">
-                    <li>
-                      <Link
-                        to="/accounts/profile"
-                        className="flex items-center gap-2 px-4 py-3 hover:bg-gray-800/60"
-                      >
-                        <User size={16} /> Profile
-                      </Link>
-                    </li>
-                    <li>
-                      <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-gray-800/60 text-left text-red-400"
-                      >
-                        <LogOut size={16} /> Logout
-                      </button>
-                    </li>
-                  </ul>
-                </div>
+          {/* User Menu */}
+          <div className="relative" ref={userRef}>
+            <button
+              onClick={() => {
+                setShowUserMenu(!showUserMenu);
+                setShowNotifications(false);
+              }}
+              className="flex items-center gap-2"
+            >
+              {profileImage ? (
+                <img
+                  src={profileImage}
+                  alt="User"
+                  className="w-8 h-8 rounded-full border border-gray-700 object-cover hover:scale-105 transition"
+                />
+              ) : (
+                <User
+                  size={22}
+                  className={`text-gray-300 hover:text-green-400 transition ${
+                    showUserMenu ? "text-green-400" : ""
+                  }`}
+                />
               )}
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <Link to="/login" className="text-sm text-gray-300 hover:text-green-400">
-                Login
-              </Link>
-              <Link to="/register" className="text-sm text-gray-300 hover:text-green-400">
-                Register
-              </Link>
-            </div>
-          )}
+            </button>
+
+            {showUserMenu && (
+              <div className="absolute right-0 mt-3 w-52 bg-gray-900/90 backdrop-blur-xl rounded-xl shadow-lg border border-gray-800 overflow-hidden animate-fadeIn">
+                <ul className="text-sm text-gray-300">
+                  <li>
+                    <Link
+                      to="/accounts/profile"
+                      className="flex items-center gap-2 px-4 py-3 hover:bg-gray-800/60"
+                    >
+                      <User size={16} /> Profile
+                    </Link>
+                  </li>
+                  <li>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2 px-4 py-3 hover:bg-gray-800/60 text-left text-red-400"
+                    >
+                      <LogOut size={16} /> Logout
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </nav>

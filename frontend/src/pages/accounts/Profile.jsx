@@ -91,26 +91,44 @@ export default function Profile() {
     e.preventDefault();
     setSubmitting(true);
 
-    const data = new FormData();
-    Object.keys(formData).forEach((key) => {
-      if (formData[key]) data.append(key, formData[key]);
-    });
-    if (image) data.append("profile_image", image);
-
     try {
-      const response = await client.patch("profile-api/", data);
-      setProfile(response.data);
+      const data = new FormData();
+      Object.keys(formData).forEach((key) => {
+        if (formData[key]) data.append(key, formData[key]);
+      });
+      if (image) data.append("profile_image", image);
+
+      // ✅ Send as multipart/form-data to avoid 415 error
+      const response = await client.patch("profile-api/", data, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      const updated = response.data;
+      setProfile(updated);
       setImage(null);
-      toast.success("Profile updated successfully.");
+
+      // ✅ Build full image URL
+      const updatedImageUrl = updated.profile_image
+        ? updated.profile_image.startsWith("http")
+          ? updated.profile_image
+          : `${BASE_URL}${updated.profile_image}`
+        : "/static/images/avt13.jpg";
+
+      setImagePreview(updatedImageUrl);
+      localStorage.setItem("profile_image", updatedImageUrl);
 
       // ✅ Emit event so Navbar updates immediately
-      const updatedImage = response.data.profile_image;
-      if (updatedImage) {
-        window.dispatchEvent(new CustomEvent("profileImageUpdated", {
-          detail: { profile_image: updatedImage },
-        }));
-      }
+      window.dispatchEvent(
+        new CustomEvent("profileImageUpdated", {
+          detail: { profile_image: updated.profile_image },
+        })
+      );
+
+      toast.success("Profile updated successfully.");
     } catch (err) {
+      console.error("Profile update failed:", err.response?.data || err.message);
       toast.error(err.response?.data?.detail || "Failed to update profile.");
     } finally {
       setSubmitting(false);
@@ -119,9 +137,9 @@ export default function Profile() {
 
   const whatsappMessage = user
     ? encodeURIComponent(
-        `Hi, I am ${user.email}. I want to apply to become a merchant on Zunhub.`
+        `Hi, I am ${user.email}. I want to apply to become a merchant on MafitaPay.`
       )
-    : encodeURIComponent("Hi, I want to apply to become a merchant on Zunhub.");
+    : encodeURIComponent("Hi, I want to apply to become a merchant on MafitaPay.");
 
   if (loading)
     return (
@@ -173,7 +191,7 @@ export default function Profile() {
                 <img
                   src={imagePreview}
                   alt="Profile"
-                  className="w-32 h-32 rounded-full mx-auto object-cover"
+                  className="w-32 h-32 rounded-full mx-auto object-cover border border-gray-700"
                 />
                 <label className="mt-4 inline-block bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg text-sm cursor-pointer">
                   <input
@@ -277,4 +295,3 @@ export default function Profile() {
     </div>
   );
 }
-                        

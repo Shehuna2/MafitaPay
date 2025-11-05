@@ -96,16 +96,16 @@ export default function Register() {
   };
 
   return (
-    <section className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-900 via-indigo-900 to-gray-800 p-4">
+    <section className="flex min-h-screen items-center justify-center p-4">
       <ToastContainer />
       <motion.div
-        className="w-full max-w-md rounded-2xl border border-gray-700 bg-white/90 p-8 shadow-xl backdrop-blur-md"
+        className="w-full max-w-md rounded-2xl border border-indigo-700 bg-gray-800 p-8 shadow-xl backdrop-blur-md"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
         exit="exit"
       >
-        <motion.h1 className="mb-6 text-3xl font-bold text-gray-900 text-center" variants={inputVariants}>
+        <motion.h1 className="mb-6 text-3xl font-bold text-green-500 text-center" variants={inputVariants}>
           Register
         </motion.h1>
         <AnimatePresence>
@@ -129,7 +129,7 @@ export default function Register() {
               placeholder="you@example.com"
               value={form.email}
               onChange={handleChange}
-              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
+              className="w-full rounded-xl border border-gray-300 bg-gray-800 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
               required
             />
           </motion.div>
@@ -141,7 +141,7 @@ export default function Register() {
               placeholder="First Name"
               value={form.first_name}
               onChange={handleChange}
-              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
+              className="w-full rounded-xl border border-gray-300 bg-gray-800 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
             />
           </motion.div>
           <motion.div variants={inputVariants}>
@@ -152,7 +152,7 @@ export default function Register() {
               placeholder="Last Name"
               value={form.last_name}
               onChange={handleChange}
-              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
+              className="w-full rounded-xl border border-gray-300 bg-gray-800 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
             />
           </motion.div>
           <motion.div variants={inputVariants}>
@@ -163,7 +163,7 @@ export default function Register() {
               placeholder="Whatsapp Number (e.g., +2341234567890)"
               value={form.phone_number}
               onChange={handleChange}
-              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
+              className="w-full rounded-xl border border-gray-300 bg-gray-800 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
             />
           </motion.div>
           <motion.div variants={inputVariants}>
@@ -171,9 +171,10 @@ export default function Register() {
               name="referral_code"
               type="text"
               placeholder="Referral Code (optional)"
+              required={true}
               value={form.referral_code}
               onChange={handleChange}
-              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
+              className="w-full rounded-xl border border-gray-300 bg-gray-800 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
             />
           </motion.div>
           <motion.div variants={inputVariants}>
@@ -183,7 +184,7 @@ export default function Register() {
               placeholder="Password"
               value={form.password}
               onChange={handleChange}
-              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
+              className="w-full rounded-xl border border-gray-300 bg-gray-800 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
               required
             />
           </motion.div>
@@ -194,14 +195,14 @@ export default function Register() {
               placeholder="Confirm Password"
               value={form.password2}
               onChange={handleChange}
-              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
+              className="w-full rounded-xl border border-gray-300 bg-gray-800 px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
               required
             />
           </motion.div>
           <motion.button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3 text-white font-semibold shadow-md hover:from-indigo-700 hover:to-purple-700 disabled:opacity-75 disabled:cursor-not-allowed"
+            className="w-full rounded-xl bg-indigo-600 px-6 py-3 text-white font-semibold shadow-md hover:from-indigo-700 hover:to-purple-700 disabled:opacity-75 disabled:cursor-not-allowed"
             variants={buttonVariants}
             whileHover="hover"
             whileTap="tap"
@@ -211,7 +212,7 @@ export default function Register() {
         </motion.form>
         <p className="mt-6 text-center text-sm text-gray-600">
           Already have an account?{" "}
-          <Link to="/login" className="text-indigo-600 hover:text-indigo-500 underline transition-colors duration-300">
+          <Link to="/login" className="text-green-500 hover:text-indigo-500 underline transition-colors duration-300">
             Login
           </Link>
         </p>

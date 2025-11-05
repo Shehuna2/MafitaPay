@@ -99,10 +99,10 @@ export default function Login() {
   };
 
   return (
-    <section className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-900 via-indigo-900 to-gray-800 p-4">
+    <section className="flex min-h-screen items-center justify-center p-4">
       <ToastContainer />
-      <div className="w-full max-w-md rounded-2xl border border-green-900 bg-indigo-900 p-8 shadow-xl backdrop-blur-md">
-        <h2 className="text-2xl font-semibold text-center text-green-200 mb-6">
+      <div className="w-full max-w-md rounded-2xl border border-indigo-900 bg-gray-800 p-8 shadow-xl backdrop-blur-md">
+        <h2 className="text-2xl font-semibold text-center text-green-500 mb-6">
           Welcome Back
         </h2>
 
@@ -114,7 +114,7 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-200 mb-1">
               Email Address
             </label>
             <input
@@ -129,7 +129,7 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-200 mb-1">
               Password
             </label>
             <input
