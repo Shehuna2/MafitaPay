@@ -180,37 +180,23 @@ class LoginSerializer(serializers.Serializer):
         }
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    first_name = serializers.CharField(source="user.profile.first_name", allow_blank=True, required=False)
-    last_name = serializers.CharField(source="user.profile.last_name", allow_blank=True, required=False)
-    phone_number = serializers.CharField(source="user.profile.phone_number", allow_blank=True, required=False)
-    date_of_birth = serializers.DateField(source="user.profile.date_of_birth", allow_null=True, required=False)
-    account_no = serializers.CharField(source="user.profile.account_no", allow_blank=True, required=False)
-    bank_name = serializers.CharField(source="user.profile.bank_name", allow_blank=True, required=False)
     email = serializers.EmailField(source="user.email", read_only=True)
     is_merchant = serializers.BooleanField(source="user.is_merchant", read_only=True)
     is_staff = serializers.BooleanField(source="user.is_staff", read_only=True)
+    id = serializers.IntegerField(source="user.id", read_only=True)
+
+    # ✅ Allow uploading and returning these directly
     profile_image = serializers.ImageField(allow_null=True, required=False)
     id_document = serializers.FileField(allow_null=True, required=False)
-    id = serializers.IntegerField(source="user.id", read_only=True)
 
     class Meta:
         model = UserProfile
         fields = [
             "email", "is_merchant", "first_name", "last_name", "phone_number", "date_of_birth",
-            "account_no", "bank_name", "total_trades", "successful_trades",
-            "success_rate", "profile_image", "id_document", "is_staff", "id",
+            "account_no", "bank_name", "total_trades", "successful_trades", "success_rate",
+            "profile_image", "id_document", "is_staff", "id",
         ]
         read_only_fields = ["total_trades", "successful_trades", "success_rate"]
-
-    def validate_phone_number(self, value):
-        if value and not re.match(r'^\+?\d{10,15}$', value):
-            raise serializers.ValidationError("Phone number must be 10-15 digits, optionally starting with '+'.")
-        return value
-
-    def validate_date_of_birth(self, value):
-        if value and value.year < 1900:
-            raise serializers.ValidationError("Date of birth cannot be before 1900.")
-        return value
 
     def validate_profile_image(self, value):
         if value and value.size > 2 * 1024 * 1024:
@@ -222,10 +208,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("ID document must be less than 5MB.")
         return value
 
-    def to_representation(self, instance):
-        ret = super().to_representation(instance)
-        logger.debug(f"Profile serialized for {ret['email']}: is_staff={ret['is_staff']}")
-        return ret
 
 class ReferralSerializer(serializers.ModelSerializer):
     total_referrals = serializers.SerializerMethodField()

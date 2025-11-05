@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from rest_framework import generics, status
 from rest_framework.response import Response
 from django.core.mail import send_mail
+from rest_framework.parsers import JSONParser
 from decimal import Decimal
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -78,7 +79,7 @@ class LoginView(generics.GenericAPIView):
 
 class ProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]  # ✅ Added JSONParser
 
     def get(self, request):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
@@ -92,6 +93,7 @@ class ProfileAPIView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class VerifyEmailView(APIView):
