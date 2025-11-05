@@ -170,47 +170,154 @@ export default function Dashboard() {
     <div className="min-h-screen text-white overflow-x-hidden px-2 sm:px-4">
       <ToastContainer position="top-right" theme="dark" autoClose={3000} />
 
-      {/* Wallet Card */}
-      <div className="relative mx-2 sm:mx-4 mt-4 sm:mt-6 mb-8 sm:mb-12">
+            {/* HERO WALLET CARD */}
+      <div className="relative mx-4 mt-4 sm:mt-6 mb-8 sm:mb-12">
         <div className="absolute inset-0 bg-card-glow rounded-3xl blur-3xl opacity-60" />
-        <div className="relative bg-indigo-600/30 backdrop-blur-2xl p-6 sm:p-8 rounded-3xl shadow-wallet border border-indigo-600/20">
+        <div
+          className="relative bg-indigo-600/30 backdrop-blur-2xl p-6 sm:p-8 rounded-3xl shadow-wallet border border-indigo-600/20 transform transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl animate-float animate-pulse-glow"
+        >
+          {/* Header */}
           <div className="flex items-center justify-between mb-4 sm:mb-6">
             <h2 className="flex items-center gap-2 sm:gap-3 text-xl sm:text-2xl font-bold text-white">
-              <Wallet className="w-6 h-6 sm:w-8 sm:h-8 text-indigo-400" /> Wallet Balance
+              <Wallet className="w-6 h-6 sm:w-8 sm:h-8 text-indigo-400" />
+              Wallet Balance
             </h2>
+
             <div className="flex gap-1 sm:gap-2">
               <button
                 onClick={handleRefresh}
-                disabled={balanceLoading}
-                className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-sm transition"
+                disabled={balanceLoading || isRefreshing}
+                className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-sm transition haptic-feedback"
+                aria-label="Refresh"
               >
                 <RefreshCw
-                  className={`w-4 h-4 sm:w-5 sm:h-5 ${
-                    isRefreshing ? "animate-spin" : ""
-                  }`}
+                  className={`w-4 h-4 sm:w-5 sm:h-5 ${balanceLoading || isRefreshing ? "animate-spin" : ""}`}
                 />
               </button>
+
               <Link
                 to="/wallet-transactions"
-                className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-sm transition"
+                className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-sm transition haptic-feedback"
+                aria-label="Transactions"
               >
                 <List className="w-4 h-4 sm:w-5 sm:h-5" />
               </Link>
+
               <button
                 onClick={() => setShowBalance((v) => !v)}
-                className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-sm transition"
+                className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-sm transition haptic-feedback"
+                aria-label={showBalance ? "Hide" : "Show"}
               >
-                {showBalance ? (
-                  <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" />
-                ) : (
-                  <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
-                )}
+                {showBalance ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5" />}
               </button>
             </div>
           </div>
+
+          {/* Balance */}
           <div className="mb-4 sm:mb-6">{renderBalance()}</div>
+
+          {/* MINI TRANSACTIONS */}
+          <div className="hidden-md">
+            {recentTx.length > 0 && (
+              <div className="mt-4 sm:mt-6 space-y-2">
+                <p className="text-xs text-gray-400 flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> Recent Activity
+                </p>
+                {recentTx.slice(0, 3).map((tx, i) => (
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between text-sm animate-slide-up"
+                    style={{ animationDelay: `${i * 100}ms` }}
+                  >
+                    <div className="flex items-center gap-2">
+                      {tx.icon}
+                      <span className="capitalize">{tx.type}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-right">
+                      <span className="font-medium">₦{tx.amount.toLocaleString()}</span>
+                      <span className="text-xs text-gray-500">{tx.time}</span>
+                    </div>
+                  </div>
+                ))}
+                <Link
+                  to="/wallet-transactions"
+                  className="text-xs text-indigo-400 hover:text-white underline mt-2 inline-block"
+                >
+                  View all →
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 sm:mt-8">
+            <p className="text-xs sm:text-sm text-gray-300">Available for spending</p>
+            <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
+              <button
+                onClick={() => {
+                  setShowDepositModal(true);
+                  triggerHaptic();
+                }}
+                className="group flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2.5 sm:px-5 sm:py-3 rounded-2xl text-sm sm:text-base font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition haptic-feedback"
+              >
+                <ArrowDownLeft className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-y-0.5 transition" />
+                Deposit
+              </button>
+
+              <Link
+                to="/deposit"
+                className="group flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2.5 sm:px-5 sm:py-3 rounded-2xl text-sm sm:text-base font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition haptic-feedback"
+              >
+                <ArrowUpRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:-translate-y-0.5 transition" />
+                Withdraw
+              </Link>
+            </div>
+          </div>
+
+          {/* Mobile Transactions (shown only on <md) */}
+          <div className="block-mobile mt-4 pt-4 border-t border-white/10">
+            <p className="text-xs text-gray-400 mb-2">Recent Activity</p>
+            {recentTx.slice(0, 2).map((tx) => (
+              <div key={tx.id} className="flex justify-between text-xs py-1">
+                <span className="flex items-center gap-1">
+                  {tx.icon} {tx.type}
+                </span>
+                <span className="text-gray-400">₦{tx.amount.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* DEPOSIT MODAL */}
+      {showDepositModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="relative bg-indigo-600/40 backdrop-blur-xl p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-sm sm:max-w-md border border-indigo-600/30 animate-fade-in">
+            <button
+              onClick={() => setShowDepositModal(false)}
+              className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-300 hover:text-white haptic-feedback"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
+
+            <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">Deposit via P2P</h2>
+            <p className="text-sm sm:text-base text-gray-300 mb-4 sm:mb-6">
+              Create a secure peer-to-peer deposit order in the marketplace.
+            </p>
+            <Link
+              to="/p2p/marketplace"
+              onClick={() => {
+                setShowDepositModal(false);
+                triggerHaptic();
+              }}
+              className="block w-full text-center bg-indigo-600 text-white py-3 rounded-2xl text-sm sm:text-base font-semibold hover:shadow-lg transform hover:scale-105 transition haptic-feedback"
+            >
+              Go to Marketplace
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions - 3 per row */}
       <div className="px-2 sm:px-4 pb-6">
