@@ -181,7 +181,7 @@ export default function Assets() {
     );
 
   return (
-    <div className="min-h-screen bg-gray-800 text-white">
+    <div className="min-h-screen text-white">
       <div className="max-w-6xl mx-auto p-6 space-y-6">
         {/* 🔍 Search Bar */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
