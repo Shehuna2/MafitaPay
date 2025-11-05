@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 import dj_database_url
+from ssl import CERT_NONE, CERT_REQUIRED
 
 
 # --------------------------------------------------
@@ -207,12 +208,15 @@ BACKEND_URL = os.getenv("BACKEND_URL", BASE_URL)
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 
+
 ssl_options = {}
 if REDIS_URL.startswith("rediss://"):
     ssl_options = {
-        "ssl_cert_reqs": ssl.CERT_REQUIRED,
-        "ssl_ca_certs": "/etc/ssl/certs/ca-certificates.crt",
+        "SSL_CERT_REQS": CERT_NONE,  # ✅ fix: use correct key + constant
+        # optional CA certs if you really need validation
+        # "SSL_CA_CERTS": "/etc/ssl/certs/ca-certificates.crt",
     }
+
 
 
 # --- Celery ---
@@ -229,8 +233,9 @@ CELERY_BEAT_SCHEDULE = {
 
 # Add SSL configuration for Celery
 if REDIS_URL.startswith("rediss://"):
-    CELERY_BROKER_USE_SSL = ssl_options
-    CELERY_RESULT_BACKEND_USE_SSL = ssl_options
+    CELERY_BROKER_USE_SSL = {"ssl_cert_reqs": CERT_NONE}
+    CELERY_RESULT_BACKEND_USE_SSL = {"ssl_cert_reqs": CERT_NONE}
+
 
 
 # --- Channels ---
