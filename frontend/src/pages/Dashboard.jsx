@@ -205,7 +205,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen text-white">
       <ToastContainer />
-      <div className="bg-indigo-600/30 backdrop-blur-md text-white p-6 rounded-2xl shadow-xl mx-4 mt-4 border border-indigo-600/20">
+      <div className="bg-indigo-600/30 backdrop-blur-md text-white p-6 rounded-2xl shadow-xl mx-2 sm:mx-6 mt-4 border border-indigo-600/20">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <Wallet className="w-5 h-5" /> Wallet Balance
