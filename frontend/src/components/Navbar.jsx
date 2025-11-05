@@ -92,7 +92,7 @@ export default function Navbar() {
           ? res.data.profile_image.startsWith("http")
             ? res.data.profile_image
             : `${BASE_URL}${res.data.profile_image}`
-          : "/static/images/avt13.jpg";
+          : "https://mafitapay-api.pages.dev/media/profile_images/avt13.jpg";
 
         setProfileImage(img);
         localStorage.setItem("profile_image", img);
