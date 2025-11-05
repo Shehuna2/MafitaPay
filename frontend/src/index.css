@@ -113,3 +113,11 @@ html, body, #root {
     }
   }
 }
+/* ───────────────────────────────────────────────────────
+   ASSETS LIST: LINE SEPARATOR (add to index.css)
+   ─────────────────────────────────────────────────────── */
+@layer utilities {
+  .asset-divider {
+    @apply h-px bg-gradient-to-r from-transparent via-indigo-600/30 to-transparent;
+  }
+}

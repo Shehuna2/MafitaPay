@@ -322,16 +322,13 @@ export default function Dashboard() {
 
       {/* Quick Actions - 3 per row */}
       <div className="px-2 sm:px-4 pb-6">
-        <h3 className="text-lg sm:text-xl font-semibold mb-4 text-indigo-400">
-          Quick Actions
-        </h3>
         <div className="grid grid-cols-3 gap-4">
           {[
             { to: "/buy-airtime", label: "Airtime", icon: <Phone className="w-6 h-6" /> },
             { to: "/buy-data", label: "Data", icon: <Globe className="w-6 h-6" /> },
             { to: "/assets", label: "Gas", icon: <Fuel className="w-6 h-6" /> },
             { to: "/sell-crypto", label: "Sell", icon: <Repeat className="w-6 h-6" /> },
-            { to: "/p2p/marketplace", label: "Sell", icon: <Repeat2 className="w-6 h-6" /> },
+            { to: "/p2p/marketplace", label: "P2P", icon: <Repeat2 className="w-6 h-6" /> },
             { to: "/buy-cable-tv", label: "Cable", icon: <Tv className="w-6 h-6" /> },
             { to: "/buy-electricity", label: "Power", icon: <Zap className="w-6 h-6" /> },
             { to: "/buy-education", label: "Edu", icon: <Book className="w-6 h-6" /> },
