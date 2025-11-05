@@ -330,6 +330,7 @@ export default function Dashboard() {
             { to: "/buy-data", label: "Data", icon: <Globe className="w-6 h-6" /> },
             { to: "/assets", label: "Gas", icon: <Fuel className="w-6 h-6" /> },
             { to: "/sell-crypto", label: "Sell", icon: <Repeat className="w-6 h-6" /> },
+            { to: "/p2p/marketplace", label: "Sell", icon: <Repeat2 className="w-6 h-6" /> },
             { to: "/buy-cable-tv", label: "Cable", icon: <Tv className="w-6 h-6" /> },
             { to: "/buy-electricity", label: "Power", icon: <Zap className="w-6 h-6" /> },
             { to: "/buy-education", label: "Edu", icon: <Book className="w-6 h-6" /> },
