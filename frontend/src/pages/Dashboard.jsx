@@ -5,6 +5,7 @@ import {
   Phone,
   Globe,
   List,
+  Repeat2,
   Tv,
   Zap,
   Book,
