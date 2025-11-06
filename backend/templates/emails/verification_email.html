@@ -4,59 +4,137 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Verify Your MafitaPay Account</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    body {
+      margin: 0; padding: 0; background-color: #0f172a; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; color: #e2e8f0;
+    }
+    .container {
+      max-width: 600px; margin: 20px auto; background: #1e293b; border-radius: 20px; overflow: hidden; box-shadow: 0 24px 48px rgba(99, 102, 241, 0.18);
+    }
+    .header {
+      padding: 48px 24px 36px; text-align: center; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); position: relative; overflow: hidden;
+    }
+    .header::before {
+      content: ''; position: absolute; inset: 0; background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="%23ffffff" opacity="0.06"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>'); opacity: 0.4;
+    }
+    .logo {
+      width: 88px; height: 88px; border-radius: 22px; object-fit: cover; border: 4px solid rgba(255,255,255,0.25); box-shadow: 0 12px 28px rgba(0,0,0,0.35); margin-bottom: 16px;
+    }
+    .title {
+      color: #ffffff; margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.8px; position: relative; z-index: 1;
+    }
+    .subtitle {
+      color: #e0e7ff; margin: 8px 0 0; font-size: 16px; font-weight: 500; opacity: 0.9;
+    }
+    .content {
+      padding: 40px 32px; background: linear-gradient(to bottom, #1e293b, #0f172a); position: relative;
+    }
+    .content::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, #8b5cf6, transparent);
+    }
+    .greeting {
+      font-size: 21px; font-weight: 600; color: #e0e7ff; margin: 0 0 16px;
+    }
+    .message {
+      font-size: 16px; line-height: 1.75; color: #94a3b8; margin: 0 0 36px;
+    }
+    .cta-button {
+      display: inline-block; padding: 16px 44px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: #ffffff; text-decoration: none; font-weight: 600; font-size: 17px; border-radius: 14px; box-shadow: 0 10px 24px rgba(99, 102, 241, 0.45); transition: all 0.3s ease; position: relative; overflow: hidden;
+    }
+    .cta-button:hover {
+      transform: translateY(-3px); box-shadow: 0 16px 36px rgba(99, 102, 241, 0.55);
+    }
+    .cta-button::after {
+      content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, transparent, rgba(255,255,255,0.25)); opacity: 0; transition: opacity 0.3  s;
+    }
+    .cta-button:hover::after {
+      opacity: 1;
+    }
+    .fallback-link {
+      font-size: 13px; color: #64748b; margin-top: 28px; line-height: 1.6; word-break: break-all;
+    }
+    .fallback-link a {
+      color: #c4b5fd; text-decoration: underline;
+    }
+    .footer {
+      padding: 36px 32px 44px; background-color: #0f172a; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #1e293b;
+    }
+    .footer a {
+      color: #c4b5fd; text-decoration: none; font-weight: 500;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background-color: #0f172a; }
+    }
+    @media (max-width: 640px) {
+      .container { margin: 16px; border-radius: 24px; }
+      .header { padding: 36px 20px 28px; }
+      .content { padding: 32px 24px; }
+      .title { font-size: 26px; }
+      .cta-button { padding: 14px 36px; font-size: 16px; }
+    }
+  </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333;">
-
-  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 0 auto;">
-    <!-- Header -->
+<body>
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
     <tr>
-      <td style="padding: 40px 20px 20px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px 10px 0 0;">
-        <img src="https://mafitapay.com/api/media/profile_images/mafita.jpg" alt="MafitaPay Logo" width="120" style="display: block; margin: 0 auto; height: auto;" />
-        <h1 style="color: #ffffff; margin: 10px 0 0; font-size: 24px; font-weight: bold;">Welcome to MafitaPay!</h1>
-      </td>
-    </tr>
-
-    <!-- Main Content -->
-    <tr>
-      <td style="padding: 40px 30px; background-color: #ffffff;">
-        <h2 style="font-size: 20px; font-weight: bold; color: #333333; margin-bottom: 15px;">
-          Hi {{ first_name|default:"there" }},
-        </h2>
-
-        <p style="font-size: 16px; line-height: 1.6; color: #555555; margin: 0 0 25px;">
-          Thanks for signing up! To start making secure and fast transactions on MafitaPay, please verify your email address by clicking the button below.
-        </p>
-
-        <!-- CTA Button -->
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center" style="margin: 0 auto;">
+      <td align="center">
+        <!-- Main Card -->
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="container">
+          <!-- Header -->
           <tr>
-            <td align="center">
-              <a href="{{ verification_url }}" target="_blank"
-                style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: #ffffff; text-decoration: none; font-weight: bold; font-size: 16px; border-radius: 8px; box-shadow: 0 4px 12px rgba(16,185,129,0.3); transition: opacity 0.3s ease;">
-                Verify My Email Now
-              </a>
+            <td class="header">
+              <div style="position: relative; z-index: 1;">
+                <img src="https://mafitapay.com/api/media/profile_images/mafita.jpg" alt="MafitaPay Logo" class="logo" />
+                <h1 class="title">Welcome to MafitaPay!</h1>
+                <p class="subtitle">Verify your email to get started</p>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Main Content -->
+          <tr>
+            <td class="content">
+              <h2 class="greeting">Hi {{ first_name|default:"there" }},</h2>
+              <p class="message">
+                Thank you for joining <strong>MafitaPay</strong>! To start buying crypto, paying bills, and earning rewards, please verify your email address.
+                <br><br>
+                Click the button below to activate your account instantly.
+              </p>
+
+              <!-- CTA Button -->
+              <div style="text-align: center; margin: 36px 0;">
+                <a href="{{ verification_url }}" target="_blank" class="cta-button">
+                  Verify My Email Now
+                </a>
+              </div>
+
+              <p class="fallback-link">
+                If the button doesn’t work, copy and paste this link into your browser:<br>
+                <a href="{{ verification_url }}" target="_blank">{{ verification_url }}</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="footer">
+              <p style="margin: 0 0 10px;">
+                Need help? Reach us at
+                <a href="mailto:support@mafitapay.com">support@mafitapay.com</a>
+              </p>
+              <p style="margin: 0;">
+                © 2025 MafitaPay. All rights reserved. |
+                <a href="{{ unsubscribe_url }}">Unsubscribe</a> |
+                <a href="https://mafitapay.com/privacy">Privacy Policy</a>
+              </p>
             </td>
           </tr>
         </table>
-
-        <p style="font-size: 14px; color: #666666; margin-top: 25px; line-height: 1.5; word-break: break-all;">
-          If the button above doesn’t work, copy and paste this link into your browser: <br />
-          <a href="{{ verification_url }}" target="_blank" style="color: #10B981; text-decoration: underline;">{{ verification_url }}</a>
-        </p>
-      </td>
-    </tr>
-
-    <!-- Footer -->
-    <tr>
-      <td style="padding: 25px 30px 40px; background-color: #f8f9fa; text-align: center; font-size: 13px; color: #888888; border-top: 1px solid #eaeaea;">
-        <p style="margin: 0 0 10px;">Need help? Contact us at
-          <a href="mailto:support@mafitapay.com" style="color: #10B981;">support@mafitapay.com</a>
-        </p>
-        <p style="margin: 0;">
-          © 2025 MafitaPay. All rights reserved. |
-          <a href="{{ unsubscribe_url }}" style="color: #10B981;">Unsubscribe</a> |
-          <a href="https://mafitapay.com/privacy" style="color: #10B981;">Privacy Policy</a>
-        </p>
       </td>
     </tr>
   </table>
