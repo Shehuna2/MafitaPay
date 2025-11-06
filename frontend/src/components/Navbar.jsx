@@ -3,12 +3,12 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Bell, Headphones, User, X, LogOut } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import client from "../api/client";
-import { useAuth } from "../context/AuthContext"; // ✅ use context
+import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, logout } = useAuth(); // ✅ reactively track auth
+  const { isAuthenticated, logout } = useAuth();
   const access = localStorage.getItem("access");
 
   const [notifications, setNotifications] = useState([]);
@@ -24,7 +24,7 @@ export default function Navbar() {
     ? "http://127.0.0.1:8000"
     : "https://mafitapay.com";
 
-  // 🧠 Hide navbar on public pages
+  // Hide navbar on public pages
   const hiddenRoutes = ["/login", "/register", "/verify-email", "/reset-password"];
   const shouldHideNavbar = hiddenRoutes.some((r) => location.pathname.startsWith(r));
 
@@ -39,7 +39,7 @@ export default function Navbar() {
       const res = await client.get("notifications/");
       const data = Array.isArray(res.data) ? res.data : [];
       setNotifications(data);
-      localStorage.setItem("notifications", JSON.stringify(data)); // sync across tabs
+      localStorage.setItem("notifications", JSON.stringify(data));
     } catch (err) {
       console.warn("Failed to fetch notifications:", err.response?.data || err.message);
       setNotifications([]);
@@ -88,12 +88,9 @@ export default function Navbar() {
     const fetchProfileImage = async () => {
       try {
         const res = await client.get("profile-api/");
-        const img = res.data.profile_image
-          ? res.data.profile_image.startsWith("http")
-            ? res.data.profile_image
-            : `${BASE_URL}${res.data.profile_image}`
-          : "/media/profile_images/avt13.jpg";
-
+        const img =
+          res.data.profile_image ||
+          "backend/media/profile_images/avt13.jpg"; // fallback placeholder
         setProfileImage(img);
         localStorage.setItem("profile_image", img);
       } catch {
@@ -116,6 +113,21 @@ export default function Navbar() {
     };
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
+  // ✅ Update image immediately when profile changes
+  useEffect(() => {
+    const handleProfileUpdate = (e) => {
+      if (e.detail?.profile_image) {
+        const img = e.detail.profile_image.startsWith("http")
+          ? e.detail.profile_image
+          : `${BASE_URL}${e.detail.profile_image}`;
+        setProfileImage(img);
+        localStorage.setItem("profile_image", img);
+      }
+    };
+    window.addEventListener("profileImageUpdated", handleProfileUpdate);
+    return () => window.removeEventListener("profileImageUpdated", handleProfileUpdate);
   }, []);
 
   // ❌ Close menus when clicking outside

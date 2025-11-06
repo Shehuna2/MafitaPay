@@ -185,9 +185,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
     is_staff = serializers.BooleanField(source="user.is_staff", read_only=True)
     id = serializers.IntegerField(source="user.id", read_only=True)
 
-    # ✅ Allow uploading and returning these directly
-    profile_image = serializers.ImageField(allow_null=True, required=False)
-    id_document = serializers.FileField(allow_null=True, required=False)
+    # ✅ Make sure URLs are absolute (Cloudinary or otherwise)
+    profile_image = serializers.SerializerMethodField()
+    id_document = serializers.SerializerMethodField()
 
     class Meta:
         model = UserProfile
@@ -197,6 +197,27 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "profile_image", "id_document", "is_staff", "id",
         ]
         read_only_fields = ["total_trades", "successful_trades", "success_rate"]
+
+    # ✅ Auto-return full URL (Cloudinary already provides a full one)
+    def get_profile_image(self, obj):
+        if obj.profile_image:
+            try:
+                return obj.profile_image.url  # Cloudinary gives absolute URL
+            except Exception:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.profile_image.url)
+        return None
+
+    def get_id_document(self, obj):
+        if obj.id_document:
+            try:
+                return obj.id_document.url
+            except Exception:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.id_document.url)
+        return None
 
     def validate_profile_image(self, value):
         if value and value.size > 2 * 1024 * 1024:

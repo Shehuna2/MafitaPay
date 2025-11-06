@@ -29,7 +29,7 @@ class Crypto(models.Model):
     ]
     name = models.CharField(max_length=50)
     symbol = models.CharField(max_length=10, unique=True)
-    logo = models.ImageField(upload_to='images/', default='default_crypto_logo.png')
+    logo = models.ImageField(upload_to='images/', default='/media/images/Solana_Coin.png')
     coingecko_id = models.CharField(max_length=50, null=True)
     network = models.CharField(max_length=50, choices=NETWORK_CHOICES) 
 

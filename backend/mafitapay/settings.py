@@ -57,6 +57,8 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt",
+    "cloudinary",
+    "cloudinary_storage",
     "accounts",
     "referrals",
     "wallet",
@@ -115,11 +117,20 @@ DATABASES = {
 # 7. STATIC & MEDIA
 # --------------------------------------------------
 STATIC_URL = "/static/"
-STATIC_ROOT = os.getenv("STATIC_ROOT", "/tmp/staticfiles")   # <-- writable on Render
+STATIC_ROOT = os.getenv("STATIC_ROOT", "/tmp/staticfiles")
 STATICFILES_DIRS = [BASE_DIR / "static"] if DEBUG else []
 
+# --- Cloudinary Media Storage ---
+CLOUDINARY_STORAGE = {
+    "CLOUD_NAME": os.getenv("CLOUDINARY_CLOUD_NAME"),
+    "API_KEY": os.getenv("CLOUDINARY_API_KEY"),
+    "API_SECRET": os.getenv("CLOUDINARY_API_SECRET"),
+}
+
+DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+# MEDIA_ROOT = BASE_DIR / "media"
 
 
 # --------------------------------------------------
@@ -291,6 +302,7 @@ LOGGING = {
     "root": {"handlers": ["console"], "level": "INFO" if not DEBUG else "DEBUG"},
 }
 
+
 # --------------------------------------------------
 # 15. ALL YOUR API KEYS / CUSTOM SETTINGS
 # --------------------------------------------------
@@ -345,3 +357,6 @@ TON_SEQNO_MAX_ATTEMPTS = int(os.getenv("TON_SEQNO_MAX_ATTEMPTS", "5"))
 # --------------------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+if not DEBUG:
+    DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+    CLOUDINARY_URL = f"cloudinary://{os.getenv('CLOUDINARY_API_KEY')}:{os.getenv('CLOUDINARY_API_SECRET')}@{os.getenv('CLOUDINARY_CLOUD_NAME')}"
