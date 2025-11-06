@@ -121,6 +121,22 @@ STATICFILES_DIRS = [BASE_DIR / "static"] if DEBUG else []
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+
+# --------------------------------------------------
+# 17. CLOUDINARY (Media Storage)
+# --------------------------------------------------
+if not DEBUG:
+    INSTALLED_APPS += ["cloudinary", "cloudinary_storage"]
+
+    CLOUDINARY_STORAGE = {
+        "CLOUD_NAME": os.getenv("CLOUDINARY_CLOUD_NAME"),
+        "API_KEY": os.getenv("CLOUDINARY_API_KEY"),
+        "API_SECRET": os.getenv("CLOUDINARY_API_SECRET"),
+    }
+
+    DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+
+
 # --------------------------------------------------
 # 8. CORS
 # --------------------------------------------------

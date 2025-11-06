@@ -156,3 +156,7 @@ whitenoise==6.7.0
 yarg==0.1.9
 yarl==1.22.0
 zope.interface==8.0.1
+
+cloudinary
+django-cloudinary-storage
+
