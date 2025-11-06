@@ -43,19 +43,33 @@ export default function Dashboard() {
     { title: "Referral Bonus", details: "Invite a friend – earn ₦5,000 each", date: "20/6" },
   ];
 
-  const mockTransactions = [
-    { id: 1, type: "deposit", amount: 50000, time: "2 mins ago", icon: <ArrowDownCircle className="w-4 h-4 text-green-400" /> },
-    { id: 2, type: "airtime", amount: 2000, time: "15 mins ago", icon: <Phone className="w-4 h-4 text-indigo-400" /> },
-    { id: 3, type: "data", amount: 5000, time: "1 hr ago", icon: <Globe className="w-4 h-4 text-blue-400" /> },
-  ];
-
   const fetchWallet = useCallback(async () => {
     try {
-      const res = await client.get("wallet/");
-      setWallet(res.data);
-      setRecentTx(mockTransactions);
+      const [walletRes, txRes] = await Promise.all([
+        client.get("wallet/"),
+        client.get("/wallet/transactions/?limit=3")
+      ]);
+
+      setWallet(walletRes.data);
+
+      const data = Array.isArray(txRes.data) ? txRes.data : txRes.data.results || [];
+      const formattedTx = data.map(tx => ({
+        id: tx.id,
+        type: tx.category === "crypto" ? "Crypto" : tx.category === "airtime" ? "Airtime" : tx.category === "data" ? "Data" : "Other",
+        amount: parseFloat(tx.amount),
+        time: new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        icon: tx.tx_type === "credit" ? (
+          <ArrowDownCircle className="w-4 h-4 text-green-400" />
+        ) : (
+          <ArrowUpRight className="w-4 h-4 text-red-400" />
+        ),
+      }));
+
+      setRecentTx(formattedTx);
       setLoading(false);
-    } catch {
+    } catch (err) {
+      console.error("Failed to load wallet/transactions:", err);
+      setRecentTx([]);
       setLoading(false);
     } finally {
       setBalanceLoading(false);
@@ -345,44 +359,44 @@ export default function Dashboard() {
         </div>
 
         {/* Event Carousel */}
-          <div>
-            <h3 className="text-lg font-bold mb-3 text-indigo-400">Upcoming</h3>
+        <div className="px-2 sm:px-4">
+          <h3 className="text-lg font-bold mb-3 text-indigo-400">Upcoming</h3>
+          <div
+            ref={eventRef}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            className="relative overflow-hidden rounded-2xl"
+          >
             <div
-              ref={eventRef}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              className="relative overflow-hidden rounded-2xl"
+              className="flex transition-transform duration-700 ease-in-out"
+              style={{ transform: `translateX(-${currentEventIndex * 100}%)` }}
             >
-              <div
-                className="flex transition-transform duration-700 ease-in-out"
-                style={{ transform: `translateX(-${currentEventIndex * 100}%)` }}
-              >
-                {eventCards.map((ev, idx) => (
-                  <div key={idx} className="w-full flex-shrink-0 px-1">
-                    <div className="bg-gray-800/60 backdrop-blur-md p-4 rounded-xl border border-gray-700/50 flex flex-col sm:flex-row items-start sm:items-center justify-between h-28">
-                      <div>
-                        <p className="text-xs text-indigo-300">{ev.title}</p>
-                        <p className="mt-1 text-sm font-bold text-white">{ev.details}</p>
-                      </div>
-                      <span className="mt-2 sm:mt-0 bg-indigo-600/30 text-indigo-300 px-2.5 py-1 rounded-full text-xs font-bold">
-                        {ev.date}
-                      </span>
+              {eventCards.map((ev, idx) => (
+                <div key={idx} className="w-full flex-shrink-0 px-1">
+                  <div className="bg-gray-800/60 backdrop-blur-md p-4 rounded-xl border border-gray-700/50 flex flex-col sm:flex-row items-start sm:items-center justify-between h-28">
+                    <div>
+                      <p className="text-xs text-indigo-300">{ev.title}</p>
+                      <p className="mt-1 text-sm font-bold text-white">{ev.details}</p>
                     </div>
+                    <span className="mt-2 sm:mt-0 bg-indigo-600/30 text-indigo-300 px-2.5 py-1 rounded-full text-xs font-bold">
+                      {ev.date}
+                    </span>
                   </div>
-                ))}
-              </div>
-              <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-1.5">
-                {eventCards.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentEventIndex(idx)}
-                    className={`w-1.5 h-1.5 rounded-full transition-all ${idx === currentEventIndex ? "bg-indigo-400 w-4" : "bg-gray-600"}`}
-                  />
-                ))}
-              </div>
+                </div>
+              ))}
+            </div>
+            <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-1.5">
+              {eventCards.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentEventIndex(idx)}
+                  className={`w-1.5 h-1.5 rounded-full transition-all ${idx === currentEventIndex ? "bg-indigo-400 w-4" : "bg-gray-600"}`}
+                />
+              ))}
             </div>
           </div>
+        </div>
       </div>
     </>
   );
