@@ -3,7 +3,6 @@
 import os
 import sys
 
-
 def main():
     """Run administrative tasks."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mafitapay.settings')
@@ -16,13 +15,6 @@ def main():
             "forget to activate a virtual environment?"
         ) from exc
     execute_from_command_line(sys.argv)
-
-    # Additional code to update user profile image URLs after migration
-    from User.models import User
-    for user in User.objects.all():
-    if user.profile_image and not str(user.profile_image).startswith("http"):
-        user.profile_image.save(user.profile_image.name, user.profile_image.file, save=True)
-    print("✅ Updated all profile image URLs to Cloudinary")
 
 
 if __name__ == '__main__':

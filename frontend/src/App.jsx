@@ -1,3 +1,4 @@
+// src/App.jsx
 import { Routes, Route, useLocation } from "react-router-dom";
 import Layout from "./layouts/Layout";
 import Navbar from "./components/Navbar";
@@ -16,7 +17,7 @@ import WalletTransactions from "./pages/WalletTransactions";
 import Login from "./pages/accounts/Login";
 import Register from "./pages/accounts/Register";
 import Profile from "./pages/accounts/Profile";
-import VerifyEmail from "./pages/accounts/VerifyEmail";
+import VerifyEmail from "./pages/accounts/VerifyEmail"; // ← Already imported
 import ResetPassword from "./pages/accounts/ResetPassword";
 import ResetPasswordRequest from "./pages/accounts/ResetPasswordRequest";
 
@@ -44,10 +45,11 @@ function App() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
 
-  // Hide Navbar on login/register/reset-password pages
+  // Hide Navbar on auth & reset pages
   const hideNavbar =
     ["/login", "/register", "/reset-password-request"].includes(location.pathname) ||
-    location.pathname.startsWith("/reset-password");
+    location.pathname.startsWith("/reset-password") ||
+    location.pathname.startsWith("/verify-email"); // ← Add verify-email
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-gray-900 to-gray-900 text-white">
@@ -62,7 +64,7 @@ function App() {
             {/* Auth */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/verify-email/:token" element={<VerifyEmail />} />
+            <Route path="/verify-email" element={<VerifyEmail />} /> {/* ← Fixed: Added */}
             <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/reset-password-request" element={<ResetPasswordRequest />} />
 

@@ -2,13 +2,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import client from "../../api/client";
-import { toast, ToastContainer } from "react-toastify";
-import { Loader2 } from "lucide-react";
-import "react-toastify/dist/ReactToastify.css";
+import { Loader2, ArrowLeft, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { useAuth } from "../../context/AuthContext"; // ← Correct
 
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { login } = useAuth(); // ← Fixed: Use `login` directly
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: localStorage.getItem("rememberedEmail") || "",
@@ -17,14 +17,14 @@ export default function Login() {
   const [errorMessage, setErrorMessage] = useState("");
   const [showResend, setShowResend] = useState(false);
   const [rememberMe, setRememberMe] = useState(!!localStorage.getItem("rememberedEmail"));
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const verified = params.get("verified");
     if (verified === "true") {
-      toast.success("Email verified successfully! Please log in.", { autoClose: 3000 });
+      setErrorMessage("Email verified! Please log in.");
     } else if (verified === "false") {
-      toast.error("Email verification failed. Please try again.", { autoClose: 3000 });
       setErrorMessage("Email verification failed. Please try again.");
     }
   }, [location]);
@@ -41,19 +41,23 @@ export default function Login() {
 
     try {
       const res = await client.post("/login/", formData);
-      localStorage.setItem("access", res.data.access);
-      localStorage.setItem("refresh", res.data.refresh);
+      const { access, refresh } = res.data;
+
+      // Save tokens
+      localStorage.setItem("access", access);
+      localStorage.setItem("refresh", refresh);
+
       if (rememberMe) {
         localStorage.setItem("rememberedEmail", formData.email);
       } else {
         localStorage.removeItem("rememberedEmail");
       }
 
-      // Fetch user profile
+      // Fetch profile
       const profileRes = await client.get(`/profile-api/?t=${Date.now()}`);
       const userData = {
         email: profileRes.data.email,
-        id: profileRes.data.id, // Critical for role detection
+        id: profileRes.data.id,
         is_merchant: profileRes.data.is_merchant,
         is_staff: profileRes.data.is_staff,
         full_name: profileRes.data.full_name || null,
@@ -62,21 +66,20 @@ export default function Login() {
       };
       localStorage.setItem("user", JSON.stringify(userData));
       localStorage.setItem("last_user_fetch", Date.now().toString());
-      console.debug("Stored user data:", userData);
 
-      toast.success("Login successful!", { autoClose: 3000 });
+      // ← Fixed: Call `login` from context
+      login({ access, refresh }, userData);
+
       window.dispatchEvent(new Event("login"));
-      navigate("/dashboard");
+
+      navigate("/dashboard", { replace: true });
     } catch (err) {
-      console.error("Login error:", err.response?.data || err.message);
       const errors = err.response?.data?.errors || {};
       const msg = errors.detail || "Login failed. Please check your credentials.";
       if (errors.action === "resend_verification") {
         setShowResend(true);
-        toast.warning("Your email is not verified. Please verify it first.", { autoClose: 3000 });
-        setErrorMessage("Your account is not verified. Check your email inbox or resend verification.");
+        setErrorMessage("Your account is not verified. Check your email or resend verification.");
       } else {
-        toast.error(msg, { autoClose: 3000 });
         setErrorMessage(msg);
       }
     } finally {
@@ -87,114 +90,181 @@ export default function Login() {
   const handleResendVerification = async () => {
     setLoading(true);
     try {
-      const res = await client.post("/api/resend-verification/", { email: formData.email });
-      toast.success(res.data.message, { autoClose: 3000 });
+      await client.post("/api/resend-verification/", { email: formData.email });
     } catch (err) {
-      const msg = err.response?.data?.error || "Failed to resend verification email.";
-      toast.error(msg, { autoClose: 3000 });
-      setErrorMessage(msg);
+      setErrorMessage(err.response?.data?.error || "Failed to resend verification email.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <section className="flex min-h-screen items-center justify-center p-4">
-      <ToastContainer />
-      <div className="w-full max-w-md rounded-2xl border border-indigo-900 bg-gray-800 p-8 shadow-xl backdrop-blur-md">
-        <h2 className="text-2xl font-semibold text-center text-green-500 mb-6">
-          Welcome Back
-        </h2>
+    <>
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .shimmer {
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+          background-size: 200% 100%;
+          animation: shimmer 1.8s infinite;
+        }
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up { animation: fade-in-up 0.4s ease-out; }
+      `}</style>
 
-        {errorMessage && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 border border-red-300 rounded-lg text-sm">
-            {errorMessage}
+      <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden flex items-center justify-center p-3">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 to-gray-900/5 pointer-events-none" />
+
+        {/* Full-Screen Loading */}
+        {loading && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-gray-800/90 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-gray-700/50 max-w-md w-full mx-4">
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-full bg-indigo-600/20 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
+                  </div>
+                  <div className="absolute inset-0 rounded-full bg-indigo-600/30 animate-ping"></div>
+                </div>
+                <p className="text-lg font-medium text-indigo-300">Signing you in...</p>
+                <div className="w-full h-2 bg-gray-700/50 rounded-full overflow-hidden mt-2">
+                  <div className="h-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-600 shimmer"></div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-200 mb-1">
-              Email Address
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400"
-              placeholder="Enter your email"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-200 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400"
-              placeholder="Enter your password"
-            />
-          </div>
-
-          <div className="text-right text-sm">
-            <Link
-              to="/reset-password-request"
-              className="text-green-600 hover:underline font-medium"
-            >
-              Forgot Password?
-            </Link>
-          </div>
-
-          <div className="flex items-center justify-between text-sm">
-            <label className="flex items-center text-white-700">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="mr-2 accent-green-600"
-              />
-              Remember Me
-            </label>
-          </div>
-
+        <div className="max-w-md w-full relative z-10">
+          {/* Back Arrow */}
           <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-indigo-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition flex justify-center items-center"
+            onClick={() => window.history.back()}
+            className="group flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 transition-all duration-200 mb-4"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Login"}
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            Back
           </button>
-        </form>
 
-        {showResend && (
-          <div className="mt-4 text-center text-sm text-gray-700">
-            <button
-              onClick={handleResendVerification}
-              disabled={loading}
-              className="text-green-600 hover:underline font-medium"
-            >
-              Resend Verification Email
-            </button>
+          <div className="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 shadow-2xl border border-gray-700/50 animate-fade-in-up">
+            <h2 className="text-2xl font-bold text-center text-indigo-400 mb-6">
+              Welcome Back
+            </h2>
+
+            {errorMessage && (
+              <div className="mb-5 p-3.5 bg-red-900/20 backdrop-blur-sm border border-red-500/30 rounded-xl text-sm text-red-300 text-center">
+                {errorMessage}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Email */}
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                    placeholder="you@example.com"
+                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                    placeholder="••••••••"
+                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-10 py-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-indigo-400 transition"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Forgot + Remember */}
+              <div className="flex items-center justify-between text-xs">
+                <label className="flex items-center gap-2 text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-gray-600 text-indigo-500 focus:ring-indigo-500"
+                  />
+                  Remember me
+                </label>
+                <Link
+                  to="/reset-password-request"
+                  className="text-indigo-400 hover:text-indigo-300 font-medium transition"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl text-sm transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-75 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  "Login"
+                )}
+              </button>
+            </form>
+
+            {/* Resend Verification */}
+            {showResend && (
+              <div className="mt-4 text-center">
+                <button
+                  onClick={handleResendVerification}
+                  disabled={loading}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 font-medium underline transition"
+                >
+                  Resend Verification Email
+                </button>
+              </div>
+            )}
+
+            {/* Register Link */}
+            <div className="mt-5 text-center text-xs text-gray-400">
+              Don’t have an account?{" "}
+              <Link
+                to="/register"
+                className="text-indigo-400 hover:text-indigo-300 font-medium underline transition"
+              >
+                Register
+              </Link>
+            </div>
           </div>
-        )}
-
-        <div className="mt-4 text-center text-sm text-white-700">
-          Don’t have an account?{" "}
-          <Link
-            to="/register"
-            className="text-green-600 hover:underline font-medium"
-          >
-            Register
-          </Link>
         </div>
       </div>
-    </section>
+    </>
   );
 }

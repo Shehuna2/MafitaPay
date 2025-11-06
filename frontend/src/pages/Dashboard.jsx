@@ -4,11 +4,9 @@ import { Link, useLocation } from "react-router-dom";
 import {
   Wallet, Phone, Globe, List, Repeat2, Tv, Zap, Book, Users, Fuel,
   RefreshCw, ArrowUpRight, ArrowDownLeft, Repeat, Eye, EyeOff, X,
-  ArrowDownCircle, Clock,
+  ArrowDownCircle, Clock, Building2, ArrowRightLeft
 } from "lucide-react";
 import client from "../api/client";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 
 const formatCurrency = (amount) => {
   const num = Number(amount) || 0;
@@ -32,7 +30,8 @@ export default function Dashboard() {
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showBalance, setShowBalance] = useState(false);
-  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState(""); // "deposit" or "withdraw"
   const [currentEventIndex, setCurrentEventIndex] = useState(0);
   const [recentTx, setRecentTx] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
@@ -57,13 +56,12 @@ export default function Dashboard() {
       setRecentTx(mockTransactions);
       setLoading(false);
     } catch {
-      toast.error("Failed to load wallet");
       setLoading(false);
     } finally {
       setBalanceLoading(false);
       setIsRefreshing(false);
     }
-  }, [mockTransactions]);
+  }, []);
 
   useEffect(() => {
     fetchWallet();
@@ -73,7 +71,6 @@ export default function Dashboard() {
     if (balanceLoading || isRefreshing) return;
     setBalanceLoading(true);
     setIsRefreshing(true);
-    toast.info("Refreshing…");
     await fetchWallet();
     triggerHaptic();
   };
@@ -82,7 +79,17 @@ export default function Dashboard() {
     if ("vibrate" in navigator) navigator.vibrate?.(30);
   };
 
-  // ─────── Event Carousel ───────
+  const openModal = (type) => {
+    setModalType(type);
+    setShowModal(true);
+    triggerHaptic();
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setModalType("");
+  };
+
   const eventRef = useRef(null);
   const touchStart = useRef(0);
   const touchEnd = useRef(0);
@@ -129,8 +136,7 @@ export default function Dashboard() {
 
   return (
     <>
-      {/* ──────── INJECTED STYLES (no index.css needed) ──────── */}
-      <style jsx>{`
+      <style>{`
         @keyframes slide-up {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -149,13 +155,9 @@ export default function Dashboard() {
       `}</style>
 
       <div className="min-h-screen text-white overflow-x-hidden px-1 sm:px-2">
-        <ToastContainer position="top-right" theme="dark" autoClose={3000} />
-
-        {/* ─────── HERO WALLET CARD (NO BLINKING) ─────── */}
+        {/* HERO WALLET CARD */}
         <div className="relative mx-2 mt-4 sm:mt-6 mb-6 sm:mb-10">
-          <div
-            className="relative bg-indigo-600/30 backdrop-blur-2xl p-6 sm:p-8 rounded-3xl shadow-wallet border border-indigo-600/20 transform transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
-          >
+          <div className="relative bg-indigo-600/30 backdrop-blur-2xl p-6 sm:p-8 rounded-3xl shadow-wallet border border-indigo-600/20 transform transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between mb-4 sm:mb-6">
               <h2 className="flex items-center gap-2 sm:gap-3 text-xl sm:text-2xl font-bold text-white">
@@ -221,7 +223,7 @@ export default function Dashboard() {
                     to="/wallet-transactions"
                     className="text-xs text-indigo-400 hover:text-white underline mt-2 inline-block"
                   >
-                    View all to
+                    View all
                   </Link>
                 </div>
               )}
@@ -232,20 +234,20 @@ export default function Dashboard() {
               <p className="text-xs sm:text-sm text-gray-300">Available for spending</p>
               <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
                 <button
-                  onClick={() => { setShowDepositModal(true); triggerHaptic(); }}
+                  onClick={() => openModal("deposit")}
                   className="group flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2.5 sm:px-5 sm:py-3 rounded-2xl text-sm sm:text-base font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition haptic-feedback"
                 >
                   <ArrowDownLeft className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-y-0.5 transition" />
                   Deposit
                 </button>
 
-                <Link
-                  to="/deposit"
+                <button
+                  onClick={() => openModal("withdraw")}
                   className="group flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2.5 sm:px-5 sm:py-3 rounded-2xl text-sm sm:text-base font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition haptic-feedback"
                 >
                   <ArrowUpRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:-translate-y-0.5 transition" />
                   Withdraw
-                </Link>
+                </button>
               </div>
             </div>
 
@@ -262,34 +264,61 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ─────── DEPOSIT MODAL ─────── */}
-        {showDepositModal && (
+        {/* UNIVERSAL MODAL: Deposit or Withdraw */}
+        {showModal && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <div className="relative bg-indigo-600/40 backdrop-blur-xl p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-sm sm:max-w-md border border-indigo-600/30 animate-fade-in">
+            <div className="relative bg-indigo-600/40 backdrop-blur-xl p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-sm sm:max-w-md border border-indigo-600/30">
               <button
-                onClick={() => setShowDepositModal(false)}
+                onClick={closeModal}
                 className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-300 hover:text-white haptic-feedback"
                 aria-label="Close"
               >
                 <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
 
-              <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">Deposit via P2P</h2>
+              <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">
+                {modalType === "deposit" ? "Deposit Funds" : "Withdraw Funds"}
+              </h2>
               <p className="text-sm sm:text-base text-gray-300 mb-4 sm:mb-6">
-                Create a secure peer-to-peer deposit order in the marketplace.
+                Choose how you’d like to {modalType === "deposit" ? "add" : "withdraw"} money.
               </p>
-              <Link
-                to="/p2p/marketplace"
-                onClick={() => { setShowDepositModal(false); triggerHaptic(); }}
-                className="block w-full text-center bg-indigo-600 text-white py-3 rounded-2xl text-sm sm:text-base font-semibold hover:shadow-lg transform hover:scale-105 transition haptic-feedback"
-              >
-                Go to Marketplace
-              </Link>
+
+              <div className="space-y-3">
+                <Link
+                  to={modalType === "deposit" ? "/deposit/" : "/withdraw/"}
+                  onClick={closeModal}
+                  className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 hover:bg-indigo-600/20 hover:border-indigo-500/50 transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3">
+                    <Building2 className="w-6 h-6 text-indigo-400" />
+                    <div>
+                      <p className="font-medium text-white">Bank Transfer</p>
+                      <p className="text-xs text-gray-400">Instant via your bank</p>
+                    </div>
+                  </div>
+                  <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
+                </Link>
+
+                <Link
+                  to="/p2p/marketplace"
+                  onClick={closeModal}
+                  className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 hover:bg-indigo-600/20 hover:border-indigo-500/50 transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3">
+                    <Repeat2 className="w-6 h-6 text-indigo-400" />
+                    <div>
+                      <p className="font-medium text-white">P2P Marketplace</p>
+                      <p className="text-xs text-gray-400">Trade directly with users</p>
+                    </div>
+                  </div>
+                  <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
+                </Link>
+              </div>
             </div>
           </div>
         )}
 
-        {/* ─────── Quick Actions ─────── */}
+        {/* Quick Actions */}
         <div className="px-2 sm:px-4 pb-6">
           <div className="grid grid-cols-3 gap-4">
             {[
@@ -315,45 +344,45 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ─────── Swipeable Carousel ─────── */}
-        <div className="px-2 sm:px-4 pb-8 select-none">
-          <h3 className="text-lg sm:text-xl font-semibold mb-4 text-indigo-400">Upcoming</h3>
-          <div
-            ref={eventRef}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            className="relative overflow-hidden rounded-3xl"
-          >
+        {/* Event Carousel */}
+          <div>
+            <h3 className="text-lg font-bold mb-3 text-indigo-400">Upcoming</h3>
             <div
-              className="flex transition-transform duration-700 ease-in-out"
-              style={{ transform: `translateX(-${currentEventIndex * 100}%)`, width: `${eventCards.length * 100}%` }}
+              ref={eventRef}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              className="relative overflow-hidden rounded-2xl"
             >
-              {eventCards.map((ev, idx) => (
-                <div key={idx} className="w-full flex-shrink-0 px-1">
-                  <div className="bg-gray-800 backdrop-blur-xl p-4 sm:p-6 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between border border-indigo-600/20 shadow-wallet h-28 sm:h-36">
-                    <div>
-                      <p className="text-xs sm:text-sm text-indigo-300">{ev.title}</p>
-                      <p className="mt-1 text-sm sm:text-lg font-medium text-white">{ev.details}</p>
+              <div
+                className="flex transition-transform duration-700 ease-in-out"
+                style={{ transform: `translateX(-${currentEventIndex * 100}%)` }}
+              >
+                {eventCards.map((ev, idx) => (
+                  <div key={idx} className="w-full flex-shrink-0 px-1">
+                    <div className="bg-gray-800/60 backdrop-blur-md p-4 rounded-xl border border-gray-700/50 flex flex-col sm:flex-row items-start sm:items-center justify-between h-28">
+                      <div>
+                        <p className="text-xs text-indigo-300">{ev.title}</p>
+                        <p className="mt-1 text-sm font-bold text-white">{ev.details}</p>
+                      </div>
+                      <span className="mt-2 sm:mt-0 bg-indigo-600/30 text-indigo-300 px-2.5 py-1 rounded-full text-xs font-bold">
+                        {ev.date}
+                      </span>
                     </div>
-                    <span className="mt-2 sm:mt-0 bg-indigo-600/30 text-indigo-300 px-2 sm:px-3 py-1 rounded-full text-xs font-semibold">
-                      {ev.date}
-                    </span>
                   </div>
-                </div>
-              ))}
-            </div>
-            <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-2">
-              {eventCards.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentEventIndex(idx)}
-                  className={`w-2 h-2 rounded-full ${idx === currentEventIndex ? "bg-indigo-400" : "bg-gray-600"}`}
-                />
-              ))}
+                ))}
+              </div>
+              <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-1.5">
+                {eventCards.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentEventIndex(idx)}
+                    className={`w-1.5 h-1.5 rounded-full transition-all ${idx === currentEventIndex ? "bg-indigo-400 w-4" : "bg-gray-600"}`}
+                  />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
       </div>
     </>
   );

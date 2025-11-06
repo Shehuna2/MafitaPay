@@ -34,7 +34,6 @@ export default function AdminSellOrders() {
     cancelled: 0,
   });
 
-  // Fetch orders
   const fetchOrders = async () => {
     try {
       if (!refreshing) setLoading(true);
@@ -164,7 +163,7 @@ export default function AdminSellOrders() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white px-4 py-10">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white px-3 sm:px-4 py-8">
         <style>{`
           @keyframes shimmer {
             0% { background-position: -200% 0; }
@@ -181,50 +180,50 @@ export default function AdminSellOrders() {
             animation: shimmer 2.2s infinite linear;
           }
         `}</style>
-        <div className="w-full max-w-3xl bg-gray-800/80 rounded-2xl p-8 shadow-xl border border-gray-700">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+        <div className="w-full max-w-4xl bg-gray-800/80 rounded-2xl p-6 sm:p-8 shadow-xl border border-gray-700">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-5 gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-6 h-6 bg-gray-700 rounded-full shimmer"></div>
+              <div className="w-5 h-5 bg-gray-700 rounded-full shimmer"></div>
               <div className="h-5 w-32 rounded shimmer"></div>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="w-8 h-8 rounded-full shimmer"></div>
+                <div key={i} className="w-7 h-7 rounded-full shimmer"></div>
               ))}
             </div>
           </div>
-          <div className="h-12 rounded-lg mb-3 w-2/3 md:w-1/2 shimmer"></div>
-          <div className="h-4 rounded w-1/4 mb-8 shimmer"></div>
-          <div className="flex justify-start md:justify-end gap-4">
-            <div className="h-12 w-12 rounded-full shimmer"></div>
-            <div className="h-12 w-12 rounded-full shimmer"></div>
+          <div className="h-10 rounded-lg mb-3 w-2/3 md:w-1/2 shimmer"></div>
+          <div className="h-4 rounded w-1/4 mb-6 shimmer"></div>
+          <div className="flex justify-start md:justify-end gap-3">
+            <div className="h-10 w-10 rounded-full shimmer"></div>
+            <div className="h-10 w-10 rounded-full shimmer"></div>
           </div>
         </div>
-        <div className="w-full max-w-5xl mt-10 px-2 sm:px-6">
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
+        <div className="w-full max-w-6xl mt-8 px-2 sm:px-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
             {Array(8)
               .fill()
               .map((_, i) => (
                 <div
                   key={i}
-                  className="h-24 sm:h-28 rounded-xl border border-gray-700 shimmer"
+                  className="h-20 sm:h-24 rounded-xl border border-gray-700 shimmer"
                 ></div>
               ))}
           </div>
         </div>
-        <p className="text-gray-400 mt-10 text-sm md:text-base animate-pulse text-center">
+        <p className="text-gray-400 mt-8 text-sm animate-pulse text-center">
           Fetching your data securely...
         </p>
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-white">
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="max-w-8xl mx-auto px-3 sm:px-4 py-6">
         {toast && (
           <div
-            className={`fixed top-20 right-6 px-4 py-2 rounded-lg shadow-lg text-sm ${
+            className={`fixed top-16 sm:top-20 right-3 sm:right-6 px-4 py-2 rounded-lg shadow-lg text-xs sm:text-sm ${
               toast.type === "error" ? "bg-red-600/80" : "bg-green-600/80"
             } backdrop-blur-md animate-fade-in-out`}
           >
@@ -233,7 +232,7 @@ export default function AdminSellOrders() {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 mb-6">
           {[
             { label: "Total", value: stats.total, color: "text-indigo-400" },
             { label: "Pending", value: stats.pending, color: "text-yellow-400" },
@@ -243,31 +242,31 @@ export default function AdminSellOrders() {
           ].map((s, i) => (
             <div
               key={i}
-              className="bg-gray-800/50 border border-gray-700/50 rounded-xl text-center p-4 shadow-sm hover:border-indigo-500/30 transition"
+              className="bg-gray-800/50 border border-gray-700/50 rounded-xl text-center p-3 sm:p-4 shadow-sm hover:border-indigo-500/30 transition"
             >
               <p className="text-xs text-gray-400 uppercase tracking-wide">{s.label}</p>
-              <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
+              <p className={`text-xl sm:text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
             </div>
           ))}
         </div>
 
         {/* Header */}
-        <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-          <h1 className="text-2xl font-semibold">Sell Orders</h1>
-          <div className="flex gap-3">
+        <div className="flex flex-wrap justify-between items-center gap-3 mb-5">
+          <h1 className="text-xl sm:text-2xl font-semibold">Sell Orders</h1>
+          <div className="flex gap-2 sm:gap-3">
             <button
               onClick={() => {
                 setRefreshing(true);
                 fetchOrders();
               }}
-              className="px-4 py-2 bg-indigo-600/60 hover:bg-indigo-600 rounded-lg flex items-center gap-2 transition"
+              className="px-3 sm:px-4 py-2 bg-indigo-600/60 hover:bg-indigo-600 rounded-lg flex items-center gap-1.5 sm:gap-2 text-sm transition"
             >
               {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
               Refresh
             </button>
             <button
               onClick={exportToCSV}
-              className="px-4 py-2 bg-green-600/60 hover:bg-green-600 rounded-lg flex items-center gap-2 transition"
+              className="px-3 sm:px-4 py-2 bg-green-600/60 hover:bg-green-600 rounded-lg flex items-center gap-1.5 sm:gap-2 text-sm transition"
             >
               <Download className="w-4 h-4" /> Export
             </button>
@@ -275,22 +274,22 @@ export default function AdminSellOrders() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap gap-3 mb-8 bg-gray-800/40 p-4 rounded-xl border border-gray-700/30 backdrop-blur-md">
-          <div className="flex items-center gap-2 bg-gray-900/60 px-3 py-2 rounded-lg">
+        <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-gray-800/40 border border-gray-700/30 backdrop-blur-md mb-6">
+          <div className="flex items-center gap-2 bg-gray-900/60 px-3 py-1.5 rounded-lg">
             <Search className="w-4 h-4 text-gray-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search order..."
-              className="bg-transparent outline-none text-sm text-white w-48"
+              className="bg-transparent outline-none text-sm text-white w-32 sm:w-48"
             />
           </div>
           {["all", "pending_payment", "proof_submitted", "completed", "cancelled"].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-4 py-2 text-sm rounded-lg capitalize transition ${
+              className={`px-3 sm:px-4 py-1.5 text-xs sm:text-sm rounded-lg capitalize transition ${
                 filter === f
                   ? "bg-indigo-600 text-white"
                   : "bg-gray-900/50 text-gray-400 hover:bg-gray-800/70"
@@ -302,27 +301,23 @@ export default function AdminSellOrders() {
         </div>
 
         {/* Orders */}
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
-          </div>
-        ) : currentOrders.length === 0 ? (
+        {currentOrders.length === 0 ? (
           <div className="flex flex-col items-center py-10 text-gray-400">
             <AlertCircle className="w-8 h-8 mb-2 text-gray-500" />
             <p>No orders found.</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {currentOrders.map((o) => (
               <div
                 key={o.order_id}
-                className={`flex justify-between items-center bg-gray-900/70 border border-gray-800 rounded-xl p-4 shadow-sm transition ${
+                className={`flex justify-between items-center bg-gray-900/70 border border-gray-800 rounded-xl p-3 sm:p-4 shadow-sm transition ${
                   highlighted.includes(o.order_id)
                     ? "border-blue-600/50 shadow-blue-500/20 animate-pulse"
                     : "hover:border-indigo-500/30"
                 }`}
               >
-                <div className="text-sm space-y-1">
+                <div className="text-xs sm:text-sm space-y-0.5">
                   <p><span className="text-gray-500">Asset:</span> <span className="font-semibold text-yellow-400">{o.asset?.toUpperCase()}</span></p>
                   <p><span className="text-gray-500">Amount:</span> {o.amount_asset} → ₦{o.amount_ngn}</p>
                   <p><span className="text-gray-500">Source:</span> {o.source || "N/A"}</p>
@@ -330,12 +325,12 @@ export default function AdminSellOrders() {
                   <p className="text-xs text-gray-500">Created: {new Date(o.created_at).toLocaleString()}</p>
                 </div>
 
-                <div className="flex flex-col items-end gap-3">
+                <div className="flex flex-col items-end gap-2">
                   {o.payment_proof && (
                     <img
                       src={o.payment_proof}
                       alt="proof"
-                      className="w-20 h-20 object-cover rounded-lg cursor-pointer border border-gray-700 hover:border-indigo-500 transition"
+                      className="w-20 sm:w-24 h-20 sm:h-24 object-cover rounded-lg cursor-pointer border border-gray-700 hover:border-indigo-500 transition"
                       onClick={() => { setModalImage(o.payment_proof); setModalIsOpen(true); }}
                     />
                   )}
@@ -343,7 +338,7 @@ export default function AdminSellOrders() {
                     <button
                       onClick={() => handleUpdateStatus(o.order_id, "completed")}
                       disabled={updating === o.order_id}
-                      className="px-3 py-1 bg-green-600/70 hover:bg-green-600 rounded-lg text-sm flex items-center gap-1 transition"
+                      className="px-3 sm:px-4 py-1.5 bg-green-600/70 hover:bg-green-600 rounded-lg text-xs sm:text-sm flex items-center gap-1 transition"
                     >
                       {updating === o.order_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                       Approve
@@ -351,7 +346,7 @@ export default function AdminSellOrders() {
                     <button
                       onClick={() => handleUpdateStatus(o.order_id, "cancelled")}
                       disabled={updating === o.order_id}
-                      className="px-3 py-1 bg-red-600/70 hover:bg-red-600 rounded-lg text-sm flex items-center gap-1 transition"
+                      className="px-3 sm:px-4 py-1.5 bg-red-600/70 hover:bg-red-600 rounded-lg text-xs sm:text-sm flex items-center gap-1 transition"
                     >
                       {updating === o.order_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
                       Reject
@@ -365,19 +360,19 @@ export default function AdminSellOrders() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex justify-center gap-4 pt-6">
+          <div className="flex justify-center gap-3 pt-5">
             <button
               onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
               disabled={currentPage === 1}
-              className="px-4 py-2 bg-gray-800/70 rounded-lg hover:bg-gray-700 disabled:opacity-40"
+              className="px-4 py-1.5 bg-gray-800/70 rounded-lg hover:bg-gray-700 disabled:opacity-40 text-sm"
             >
               Prev
             </button>
-            <span className="text-sm text-gray-400">Page {currentPage} of {totalPages}</span>
+            <span className="text-xs sm:text-sm text-gray-400">Page {currentPage} of {totalPages}</span>
             <button
               onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
               disabled={currentPage === totalPages}
-              className="px-4 py-2 bg-gray-800/70 rounded-lg hover:bg-gray-700 disabled:opacity-40"
+              className="px-4 py-1.5 bg-gray-800/70 rounded-lg hover:bg-gray-700 disabled:opacity-40 text-sm"
             >
               Next
             </button>
@@ -388,14 +383,14 @@ export default function AdminSellOrders() {
         <Modal
           isOpen={modalIsOpen}
           onRequestClose={() => setModalIsOpen(false)}
-          className="bg-gray-900/90 backdrop-blur-md rounded-xl p-6 max-w-3xl mx-auto mt-24 outline-none shadow-lg"
+          className="bg-gray-900/90 backdrop-blur-md rounded-xl p-5 max-w-4xl mx-auto mt-20 sm:mt-24 outline-none shadow-lg"
           overlayClassName="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center"
         >
-          <h2 className="text-xl font-semibold mb-4">Payment Proof</h2>
+          <h2 className="text-lg sm:text-xl font-semibold mb-3">Payment Proof</h2>
           <img src={modalImage} alt="Proof" className="w-full rounded-lg" />
           <button
             onClick={() => setModalIsOpen(false)}
-            className="mt-4 px-6 py-2 bg-indigo-600/70 hover:bg-indigo-600 rounded-lg text-white transition"
+            className="mt-4 px-5 sm:px-6 py-2 bg-indigo-600/70 hover:bg-indigo-600 rounded-lg text-white text-sm transition"
           >
             Close
           </button>

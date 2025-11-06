@@ -1,27 +1,24 @@
 // src/pages/Assets.jsx
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, ArrowDown, Search, Clock, Star } from "lucide-react";
+import { ArrowUpRight, ArrowDown, Search, Clock, Star, ArrowLeft } from "lucide-react";
 import client from "../../api/client";
 
-// ──────────────────────────────────────── HAPTIC
 const triggerHaptic = () => {
   if ("vibrate" in navigator) navigator.vibrate?.(30);
 };
 
-// ──────────────────────────────────────── ERROR BOUNDARY
 class AssetCardErrorBoundary extends React.Component {
   state = { hasError: false };
   static getDerivedStateFromError() { return { hasError: true }; }
   componentDidCatch(e, i) { console.error("AssetCard error:", e, i); }
   render() {
     return this.state.hasError
-      ? <div className="p-5 rounded-2xl bg-red-900/20 border border-red-500/30 text-red-400 text-center">Failed to load</div>
+      ? <div className="p-5 rounded-xl bg-red-900/20 border border-red-500/30 text-red-400 text-center text-sm">Failed to load</div>
       : this.props.children;
   }
 }
 
-// ──────────────────────────────────────── SPARKLINE
 const Sparkline = React.memo(({ points = [], color = "#10B981", width = 90, height = 36 }) => {
   if (!points?.length) return null;
   const min = Math.min(...points);
@@ -40,7 +37,6 @@ const Sparkline = React.memo(({ points = [], color = "#10B981", width = 90, heig
   );
 });
 
-// ──────────────────────────────────────── HELPERS
 const makeInitialPoints = (price, count = 14) => {
   const p = Number(price) || 0;
   const points = [];
@@ -53,7 +49,6 @@ const makeInitialPoints = (price, count = 14) => {
   return points;
 };
 
-// ──────────────────────────────────────── ASSET CARD (ONLY ONE CARD, STAR INSIDE)
 const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) => {
   const navigate = useNavigate();
   const logo = asset.logo_url?.startsWith("http")
@@ -93,39 +88,36 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) =
     <AssetCardErrorBoundary>
       <div
         onClick={handleClick}
-        className="group relative w-full bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl p-4 rounded-2xl border border-indigo-600/20 shadow-wallet transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:border-indigo-500/40 cursor-pointer animate-fade-in-up haptic-feedback"
+        className="group relative w-full bg-gray-800/80 backdrop-blur-xl p-3.5 rounded-xl border border-gray-700/50 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:border-indigo-500/50 cursor-pointer"
       >
-        <div className="absolute inset-0 rounded-2xl bg-indigo-600/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        <div className="absolute inset-0 rounded-xl bg-indigo-600/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
         <div className="relative flex items-center justify-between gap-3">
-          {/* Left: Logo + Name */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-white/10 p-0.5 bg-white/5 flex-shrink-0">
+            <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-600/50 bg-gray-700/50 flex-shrink-0">
               {logo ? (
                 <img src={logo} alt={asset.name} className="w-full h-full rounded-full object-cover" />
               ) : (
-                <div className="w-full h-full rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs">
+                <div className="w-full h-full rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs">
                   {asset.symbol?.[0]}
                 </div>
               )}
             </div>
             <div className="min-w-0">
-              <h3 className="text-base font-bold text-white truncate group-hover:text-indigo-300 transition">
+              <h3 className="text-sm font-bold text-white truncate group-hover:text-indigo-300 transition">
                 {asset.name}
               </h3>
               <p className="text-xs text-gray-400 uppercase">{asset.symbol}</p>
             </div>
           </div>
 
-          {/* Middle: Sparkline */}
           <div className="flex-shrink-0">
             <Sparkline points={points} color={color} width={window.innerWidth < 640 ? 70 : 90} height={36} />
           </div>
 
-          {/* Right: Price + Change + Star */}
           <div className="text-right flex-shrink-0 flex items-center gap-2">
             <div>
-              <p className="text-base font-mono font-bold text-white transition-all duration-300">
+              <p className="text-sm font-mono font-bold text-white">
                 ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
               <p className={`text-xs font-medium flex items-center justify-end gap-0.5 ${isPositive ? "text-green-400" : "text-red-400"}`}>
@@ -150,7 +142,6 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) =
   );
 });
 
-// ──────────────────────────────────────── MAIN PAGE
 export default function Assets() {
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -249,29 +240,29 @@ export default function Assets() {
 
   const skeletonCards = () =>
     Array(5).fill().map((_, i) => (
-      <div key={i} className="w-full bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl p-4 rounded-2xl border border-indigo-600/20 animate-pulse">
+      <div key={i} className="w-full bg-gray-800/60 backdrop-blur-md p-3.5 rounded-xl border border-gray-700/50 animate-pulse">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1">
-            <div className="w-11 h-11 rounded-full bg-gray-700 flex-shrink-0" />
+            <div className="w-10 h-10 rounded-full bg-gray-700/50 flex-shrink-0" />
             <div className="flex-1">
-              <div className="h-4 w-28 bg-gray-700 rounded mb-1" />
-              <div className="h-3 w-14 bg-gray-700 rounded" />
+              <div className="h-4 w-28 bg-gray-700/50 rounded mb-1" />
+              <div className="h-3 w-14 bg-gray-700/50 rounded" />
             </div>
           </div>
-          <div className="w-20 h-9 bg-gray-700 rounded" />
-          <div className="w-20 h-8 bg-gray-700 rounded text-right" />
+          <div className="w-20 h-9 bg-gray-700/50 rounded" />
+          <div className="w-20 h-8 bg-gray-700/50 rounded text-right" />
         </div>
       </div>
     ));
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
-        <div className="bg-red-900/20 backdrop-blur-xl p-8 rounded-3xl border border-red-500/30 max-w-md">
-          <p className="text-red-400 font-medium">{error}</p>
+      <div className="min-h-screen flex flex-col items-center justify-center p-3 text-center">
+        <div className="bg-red-900/20 backdrop-blur-xl p-6 rounded-2xl border border-red-500/30 max-w-md w-full">
+          <p className="text-red-400 font-medium text-sm">{error}</p>
           <button
             onClick={fetchAssets}
-            className="mt-4 px-6 py-2 bg-indigo-600 rounded-full text-sm font-medium hover:bg-indigo-700 transition haptic-feedback"
+            className="mt-4 px-5 py-2 bg-indigo-600 rounded-xl text-sm font-bold hover:bg-indigo-500 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
           >
             Retry
           </button>
@@ -289,14 +280,8 @@ export default function Assets() {
         }
         .animate-fade-in-up { animation: fade-in-up 0.4s ease-out; }
 
-        .shadow-wallet {
-          box-shadow: 0 8px 32px rgba(0,0,0,0.25),
-                      inset 0 1px 0 rgba(255,255,255,0.1);
-        }
-
         .input-glow:focus {
           outline: none;
-          ring: 2px solid #6366f1;
           box-shadow: 0 0 0 3px rgba(99,102,241,0.3);
         }
 
@@ -314,27 +299,35 @@ export default function Assets() {
         .hide-scroll-bar::-webkit-scrollbar { display: none; }
       `}</style>
 
-      <div className="min-h-screen text-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 pb-12 space-y-8">
+      <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none" />
+
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10">
+          {/* Header */}
+          <div className="flex items-center gap-2 mb-5">
+            <ArrowLeft className="w-5 h-5 text-indigo-400" />
+            <h1 className="text-xl sm:text-2xl font-bold text-indigo-400">Crypto Assets</h1>
+          </div>
+
           {/* Search */}
-          <div className="relative max-w-md mx-auto sm:mx-0">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <div className="relative max-w-md mx-auto sm:mx-0 mb-5">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
               placeholder="Search assets..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-gray-800/70 backdrop-blur-xl pl-12 pr-4 py-3 rounded-2xl border border-indigo-600/20 focus:outline-none input-glow transition-all duration-300 placeholder-gray-500"
+              className="w-full bg-gray-800/60 backdrop-blur-md pl-10 pr-3 py-2.5 rounded-xl border border-gray-700/80 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 input-glow"
             />
           </div>
 
           {/* Recently Viewed */}
           {recentViewed.length > 0 && (
-            <div>
-              <p className="text-sm text-indigo-300 flex items-center gap-2 mb-3">
+            <div className="mb-5">
+              <p className="text-xs text-indigo-300 flex items-center gap-1.5 mb-2">
                 <Clock className="w-4 h-4" /> Recently Viewed
               </p>
-              <div className="flex overflow-x-auto gap-3 pb-2 snap-x snap-mandatory hide-scroll-bar">
+              <div className="flex overflow-x-auto gap-2 pb-2 hide-scroll-bar">
                 {recentViewed.map((asset) => (
                   <button
                     key={asset.id}
@@ -342,12 +335,12 @@ export default function Assets() {
                       triggerHaptic();
                       window.location.href = `/buy-crypto/${asset.id}`;
                     }}
-                    className="flex-shrink-0 flex items-center gap-2 bg-white/5 backdrop-blur-sm border border-white/10 rounded-full px-4 py-2 text-sm font-medium transition-all duration-300 hover:bg-indigo-600/20 hover:border-indigo-500/50 hover:scale-105 haptic-feedback snap-center"
+                    className="flex-shrink-0 flex items-center gap-2 bg-gray-800/60 backdrop-blur-md border border-gray-700/50 rounded-full px-3 py-1.5 text-xs font-bold text-gray-300 hover:bg-indigo-600/20 hover:border-indigo-500/50 hover:scale-105 transition-all duration-300 haptic-feedback"
                   >
                     {asset.logo_url ? (
                       <img src={asset.logo_url} alt="" className="w-5 h-5 rounded-full" />
                     ) : (
-                      <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center text-xs text-white font-bold">
+                      <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-xs text-white font-bold">
                         {asset.symbol[0]}
                       </div>
                     )}
@@ -360,18 +353,18 @@ export default function Assets() {
 
           {/* Assets List */}
           <div>
-            <h2 className="text-xl font-bold mb-4 text-white">Supported Assets</h2>
+            <h2 className="text-lg font-bold mb-3 text-white">Supported Assets</h2>
             {loading ? (
-              <div className="space-y-4">{skeletonCards()}</div>
+              <div className="space-y-3">{skeletonCards()}</div>
             ) : filteredAssets.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <Search className="w-10 h-10 mx-auto mb-3 text-gray-500" />
-                <p>No assets found.</p>
+              <div className="text-center py-10 text-gray-400">
+                <Search className="w-10 h-10 mx-auto mb-2 text-gray-500" />
+                <p className="text-sm">No assets found.</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {filteredAssets.map((asset, i) => (
-                  <div key={asset.id} style={{ animationDelay: `${i * 50}ms` }}>
+                  <div key={asset.id} style={{ animationDelay: `${i * 50}ms` }} className="animate-fade-in-up">
                     <AssetCard
                       asset={asset}
                       onView={handleView}

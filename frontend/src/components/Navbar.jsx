@@ -1,38 +1,28 @@
-// File: src/components/Navbar.jsx
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Bell, Headphones, User, X, LogOut } from "lucide-react";
+// src/components/Navbar.jsx
+import { Link, useLocation } from "react-router-dom";
+import { Bell, Headphones, User, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import client from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
-  const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated } = useAuth();
   const access = localStorage.getItem("access");
 
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [profileImage, setProfileImage] = useState(localStorage.getItem("profile_image") || null);
   const [loadingNotifs, setLoadingNotifs] = useState(false);
 
   const notificationRef = useRef(null);
   const userRef = useRef(null);
 
-  const BASE_URL = window.location.hostname.includes("localhost")
-    ? "http://127.0.0.1:8000"
-    : "https://mafitapay.com";
-
-  // Hide navbar on public pages
   const hiddenRoutes = ["/login", "/register", "/verify-email", "/reset-password"];
   const shouldHideNavbar = hiddenRoutes.some((r) => location.pathname.startsWith(r));
 
-  if (shouldHideNavbar || !isAuthenticated) {
-    return null;
-  }
+  if (shouldHideNavbar || !isAuthenticated) return null;
 
-  // 📬 Fetch notifications
   const fetchNotifications = async () => {
     try {
       setLoadingNotifs(true);
@@ -63,7 +53,6 @@ export default function Navbar() {
     };
   }, [access]);
 
-  // 📨 Mark as read
   const handleToggleNotifications = async () => {
     const newState = !showNotifications;
     setShowNotifications(newState);
@@ -81,56 +70,6 @@ export default function Navbar() {
     }
   };
 
-  // 🧍 Fetch profile image
-  useEffect(() => {
-    if (!access) return;
-
-    const fetchProfileImage = async () => {
-      try {
-        const res = await client.get("profile-api/");
-        const img =
-          res.data.profile_image ||
-          "backend/media/profile_images/avt13.jpg"; // fallback placeholder
-        setProfileImage(img);
-        localStorage.setItem("profile_image", img);
-      } catch {
-        console.warn("Failed to fetch profile image");
-      }
-    };
-
-    fetchProfileImage();
-  }, [access]);
-
-  // 🔄 Sync profile image + notifications across tabs
-  useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === "profile_image" && e.newValue) {
-        setProfileImage(e.newValue);
-      }
-      if (e.key === "notifications" && e.newValue) {
-        setNotifications(JSON.parse(e.newValue));
-      }
-    };
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
-
-  // ✅ Update image immediately when profile changes
-  useEffect(() => {
-    const handleProfileUpdate = (e) => {
-      if (e.detail?.profile_image) {
-        const img = e.detail.profile_image.startsWith("http")
-          ? e.detail.profile_image
-          : `${BASE_URL}${e.detail.profile_image}`;
-        setProfileImage(img);
-        localStorage.setItem("profile_image", img);
-      }
-    };
-    window.addEventListener("profileImageUpdated", handleProfileUpdate);
-    return () => window.removeEventListener("profileImageUpdated", handleProfileUpdate);
-  }, []);
-
-  // ❌ Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (
@@ -157,48 +96,48 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 w-full bg-gray-950/40 backdrop-blur-md border-b border-gray-800 z-50">
-      <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-        <Link to="/dashboard" className="text-xl font-bold text-gray-200">
+      <div className="container mx-auto px-4 py-2.5 flex justify-between items-center">
+        {/* Logo */}
+        <Link
+          to="/dashboard"
+          className="text-base font-bold text-gray-200 flex-shrink-0"
+        >
           Mafita<span className="text-green-400">Pay</span>
         </Link>
 
-        <div className="flex items-center gap-5 relative">
+        {/* Icons – Compact & Responsive */}
+        <div className="flex items-center gap-3">
           {/* Notifications */}
           <div className="relative" ref={notificationRef}>
-            <button onClick={handleToggleNotifications} className="relative">
-              <Bell
-                size={22}
-                className={`text-gray-300 hover:text-green-400 transition ${
-                  showNotifications ? "text-green-400" : ""
-                }`}
-              />
+            <button onClick={handleToggleNotifications} className="relative p-0.5">
+              <Bell size={20} className="text-gray-300 hover:text-green-400 transition" />
               {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-1 bg-green-500 text-white text-[10px] px-1.5 rounded-full">
+                <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[9px] px-1.5 rounded-full">
                   {unreadCount}
                 </span>
               )}
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-3 w-72 bg-gray-900/90 backdrop-blur-xl rounded-xl shadow-lg border border-gray-800 overflow-hidden animate-fadeIn">
-                <div className="flex justify-between items-center px-4 py-2 border-b border-gray-800">
-                  <span className="text-sm font-semibold text-gray-200">Notifications</span>
+              <div className="absolute right-0 mt-2 w-64 bg-gray-900/90 backdrop-blur-xl rounded-xl shadow-lg border border-gray-800 overflow-hidden text-xs">
+                <div className="flex justify-between items-center px-3 py-2 border-b border-gray-800">
+                  <span className="font-semibold text-gray-200">Notifications</span>
                   <button
                     onClick={() => setShowNotifications(false)}
                     className="text-gray-500 hover:text-gray-300"
                   >
-                    <X size={16} />
+                    <X size={14} />
                   </button>
                 </div>
 
-                <ul className="max-h-60 overflow-y-auto">
+                <ul className="max-h-56 overflow-y-auto">
                   {loadingNotifs ? (
-                    <li className="px-4 py-3 text-sm text-gray-400 text-right">Loading...</li>
+                    <li className="px-3 py-2 text-gray-400 text-center">Loading...</li>
                   ) : notifications.length > 0 ? (
                     notifications.map((n) => (
                       <li
                         key={n.id}
-                        className={`px-4 py-3 text-sm border-b border-gray-800 hover:bg-gray-800/60 cursor-pointer ${
+                        className={`px-3 py-2 border-b border-gray-800 hover:bg-gray-800/60 cursor-pointer text-xs ${
                           n.is_read ? "text-gray-400" : "text-gray-200"
                         }`}
                       >
@@ -206,7 +145,7 @@ export default function Navbar() {
                       </li>
                     ))
                   ) : (
-                    <li className="px-4 py-3 text-sm text-gray-400 text-right">No new notifications</li>
+                    <li className="px-3 py-2 text-gray-400 text-center">No new notifications</li>
                   )}
                 </ul>
               </div>
@@ -214,58 +153,9 @@ export default function Navbar() {
           </div>
 
           {/* WhatsApp */}
-          <button onClick={openWhatsApp}>
-            <Headphones size={22} className="text-gray-300 hover:text-green-400 transition" />
+          <button onClick={openWhatsApp} className="p-0.5">
+            <Headphones size={20} className="text-gray-300 hover:text-green-400 transition" />
           </button>
-
-          {/* User Menu */}
-          <div className="relative" ref={userRef}>
-            <button
-              onClick={() => {
-                setShowUserMenu(!showUserMenu);
-                setShowNotifications(false);
-              }}
-              className="flex items-center gap-2"
-            >
-              {profileImage ? (
-                <img
-                  src={profileImage}
-                  alt="User"
-                  className="w-8 h-8 rounded-full border border-gray-700 object-cover hover:scale-105 transition"
-                />
-              ) : (
-                <User
-                  size={22}
-                  className={`text-gray-300 hover:text-green-400 transition ${
-                    showUserMenu ? "text-green-400" : ""
-                  }`}
-                />
-              )}
-            </button>
-
-            {showUserMenu && (
-              <div className="absolute right-0 mt-3 w-52 bg-gray-900/90 backdrop-blur-xl rounded-xl shadow-lg border border-gray-800 overflow-hidden animate-fadeIn">
-                <ul className="text-sm text-gray-300">
-                  <li>
-                    <Link
-                      to="/accounts/profile"
-                      className="flex items-center gap-2 px-4 py-3 hover:bg-gray-800/60"
-                    >
-                      <User size={16} /> Profile
-                    </Link>
-                  </li>
-                  <li>
-                    <button
-                      onClick={logout}
-                      className="w-full flex items-center gap-2 px-4 py-3 hover:bg-gray-800/60 text-left text-red-400"
-                    >
-                      <LogOut size={16} /> Logout
-                    </button>
-                  </li>
-                </ul>
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </nav>

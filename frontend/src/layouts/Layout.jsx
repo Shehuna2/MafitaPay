@@ -142,8 +142,8 @@ export default function Layout({ children }) {
 
   return (
     <div className="flex min-h-screen bg-gray-900 text-white">
-      <aside className="hidden lg:flex flex-col w-60 bg-gray-800 border-r border-gray-700 p-4 fixed top-0 left-0 h-screen overflow-y-auto">
-        <h1 className="text-xl font-bold mb-10 mt-2">Zunhub</h1>
+      <aside className="hidden lg:flex flex-col w-60 bg-gray-800 border-r border-gray-700 p-2 fixed top-0 left-0 h-screen overflow-y-auto">
+        <h1 className="text-xl font-bold mb-10 mt-2">MafitaPay</h1>
         <nav className="space-y-2">
           {navItems.map((item) =>
             item.isGroup ? (
