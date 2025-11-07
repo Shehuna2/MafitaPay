@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model, authenticate
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import UserProfile
-from .tasks import send_verification_email
+from .tasks import send_verification_email_sync, send_reset_email_sync
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -109,7 +109,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         profile.save()
 
         verification_url = f"{settings.BASE_URL}/api/verify-email/{verification_token}/"
-        send_verification_email.delay(user.email, verification_url, first_name=first_name, last_name=last_name)
+        send_verification_email_sync(user.email, verification_url, first_name=first_name, last_name=last_name)
 
         logger.debug(f"Registration completed for {user.email} in {time.time() - start_time:.2f} seconds")
         return user

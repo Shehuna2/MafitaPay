@@ -20,7 +20,7 @@ celery==5.5.3
 certifi==2025.10.5
 cffi==2.0.0
 channels==4.3.1
-channels_redis==4.3.0
+
 charset-normalizer==3.4.4
 ckzg==2.1.5
 click==8.3.0
@@ -38,7 +38,6 @@ decorator==5.2.1
 defusedxml==0.7.1
 Django==5.2.7
 django-cors-headers==4.9.0
-django-redis==6.0.0
 djangorestframework==3.16.1
 djangorestframework_simplejwt==5.5.1
 docopt==0.6.2
@@ -73,7 +72,7 @@ jsonschema-specifications==2025.9.1
 jupyter_client==8.6.3
 jupyter_core==5.9.1
 jupyterlab_pygments==0.3.0
-kombu==5.5.4
+
 loguru==0.7.3
 MarkupSafe==3.0.3
 matplotlib-inline==0.1.7
@@ -114,7 +113,6 @@ python-dotenv==1.1.1
 pytz==2025.2
 pyunormalize==17.0.0
 pyzmq==27.1.0
-redis==6.4.0
 referencing==0.37.0
 regex==2025.10.22
 psycopg[binary]==3.2.3

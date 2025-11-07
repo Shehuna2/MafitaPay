@@ -230,66 +230,95 @@ BACKEND_URL = os.getenv("BACKEND_URL", BASE_URL)
 
 
 # --------------------------------------------------
-# 13. REDIS (Celery / Cache / Channels)
+# 13. REMOVED CELERY & REDIS — Use in-memory alternatives
 # --------------------------------------------------
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+# We no longer use Upstash / Redis as a message broker.
+# For caches and channels we'll use in-memory options suitable for Render single-instance deployments.
+# If you later need Redis again for multi-instance Channels or Celery, you can re-add it.
 
-# --- SSL for Upstash / Render ---
-ssl_options = {}
-if REDIS_URL.startswith("rediss://"):
-    ssl_options = {
-        # Upstash already manages certs; disabling strict validation prevents handshake errors
-        "SSL_CERT_REQS": CERT_NONE,
-    }
-
-# --- Celery ---
-CELERY_BROKER_URL = REDIS_URL  # Upstash only supports DB 0
-CELERY_RESULT_BACKEND = REDIS_URL
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_BEAT_SCHEDULE = {
-    "check-sell-orders-every-minute": {
-        "task": "bills.tasks.check_sell_orders",
-        "schedule": 60.0,
-    },
-}
-
-# Add SSL configuration for Celery (if rediss://)
-if REDIS_URL.startswith("rediss://"):
-    CELERY_BROKER_USE_SSL = ssl_options
-    CELERY_RESULT_BACKEND_USE_SSL = ssl_options
-
-# --- Channels ---
-if DEBUG:
-    CHANNEL_LAYERS = {
-        "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
-    }
-else:
-    CHANNEL_LAYERS = {
-        "default": {
-            "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {
-                "hosts": [{
-                    "address": REDIS_URL,  # ✅ no /1 or /2 for Upstash
-                    **ssl_options,
-                }],
-            },
-        },
-    }
-
-# --- Cache ---
+# Use local memory cache (fast, no external dependency). Not shared across instances.
 CACHES = {
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL,  # ✅ no /1 or /2
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            **ssl_options,
-        },
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "default-locmem",
     }
 }
 
-CACHE_TTL = 300
+# Celery removed — make sure CELERY_* settings are not present.
+# If other modules import them, safely set minimal defaults:
+CELERY_BROKER_URL = None
+CELERY_RESULT_BACKEND = None
+
+# Channels: use in-memory channel layer (works for single process).
+# If you later scale to multiple instances, switch to Redis or another channel backend.
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
+    }
+}
+
+
+# # --------------------------------------------------
+# # 13. REDIS (Celery / Cache / Channels)
+# # --------------------------------------------------
+# REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+
+# # --- SSL for Upstash / Render ---
+# ssl_options = {}
+# if REDIS_URL.startswith("rediss://"):
+#     ssl_options = {
+#         # Upstash already manages certs; disabling strict validation prevents handshake errors
+#         "SSL_CERT_REQS": CERT_NONE,
+#     }
+
+# # --- Celery ---
+# CELERY_BROKER_URL = REDIS_URL  # Upstash only supports DB 0
+# CELERY_RESULT_BACKEND = REDIS_URL
+# CELERY_ACCEPT_CONTENT = ["json"]
+# CELERY_TASK_SERIALIZER = "json"
+# CELERY_BEAT_SCHEDULE = {
+#     "check-sell-orders-every-minute": {
+#         "task": "bills.tasks.check_sell_orders",
+#         "schedule": 60.0,
+#     },
+# }
+
+# # Add SSL configuration for Celery (if rediss://)
+# if REDIS_URL.startswith("rediss://"):
+#     CELERY_BROKER_USE_SSL = ssl_options
+#     CELERY_RESULT_BACKEND_USE_SSL = ssl_options
+
+# # --- Channels ---
+# if DEBUG:
+#     CHANNEL_LAYERS = {
+#         "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
+#     }
+# else:
+#     CHANNEL_LAYERS = {
+#         "default": {
+#             "BACKEND": "channels_redis.core.RedisChannelLayer",
+#             "CONFIG": {
+#                 "hosts": [{
+#                     "address": REDIS_URL,  # ✅ no /1 or /2 for Upstash
+#                     **ssl_options,
+#                 }],
+#             },
+#         },
+#     }
+
+# # --- Cache ---
+# CACHES = {
+#     "default": {
+#         "BACKEND": "django_redis.cache.RedisCache",
+#         "LOCATION": REDIS_URL,  # ✅ no /1 or /2
+#         "OPTIONS": {
+#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+#             **ssl_options,
+#         },
+#     }
+# }
+
+# CACHE_TTL = 300
 
 
 # --------------------------------------------------

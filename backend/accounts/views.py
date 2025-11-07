@@ -23,7 +23,7 @@ from .serializers import (
 
 from .models import User, UserProfile
 from wallet.models import WalletTransaction, Wallet
-from .tasks import send_verification_email, send_reset_email
+from .tasks import send_verification_email_sync, send_reset_email_sync
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +50,8 @@ class RegisterView(generics.GenericAPIView):
             first_name = getattr(profile, "first_name", "")
             last_name = getattr(profile, "last_name", "")
 
-            # Send verification email asynchronously
-            send_verification_email.delay(user.email, verification_url, first_name, last_name)
+            # Send verification email synchronously
+            send_verification_email_sync(user.email, verification_url, first_name, last_name)
 
             logger.info(f"Registration complete for {user.email}, verification sent to {verification_url}")
             return Response(
@@ -234,7 +234,7 @@ class ResendVerificationEmailView(APIView):
             first_name = getattr(profile, "first_name", "")
             last_name = getattr(profile, "last_name", "")
 
-            send_verification_email.delay(user.email, verification_url, first_name, last_name)
+            send_verification_email_sync(user.email, verification_url, first_name, last_name)
 
             logger.info(f"Verification email resent to {email} with link {verification_url}")
             return Response({"message": "Verification email resent successfully."}, status=status.HTTP_200_OK)
@@ -257,7 +257,7 @@ class PasswordResetRequestView(APIView):
             user.reset_token_expiry = expiry
             user.save()
             reset_url = f"{settings.FRONTEND_URL}/reset-password/{reset_token}/"  # Use FRONTEND_URL
-            send_reset_email.delay(user.email, reset_url, user.profile.full_name if user.profile else None)
+            send_reset_email_sync(user.email, reset_url, user.profile.full_name if user.profile else None)
             return Response({"message": "Password reset email sent."}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({"error": "No account found with this email."}, status=status.HTTP_404_NOT_FOUND)
