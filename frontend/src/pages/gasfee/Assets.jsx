@@ -51,9 +51,9 @@ const makeInitialPoints = (price, count = 14) => {
 
 const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) => {
   const navigate = useNavigate();
-  const logo = asset.logo_url?.startsWith("http")
-    ? asset.logo_url
-    : `${window.location.origin}${asset.logo_url || ""}`;
+  const logo = `/images/${asset.symbol?.toLowerCase()}.png`;
+  const fallbackLogo = asset.logo_url || "/images/default.png";
+
   const change = Number(asset.changePct || 0).toFixed(2);
   const isPositive = change >= 0;
   const color = isPositive ? "#10B981" : "#EF4444";
@@ -95,13 +95,12 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) =
         <div className="relative flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-600/50 bg-gray-700/50 flex-shrink-0">
-              {logo ? (
-                <img src={logo} alt={asset.name} className="w-full h-full rounded-full object-cover" />
-              ) : (
-                <div className="w-full h-full rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs">
-                  {asset.symbol?.[0]}
-                </div>
-              )}
+              <img
+                src={logo}
+                alt={asset.name}
+                onError={(e) => (e.target.src = fallbackLogo)}
+                className="w-full h-full rounded-full object-contain bg-gray-900"
+              />
             </div>
             <div className="min-w-0">
               <h3 className="text-sm font-bold text-white truncate group-hover:text-indigo-300 transition">
@@ -337,13 +336,13 @@ export default function Assets() {
                     }}
                     className="flex-shrink-0 flex items-center gap-2 bg-gray-800/60 backdrop-blur-md border border-gray-700/50 rounded-full px-3 py-1.5 text-xs font-bold text-gray-300 hover:bg-indigo-600/20 hover:border-indigo-500/50 hover:scale-105 transition-all duration-300 haptic-feedback"
                   >
-                    {asset.logo_url ? (
-                      <img src={asset.logo_url} alt="" className="w-5 h-5 rounded-full" />
-                    ) : (
-                      <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-xs text-white font-bold">
-                        {asset.symbol[0]}
-                      </div>
-                    )}
+                    <img
+                      src={`/images/${asset.symbol?.toLowerCase()}.png`}
+                      onError={(e) => (e.target.src = "/images/default.png")}
+                      alt={asset.symbol}
+                      className="w-5 h-5 rounded-full bg-gray-900 object-contain"
+                    />
+
                     <span>{asset.symbol}</span>
                   </button>
                 ))}

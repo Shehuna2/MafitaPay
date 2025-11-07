@@ -1,6 +1,15 @@
-// src/pages/WalletTransactions.jsx
 import { useEffect, useState } from "react";
-import { Loader2, ArrowLeft, Search, Filter, RefreshCw, ExternalLink, Calendar, Clock, AlertCircle } from "lucide-react";
+import {
+  Loader2,
+  ArrowLeft,
+  Search,
+  Filter,
+  RefreshCw,
+  ExternalLink,
+  Calendar,
+  Clock,
+  AlertCircle,
+} from "lucide-react";
 import client from "../api/client";
 
 export default function WalletTransactions() {
@@ -104,19 +113,36 @@ export default function WalletTransactions() {
     <>
       <style jsx>{`
         @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
+          0% {
+            background-position: -200% 0;
+          }
+          100% {
+            background-position: 200% 0;
+          }
         }
         .shimmer {
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.08),
+            transparent
+          );
           background-size: 200% 100%;
           animation: shimmer 1.8s infinite;
         }
         @keyframes fade-in-up {
-          from { opacity: 0; transform: translateY(8px); }
-          to   { opacity: 1; transform: translateY(0); }
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
-        .animate-fade-in-up { animation: fade-in-up 0.4s ease-out; }
+        .animate-fade-in-up {
+          animation: fade-in-up 0.4s ease-out;
+        }
       `}</style>
 
       <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
@@ -133,7 +159,9 @@ export default function WalletTransactions() {
                   </div>
                   <div className="absolute inset-0 rounded-full bg-indigo-600/30 animate-ping"></div>
                 </div>
-                <p className="text-lg font-medium text-indigo-300">Loading transactions...</p>
+                <p className="text-lg font-medium text-indigo-300">
+                  Loading transactions...
+                </p>
                 <div className="w-full h-2 bg-gray-700/50 rounded-full overflow-hidden mt-2">
                   <div className="h-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-600 shimmer"></div>
                 </div>
@@ -154,7 +182,9 @@ export default function WalletTransactions() {
 
           {/* Header */}
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-indigo-400">Wallet Transactions</h2>
+            <h2 className="text-2xl font-bold text-indigo-400">
+              Wallet Transactions
+            </h2>
             <button
               onClick={() => fetchTransactions()}
               className="flex items-center gap-2 px-4 py-2 bg-indigo-600/50 hover:bg-indigo-600 rounded-xl text-white font-medium text-sm transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
@@ -272,17 +302,32 @@ export default function WalletTransactions() {
                     >
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="font-semibold text-lg capitalize text-indigo-300">
-                              {tx.category}
-                            </p>
-                            <span className="text-xs text-gray-500">•</span>
-                            <p className="text-sm text-gray-400 capitalize">{tx.tx_type}</p>
+                          <div className="flex items-center gap-3 mb-1">
+                            {tx.network && (
+                              <img
+                                src={`/images/${tx.network.toLowerCase()}.png`}
+                                alt={tx.network}
+                                className="w-6 h-6 rounded-full border border-gray-700"
+                                onError={(e) =>
+                                  (e.target.style.display = "none")
+                                }
+                              />
+                            )}
+                            <div>
+                              <p className="font-semibold text-lg capitalize text-indigo-300">
+                                {tx.category}
+                              </p>
+                              <p className="text-sm text-gray-400 capitalize">
+                                {tx.tx_type}
+                              </p>
+                            </div>
                           </div>
+
                           <p className="text-xs text-gray-500 flex items-center gap-1">
                             <Clock className="w-3 h-3" />
                             {new Date(tx.created_at).toLocaleString()}
                           </p>
+
                           {explorerUrl && (
                             <a
                               href={explorerUrl}
@@ -295,10 +340,13 @@ export default function WalletTransactions() {
                             </a>
                           )}
                         </div>
+
                         <div className="text-right">
                           <p
                             className={`font-bold text-xl ${
-                              tx.tx_type === "debit" ? "text-red-400" : "text-green-400"
+                              tx.tx_type === "debit"
+                                ? "text-red-400"
+                                : "text-green-400"
                             }`}
                           >
                             {tx.tx_type === "debit" ? "-" : "+"}₦
@@ -341,7 +389,9 @@ export default function WalletTransactions() {
                   return (
                     <button
                       key={page}
-                      onClick={() => fetchTransactions(`/wallet/transactions/?page=${page}`)}
+                      onClick={() =>
+                        fetchTransactions(`/wallet/transactions/?page=${page}`)
+                      }
                       className={`w-10 h-10 rounded-xl text-sm font-medium transition ${
                         pagination.page === page
                           ? "bg-indigo-600 text-white"

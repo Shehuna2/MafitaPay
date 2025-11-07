@@ -124,6 +124,11 @@ STATIC_ROOT = os.getenv("STATIC_ROOT", "/tmp/staticfiles")
 STATICFILES_DIRS = []
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
+
+
+MEDIA_URL = "/media/"
+# MEDIA_ROOT = BASE_DIR / "media"
+
 # --- Cloudinary Media Storage ---
 CLOUDINARY_STORAGE = {
     "CLOUD_NAME": os.getenv("CLOUDINARY_CLOUD_NAME"),
@@ -132,10 +137,6 @@ CLOUDINARY_STORAGE = {
 }
 
 DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
-
-MEDIA_URL = "/media/"
-# MEDIA_ROOT = BASE_DIR / "media"
-
 
 # --------------------------------------------------
 # 17. CLOUDINARY (Media Storage)

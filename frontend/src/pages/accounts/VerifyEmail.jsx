@@ -88,15 +88,6 @@ export default function VerifyEmail() {
         )}
 
         <div className="max-w-md w-full relative z-10">
-          {/* Back Arrow */}
-          <button
-            onClick={() => window.history.back()}
-            className="group flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 transition-all duration-200 mb-4"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            Back
-          </button>
-
           <div className="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 shadow-2xl border border-gray-700/50 animate-fade-in-up text-center">
             {/* SUCCESS: Verified */}
             {verified === "true" && (

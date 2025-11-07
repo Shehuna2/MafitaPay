@@ -275,9 +275,12 @@ export default function BuyCrypto() {
                   </span>
                 </p>
               </div>
-              {crypto.logo_url && (
-                <img src={crypto.logo_url} alt={crypto.name} className="w-10 h-10 rounded-full border border-indigo-500/30" />
-              )}
+              <img
+                src={`/images/${crypto.symbol?.toLowerCase()}.png`}
+                alt={crypto.name}
+                onError={(e) => (e.target.src = crypto.logo_url || "/images/default.png")}
+                className="w-10 h-10 rounded-full border border-indigo-500/30 object-contain bg-gray-900"
+              />
             </div>
 
             {message && (

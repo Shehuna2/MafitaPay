@@ -1,4 +1,3 @@
-// src/components/Receipt.jsx
 import { XCircle, Copy, Download, Share2, CheckCircle, Clock, Zap, Smartphone, ExternalLink } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { useState } from "react";
@@ -19,6 +18,7 @@ export default function Receipt({ type, data, onClose }) {
     tx_hash,
     created_at,
   } = data;
+
   const date = created_at ? new Date(created_at).toLocaleString() : new Date().toLocaleString();
 
   const statusConfig = {
@@ -153,12 +153,24 @@ Date: ${date}
             </div>
           </div>
 
-          {/* Title & Status */}
+          {/* Title */}
           <h2 className="text-2xl font-bold text-center mb-2 text-indigo-300">{getTitle()}</h2>
           <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full ${config.bg} ${config.color} text-sm font-semibold mx-auto block w-fit mb-5`}>
             <div className="w-2 h-2 rounded-full bg-current animate-pulse"></div>
             {status.toUpperCase()}
           </div>
+
+          {/* 👇 Added crypto logo display (only for crypto receipts) */}
+          {type === "crypto" && crypto && (
+            <div className="flex justify-center mb-4">
+              <img
+                src={`/images/${crypto.toLowerCase()}.png`}
+                alt={crypto}
+                onError={(e) => (e.target.src = "/images/default.png")}
+                className="w-16 h-16 object-contain rounded-full border border-indigo-500/40 bg-gray-900 p-2"
+              />
+            </div>
+          )}
 
           {/* Details Grid */}
           <div className="space-y-3 text-sm">
@@ -267,7 +279,7 @@ Date: ${date}
               Share
             </button>
             <button
-              onClick={onClose}  // Only closes modal — stays on current page
+              onClick={onClose}
               className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl text-sm font-medium transition"
             >
               Done

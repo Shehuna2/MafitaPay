@@ -219,7 +219,7 @@ export default function AdminSellOrders() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-white">
+    <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 rounded-xl text-white">
       <div className="max-w-8xl mx-auto px-3 sm:px-4 py-6">
         {toast && (
           <div
