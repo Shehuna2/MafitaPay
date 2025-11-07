@@ -1,7 +1,7 @@
 // src/pages/BuyData.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle, XCircle } from "lucide-react";
 import client from "../../api/client";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -15,9 +15,12 @@ export default function BuyData() {
   });
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingPlans, setLoadingPlans] = useState(true);
   const [message, setMessage] = useState(null);
   const [receiptData, setReceiptData] = useState(null);
+  const [showConfirm, setShowConfirm] = useState(false); // NEW: Modal state
   const navigate = useNavigate();
+  const modalRef = useRef(null); // For click-outside
 
   const resetForm = () => {
     setForm({
@@ -29,12 +32,15 @@ export default function BuyData() {
 
   useEffect(() => {
     async function fetchPlans() {
+      setLoadingPlans(true);
       try {
         const res = await client.get(`/bills/data-plans/?network=${form.network}`);
         setPlans(res.data.plans || []);
       } catch (err) {
         console.error("Error fetching plans:", err.response?.data || err.message);
         toast.error("Failed to load data plans.");
+      } finally {
+        setLoadingPlans(false);
       }
     }
     fetchPlans();
@@ -49,11 +55,41 @@ export default function BuyData() {
   };
 
   const formatPlanTitle = (text = "") => {
-    return text.replace(/^N\d+\s*/i, "").trim();
+    if (!text) return "Unknown Plan";
+
+    const str = text.toLowerCase().trim();
+
+    const dataMatch = str.match(/(\d+(\.\d+)?\s*(mb|gb|tb))/i);
+    const dataAmount = dataMatch ? dataMatch[0].toUpperCase() : "";
+
+    const validityMatch = str.match(/\b(\d+\s*(day|days|week|weeks|month|months))\b/i);
+    let validity = validityMatch
+      ? validityMatch[0]
+          .replace(/days?/i, "Day")
+          .replace(/weeks?/i, "Week")
+          .replace(/months?/i, "Month")
+          .replace(/\s+/g, "")
+      : "";
+
+    if (!validity) {
+      const fallback = str.match(/\b(daily|weekly|monthly)\b/i)?.[0];
+      validity = fallback ? fallback.replace("ly", "y") : "";
+    }
+
+    const finalValidity = validity || "Valid";
+
+    return dataAmount ? `${dataAmount} - ${finalValidity}` : "View Plan";
   };
 
-  const handleSubmit = async (e) => {
+  // NEW: Open confirmation modal
+  const handleSubmit = (e) => {
     e.preventDefault();
+    setShowConfirm(true);
+  };
+
+  // NEW: Confirm purchase
+  const confirmPurchase = async () => {
+    setShowConfirm(false);
     setLoading(true);
     setMessage(null);
 
@@ -96,143 +132,290 @@ export default function BuyData() {
     }
   };
 
+  // NEW: Back button
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/dashboard");
+    }
+  };
+
+  // NEW: Click outside modal to close
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (modalRef.current && !modalRef.current.contains(e.target)) {
+        setShowConfirm(false);
+      }
+    };
+    if (showConfirm) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showConfirm]);
+
+  // NEW: Escape key to close modal
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === "Escape") setShowConfirm(false);
+    };
+    if (showConfirm) {
+      document.addEventListener("keydown", handleEsc);
+    }
+    return () => document.removeEventListener("keydown", handleEsc);
+  }, [showConfirm]);
+
   return (
-    <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
-      <ToastContainer />
-      <div className="absolute inset-0 pointer-events-none" />
+    <>
+      <style jsx>{`
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .shimmer {
+          background: linear-gradient(90deg, #374151 25%, #4B5563 50%, #374151 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.8s infinite;
+        }
+        @keyframes modalFade {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .modal-enter {
+          animation: modalFade 0.2s ease-out forwards;
+        }
+      `}</style>
 
-      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10">
-        {loading && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-            <Loader2 className="w-12 h-12 text-indigo-400 animate-spin" />
-          </div>
-        )}
+      <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
+        <ToastContainer />
+        <div className="absolute inset-0 pointer-events-none" />
 
-        <div className="flex items-center gap-2 mb-5">
-          <ArrowLeft className="w-5 h-5 text-indigo-400" />
-          <h2 className="text-xl sm:text-2xl font-bold text-indigo-400">Buy Data</h2>
-        </div>
-
-        {message && (
-          <div
-            className={`p-3 rounded-xl mb-5 shadow-md backdrop-blur-md border ${
-              message.type === "success"
-                ? "bg-green-600/20 text-green-400 border-green-500/50"
-                : "bg-red-600/20 text-red-400 border-red-500/50"
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
-
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-4 bg-gray-800/80 backdrop-blur-xl p-4 sm:p-5 rounded-2xl border border-gray-700/50 shadow-2xl"
-        >
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Phone Number</label>
-              <input
-                name="phone"
-                type="text"
-                placeholder="08012345678"
-                value={form.phone}
-                onChange={handleChange}
-                required
-                className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
-              />
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10">
+          {loading && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+              <Loader2 className="w-12 h-12 text-indigo-400 animate-spin" />
             </div>
-            <div className="sm:w-32">
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Network</label>
-              <select
-                name="network"
-                value={form.network}
-                onChange={handleChange}
-                className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 appearance-none cursor-pointer hover:border-indigo-500/50"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
-                  backgroundPosition: "right 0.75rem center",
-                  backgroundRepeat: "no-repeat",
-                  backgroundSize: "12px",
-                }}
-              >
-                <option value="mtn">MTN</option>
-                <option value="airtel">Airtel</option>
-                <option value="glo">Glo</option>
-                <option value="9mobile">9Mobile</option>
-              </select>
-            </div>
-          </div>
+          )}
 
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Quick Pick Plans</label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {plans.slice(0, 6).map((plan) => (
-                <button
-                  type="button"
-                  key={plan.variation_code}
-                  onClick={() => handleQuickPick(plan.variation_code)}
-                  className={`p-2.5 rounded-xl text-center text-xs font-bold transition-all duration-200 backdrop-blur-md border ${
-                    form.variation_code === plan.variation_code
-                      ? "bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-500/30 transform -translate-y-0.5"
-                      : "bg-gray-800/60 border-gray-700 hover:bg-gray-700/80 hover:border-indigo-500/50"
-                  }`}
-                >
-                  <span className="block font-bold">
-                    {formatPlanTitle(plan.name || plan.description)}
-                  </span>
-                  <span className="text-xs text-gray-400">₦{plan.variation_amount}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Select Plan</label>
-            <select
-              name="variation_code"
-              value={form.variation_code}
-              onChange={handleChange}
-              required
-              className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 appearance-none cursor-pointer hover:border-indigo-500/50"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
-                backgroundPosition: "right 0.75rem center",
-                backgroundRepeat: "no-repeat",
-                backgroundSize: "12px",
-              }}
-            >
-              <option value="">Select Plan</option>
-              {plans.map((plan, index) => (
-                <option
-                  key={`${plan.variation_code}-${index}`}
-                  value={plan.variation_code}
-                >
-                  {formatPlanTitle(plan.name || plan.description)} – ₦{plan.variation_amount}
-                </option>
-              ))}
-            </select>
-          </div>
-
+          {/* BACK BUTTON */}
           <button
-            type="submit"
-            disabled={loading || !form.variation_code}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-xl font-bold text-sm transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-indigo-500/30 transform hover:-translate-y-0.5 disabled:opacity-75 disabled:cursor-not-allowed"
+            onClick={handleBack}
+            className="flex items-center gap-2 mb-5 text-indigo-400 hover:text-indigo-300 transition-colors group"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Buy Data"}
+            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+            <h2 className="text-xl sm:text-2xl font-bold">Buy Data</h2>
           </button>
-        </form>
 
-        <Receipt
-          type="data"
-          data={receiptData}
-          onClose={() => {
-            setReceiptData(null);
-            resetForm();
-            navigate("/dashboard", { state: { transactionCompleted: true, fromTransaction: true } });
-          }}
-        />
+          {message && (
+            <div
+              className={`p-3 rounded-xl mb-5 shadow-md backdrop-blur-md border ${
+                message.type === "success"
+                  ? "bg-green-600/20 text-green-400 border-green-500/50"
+                  : "bg-red-600/20 text-red-400 border-red-500/50"
+              }`}
+            >
+              {message.text}
+            </div>
+          )}
+
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-4 bg-gray-800/80 backdrop-blur-xl p-4 sm:p-5 rounded-2xl border border-gray-700/50 shadow-2xl"
+          >
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Phone Number</label>
+                <input
+                  name="phone"
+                  type="text"
+                  placeholder="08012345678"
+                  value={form.phone}
+                  onChange={handleChange}
+                  required
+                  className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                />
+              </div>
+              <div className="sm:w-32">
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Network</label>
+                <select
+                  name="network"
+                  value={form.network}
+                  onChange={handleChange}
+                  className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 appearance-none cursor-pointer hover:border-indigo-500/50"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                    backgroundPosition: "right 0.75rem center",
+                    backgroundRepeat: "no-repeat",
+                    backgroundSize: "12px",
+                  }}
+                >
+                  <option value="mtn">MTN</option>
+                  <option value="airtel">Airtel</option>
+                  <option value="glo">Glo</option>
+                  <option value="9mobile">9Mobile</option>
+                </select>
+              </div>
+            </div>
+
+            {/* QUICK PICK PLANS */}
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">Quick Pick Plans</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {loadingPlans ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <div
+                      key={`skeleton-quick-${i}`}
+                      className="p-2.5 rounded-xl bg-gray-800/60 border border-gray-700/80 animate-pulse"
+                    >
+                      <div className="h-4 bg-gray-700/60 rounded w-full mb-1 shimmer"></div>
+                      <div className="h-3 bg-gray-700/50 rounded w-3/4 shimmer"></div>
+                    </div>
+                  ))
+                ) : plans.length > 0 ? (
+                  plans.slice(0, 6).map((plan) => (
+                    <button
+                      type="button"
+                      key={plan.variation_code}
+                      onClick={() => handleQuickPick(plan.variation_code)}
+                      className={`p-2.5 rounded-xl text-center text-xs font-bold transition-all duration-200 backdrop-blur-md border ${
+                        form.variation_code === plan.variation_code
+                          ? "bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-500/30 transform -translate-y-0.5"
+                          : "bg-gray-800/60 border-gray-700 hover:bg-gray-700/80 hover:border-indigo-500/50"
+                      }`}
+                    >
+                      <span className="block font-bold">
+                        {formatPlanTitle(plan.name || plan.description)}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        ₦{plan.variation_amount || "???"}
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="col-span-full text-center text-gray-500 text-xs py-4">
+                    No plans available
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* SELECT PLAN DROPDOWN */}
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">Select Plan</label>
+              {loadingPlans ? (
+                <div className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl animate-pulse">
+                  <div className="h-4 bg-gray-700/60 rounded w-3/4 shimmer"></div>
+                </div>
+              ) : (
+                <select
+                  name="variation_code"
+                  value={form.variation_code}
+                  onChange={handleChange}
+                  required
+                  className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 appearance-none cursor-pointer hover:border-indigo-500/50"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                    backgroundPosition: "right 0.75rem center",
+                    backgroundRepeat: "no-repeat",
+                    backgroundSize: "12px",
+                  }}
+                >
+                  <option value="">Select Plan</option>
+                  {plans.map((plan, index) => (
+                    <option
+                      key={`${plan.variation_code}-${index}`}
+                      value={plan.variation_code}
+                    >
+                      {formatPlanTitle(plan.name || plan.description)} – ₦{plan.variation_amount}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading || !form.variation_code}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-xl font-bold text-sm transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-indigo-500/30 transform hover:-translate-y-0.5 disabled:opacity-75 disabled:cursor-not-allowed"
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Buy Data"}
+            </button>
+          </form>
+
+          {/* CONFIRMATION MODAL */}
+          {showConfirm && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div
+                ref={modalRef}
+                className="bg-gray-800/90 backdrop-blur-xl rounded-2xl border border-gray-700/50 shadow-2xl p-6 max-w-sm w-full modal-enter"
+              >
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-400" />
+                  Confirm Purchase
+                </h3>
+
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Phone:</span>
+                    <span className="font-medium text-white">{form.phone}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Network:</span>
+                    <span className="font-medium text-white">
+                      {form.network.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Plan:</span>
+                    <span className="font-medium text-white">
+                      {(() => {
+                        const plan = plans.find(p => p.variation_code === form.variation_code);
+                        return plan ? formatPlanTitle(plan.name || plan.description) : "Unknown";
+                      })()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Amount:</span>
+                    <span className="font-bold text-indigo-400">
+                      ₦{(() => {
+                        const plan = plans.find(p => p.variation_code === form.variation_code);
+                        return plan?.variation_amount || "0";
+                      })()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={confirmPurchase}
+                    className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-xl font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-xl hover:shadow-green-500/30 transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => setShowConfirm(false)}
+                    className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2.5 rounded-xl font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-xl hover:shadow-red-500/30 transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Receipt
+            type="data"
+            data={receiptData}
+            onClose={() => {
+              setReceiptData(null);
+              resetForm();
+              navigate("/dashboard", { state: { transactionCompleted: true, fromTransaction: true } });
+            }}
+          />
+        </div>
       </div>
-    </div>
+    </>
   );
 }
