@@ -118,8 +118,6 @@ export default function Login() {
       `}</style>
 
       <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden flex items-center justify-center p-3">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 to-gray-900/5 pointer-events-none" />
-
         {/* Full-Screen Loading */}
         {loading && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
@@ -141,15 +139,6 @@ export default function Login() {
         )}
 
         <div className="max-w-md w-full relative z-10">
-          {/* Back Arrow */}
-          <button
-            onClick={() => window.history.back()}
-            className="group flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 transition-all duration-200 mb-4"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            Back
-          </button>
-
           <div className="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 shadow-2xl border border-gray-700/50 animate-fade-in-up">
             <h2 className="text-2xl font-bold text-center text-indigo-400 mb-6">
               Welcome Back

@@ -112,13 +112,17 @@ DATABASES = {
         ssl_require=not DEBUG,
     )
 }
+# Prevent too many open DB connections
+DATABASES["default"]["CONN_MAX_AGE"] = 60  # keep connections open for 1 minute
+
 
 # --------------------------------------------------
 # 7. STATIC & MEDIA
 # --------------------------------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = os.getenv("STATIC_ROOT", "/tmp/staticfiles")
-STATICFILES_DIRS = [BASE_DIR / "static"] if DEBUG else []
+STATICFILES_DIRS = []
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # --- Cloudinary Media Storage ---
 CLOUDINARY_STORAGE = {
