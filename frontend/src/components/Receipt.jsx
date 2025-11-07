@@ -278,12 +278,6 @@ Date: ${date}
               <Share2 className="w-4 h-4" />
               Share
             </button>
-            <button
-              onClick={onClose}
-              className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl text-sm font-medium transition"
-            >
-              Done
-            </button>
           </div>
         </div>
       </div>
