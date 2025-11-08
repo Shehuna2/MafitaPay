@@ -147,6 +147,49 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) =
   );
 });
 
+// 🔹 Recent Viewed List Component
+const RecentViewedList = ({ recentViewed }) => {
+  const [maxItems, setMaxItems] = useState(
+    window.innerWidth < 640 ? 4 : recentViewed.length
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setMaxItems(window.innerWidth < 640 ? 4 : recentViewed.length);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [recentViewed.length]);
+
+  return (
+    <div className="mb-5">
+      <p className="text-xs text-indigo-300 flex items-center gap-1.5 mb-2">
+        <Clock className="w-4 h-4" /> Recently Viewed
+      </p>
+      <div className="flex overflow-x-auto gap-2 pb-2 hide-scroll-bar">
+        {recentViewed.slice(0, maxItems).map((asset) => (
+          <button
+            key={asset.id}
+            onClick={() => {
+              triggerHaptic();
+              window.location.href = `/buy-crypto/${asset.id}`;
+            }}
+            className="flex-shrink-0 flex items-center gap-2 bg-gray-800/60 backdrop-blur-md border border-gray-700/50 rounded-full px-2.5 py-1.5 text-xs font-bold text-gray-300 hover:bg-indigo-600/20 hover:border-indigo-500/50 hover:scale-105 transition-all duration-300 haptic-feedback"
+          >
+            <img
+              src={`/images/${asset.symbol?.toLowerCase()}.png`}
+              onError={(e) => (e.target.src = '/images/default.png')}
+              alt={asset.symbol}
+              className="w-5 h-5 rounded-full bg-gray-900 object-contain"
+            />
+            <span className="truncate max-w-16">{asset.symbol}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export default function Assets() {
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -327,33 +370,8 @@ export default function Assets() {
           </div>
 
           {/* Recently Viewed */}
-          {recentViewed.length > 0 && (
-            <div className="mb-5">
-              <p className="text-xs text-indigo-300 flex items-center gap-1.5 mb-2">
-                <Clock className="w-4 h-4" /> Recently Viewed
-              </p>
-              <div className="flex overflow-x-auto gap-2 pb-2 hide-scroll-bar">
-                {recentViewed.map((asset) => (
-                  <button
-                    key={asset.id}
-                    onClick={() => {
-                      triggerHaptic();
-                      window.location.href = `/buy-crypto/${asset.id}`;
-                    }}
-                    className="flex-shrink-0 flex items-center gap-2 bg-gray-800/60 backdrop-blur-md border border-gray-700/50 rounded-full px-2.5 py-1.5 text-xs font-bold text-gray-300 hover:bg-indigo-600/20 hover:border-indigo-500/50 hover:scale-105 transition-all duration-300 haptic-feedback"
-                  >
-                    <img
-                      src={`/images/${asset.symbol?.toLowerCase()}.png`}
-                      onError={(e) => (e.target.src = "/images/default.png")}
-                      alt={asset.symbol}
-                      className="w-5 h-5 rounded-full bg-gray-900 object-contain"
-                    />
-                    <span className="truncate max-w-16">{asset.symbol}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          {recentViewed.length > 0 && <RecentViewedList recentViewed={recentViewed} />}
+
 
           {/* Assets List */}
           <div>
