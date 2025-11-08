@@ -167,6 +167,7 @@ export default function Deposit() {
                 </p>
                 <button
                   onClick={fetchDVA}
+                  disabled={true}
                   className="bg-indigo-600 hover:bg-indigo-500 text-white px-7 py-3 rounded-xl font-bold text-sm transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center gap-2.5 mx-auto"
                 >
                   Generate Virtual Account

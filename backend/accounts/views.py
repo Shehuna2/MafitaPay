@@ -99,7 +99,6 @@ class ProfileAPIView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 class VerifyEmailView(APIView):
     permission_classes = [AllowAny]
 
@@ -109,21 +108,26 @@ class VerifyEmailView(APIView):
         try:
             user = User.objects.get(verification_token=token)
         except User.DoesNotExist:
-            logger.warning(f"[VERIFY EMAIL] Invalid or unknown token: {token}")
-            return HttpResponseRedirect(f"{settings.FRONTEND_URL}/verify-email?verified=false&reason=invalid")
+            logger.warning(f"[VERIFY EMAIL] Invalid token: {token}")
+            return HttpResponseRedirect(
+                f"{settings.FRONTEND_URL}/verify-email?verified=false&reason=invalid"
+            )
 
         if user.is_email_verified:
-            logger.info(f"[VERIFY EMAIL] Token already used for {user.email}")
-            return HttpResponseRedirect(f"{settings.FRONTEND_URL}/verify-email?verified=true&reason=already_verified")
+            logger.info(f"[VERIFY EMAIL] Already verified: {user.email}")
+            # Redirect with already_verified
+            return HttpResponseRedirect(
+                f"{settings.FRONTEND_URL}/verify-email?"
+                f"verified=true&reason=already_verified&email={user.email}"
+            )
 
-        # ✅ Verify email
+        # Mark user verified
         user.is_email_verified = True
         user.verification_token = None
         user.save()
+        logger.info(f"[VERIFY EMAIL] Marked verified: {user.email}")
 
-        logger.info(f"[VERIFY EMAIL] Email verified successfully for {user.email}")
-
-        # Handle referral bonuses safely
+        # Handle referral/bonus awarding BEFORE redirect
         try:
             if user.referred_by:
                 referrer = user.referred_by
@@ -134,6 +138,7 @@ class VerifyEmailView(APIView):
                 new_user_wallet = user.wallet
 
                 # Referrer bonus
+                prev_ref_balance = referrer_wallet.balance
                 referrer_wallet.balance += REFERRER_BONUS
                 referrer_wallet.save()
                 WalletTransaction.objects.create(
@@ -142,13 +147,14 @@ class VerifyEmailView(APIView):
                     tx_type="credit",
                     category="referral",
                     amount=REFERRER_BONUS,
-                    balance_before=referrer_wallet.balance - REFERRER_BONUS,
+                    balance_before=prev_ref_balance,
                     balance_after=referrer_wallet.balance,
                     reference=f"Referral bonus for inviting {user.email}",
                     status="success",
                 )
 
                 # New user bonus
+                prev_new_balance = new_user_wallet.balance
                 new_user_wallet.balance += NEW_USER_BONUS
                 new_user_wallet.save()
                 WalletTransaction.objects.create(
@@ -157,12 +163,13 @@ class VerifyEmailView(APIView):
                     tx_type="credit",
                     category="referral",
                     amount=NEW_USER_BONUS,
-                    balance_before=new_user_wallet.balance - NEW_USER_BONUS,
+                    balance_before=prev_new_balance,
                     balance_after=new_user_wallet.balance,
                     reference="Signup bonus via referral",
                     status="success",
                 )
 
+                # Notify by email
                 send_mail(
                     subject="Referral Bonus Awarded",
                     message=f"Congratulations! You've earned ₦{REFERRER_BONUS} for referring {user.email}.",
@@ -179,10 +186,11 @@ class VerifyEmailView(APIView):
                 logger.info(f"[VERIFY EMAIL] Referral bonuses awarded: ₦{REFERRER_BONUS} to {referrer.email}, ₦{NEW_USER_BONUS} to {user.email}")
 
             else:
-                # Non-referred user bonus
+                # Non-referred bonus
                 NON_REFERRED_BONUS = Decimal(getattr(settings, "NON_REFERRED_BONUS", "0.00"))
                 if NON_REFERRED_BONUS > 0:
                     wallet = user.wallet
+                    prev_balance = wallet.balance
                     wallet.balance += NON_REFERRED_BONUS
                     wallet.save()
                     WalletTransaction.objects.create(
@@ -191,7 +199,7 @@ class VerifyEmailView(APIView):
                         tx_type="credit",
                         category="signup",
                         amount=NON_REFERRED_BONUS,
-                        balance_before=wallet.balance - NON_REFERRED_BONUS,
+                        balance_before=prev_balance,
                         balance_after=wallet.balance,
                         reference="Signup bonus for non-referred user",
                         status="success",
@@ -203,12 +211,15 @@ class VerifyEmailView(APIView):
                         recipient_list=[user.email],
                     )
                     logger.info(f"[VERIFY EMAIL] Non-referred signup bonus awarded to {user.email}")
+
         except Exception as e:
-            logger.error(f"[VERIFY EMAIL] Bonus handling error for {user.email}: {str(e)}")
+            logger.error(f"[VERIFY EMAIL] Bonus handling error for {user.email}: {str(e)}", exc_info=True)
 
-        # ✅ Redirect user to frontend success page
-        return HttpResponseRedirect(f"{settings.FRONTEND_URL}/verify-email?verified=true&reason=success")
-
+        # Final redirect (success)
+        logger.info(f"[VERIFY EMAIL] Success: {user.email}")
+        return HttpResponseRedirect(
+            f"{settings.FRONTEND_URL}/verify-email?verified=true&reason=success&email={user.email}"
+        )
 
 
 class ResendVerificationEmailView(APIView):

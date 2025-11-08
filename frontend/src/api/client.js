@@ -2,9 +2,7 @@
 import axios from "axios";
 
 // ✅ Normalize base URL: use environment variable or fallback to localhost
-const BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") ||
-    "http://localhost:8000") + "/api"; // ensure /api is always appended
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
 // ✅ Create Axios instance
 const client = axios.create({

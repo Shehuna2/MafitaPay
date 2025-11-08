@@ -10,12 +10,20 @@ services:
       mkdir -p /tmp/staticfiles &&
       python manage.py collectstatic --no-input --clear &&
       python manage.py migrate --noinput &&
-      gunicorn mafitapay.wsgi:application
+      gunicorn mafitapay.wsgi:application --bind 0.0.0.0:$PORT --workers 3
+    plan: starter
+    autoDeploy: true
+    healthCheckPath: /health/
     envVars:
+      # Smart-switch triggers
+      - key: RENDER
+        value: "true"
       - key: DJANGO_DEBUG
         value: "False"
       - key: DJANGO_SECRET_KEY
         generateValue: true
+
+      # DB & Redis
       - key: DATABASE_URL
         fromDatabase:
           name: mafita-db
@@ -25,9 +33,35 @@ services:
           name: mafita-redis
           type: redis
           property: connectionString
+
+      # Hosts & CORS
       - key: ALLOWED_HOSTS
-        value: mafitapay.com,api.mafitapay.com
+        value: mafitapay.com,www.mafitapay.com,api.mafitapay.com,mafitapay-api.onrender.com
       - key: CORS_ALLOWED_ORIGINS
-        value: https://mafitapay.com
+        value: https://mafitapay.com,https://www.mafitapay.com,https://admin.mafitapay.com
+
+      # Static files
       - key: STATIC_ROOT
         value: /tmp/staticfiles
+
+      # URLs
+      - key: BASE_URL
+        value: https://mafitapay-api.onrender.com
+      - key: FRONTEND_URL
+        value: https://mafitapay.com
+      - key: BACKEND_URL
+        value: https://mafitapay-api.onrender.com
+
+      # Email (SendGrid)
+      - key: EMAIL_HOST
+        value: smtp.sendgrid.net
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USE_TLS
+        value: "True"
+      - key: EMAIL_HOST_USER
+        value: apikey
+      - key: EMAIL_HOST_PASSWORD
+        sync: true   # Paste your SG.xxxx key in Render UI
+      - key: DEFAULT_FROM_EMAIL
+        value: "MafitaPay <no-reply@mafitapay.com>"

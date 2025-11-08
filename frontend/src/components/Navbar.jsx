@@ -100,9 +100,9 @@ export default function Navbar() {
         {/* Logo */}
         <Link
           to="/dashboard"
-          className="text-base font-bold text-gray-200 flex-shrink-0"
+          className="text-base font-bold text-green-100 flex-shrink-0"
         >
-          Mafita<span className="text-green-400">Pay</span>
+          Mafita<span className="text-indigo-400">Pay</span>
         </Link>
 
         {/* Icons – Compact & Responsive */}
