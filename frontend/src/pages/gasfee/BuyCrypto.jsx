@@ -238,7 +238,7 @@ export default function BuyCrypto() {
   return (
     <>
       <ToastContainer />
-      <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
+      <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden p-6">
         <div className="absolute inset-0 pointer-events-none" />
 
         <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10">
