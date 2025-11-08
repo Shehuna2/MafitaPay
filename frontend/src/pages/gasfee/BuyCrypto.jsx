@@ -259,7 +259,9 @@ export default function BuyCrypto() {
                 <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                 Back
               </button>
-              <h1 className="text-xl sm:text-2xl font-bold text-indigo-400">Buy {crypto.name}</h1>
+              <span className="flex-1 text-right">
+                <h1 className="text-xl sm:text-2xl font-bold text-indigo-400">Buy {crypto.name}</h1>
+              </span>
             </div>
 
             <div className="bg-gray-800/60 backdrop-blur-md p-3 rounded-xl mb-5 flex items-center justify-between border border-gray-700/50 z-10">

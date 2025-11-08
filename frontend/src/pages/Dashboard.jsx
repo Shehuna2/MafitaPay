@@ -138,6 +138,7 @@ export default function Dashboard() {
   };
 
   // FULL SKELETON LOADER
+
   if (loading) {
     return (
       <>
@@ -155,50 +156,41 @@ export default function Dashboard() {
           @keyframes pulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 0.4; } }
         `}</style>
 
-        <div className="min-h-screen bg-gray-900 text-white px-1 sm:px-2 py-6 animate-fade-in">
-          {/* Wallet Card Skeleton */}
-          <div className="mx-2 mb-6">
-            <div className="bg-indigo-600/30 backdrop-blur-2xl p-6 sm:p-8 rounded-3xl border border-indigo-600/20">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
+        <div className="min-h-screen bg-gray-900 text-white px-2 py-6 animate-fade-in">
+          {/* Wallet Skeleton */}
+          <div className="mx-auto mb-6 w-full max-w-lg sm:max-w-2xl">
+            <div className="bg-indigo-600/30 backdrop-blur-2xl p-4 sm:p-6 rounded-3xl border border-indigo-600/20">
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <div className="flex items-center gap-2 sm:gap-3">
                   <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-700/50 rounded-full shimmer" />
-                  <div className="h-6 sm:h-7 w-40 bg-gray-700/50 rounded shimmer" />
+                  <div className="h-5 sm:h-6 w-32 sm:w-40 bg-gray-700/50 rounded shimmer" />
                 </div>
-                <div className="flex gap-2">
-                  <div className="w-10 h-10 rounded-xl bg-gray-700/50 shimmer" />
-                  <div className="w-10 h-10 rounded-xl bg-gray-700/50 shimmer" />
-                  <div className="w-10 h-10 rounded-xl bg-gray-700/50 shimmer" />
+                <div className="flex gap-1 sm:gap-2">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gray-700/50 shimmer" />
+                  ))}
                 </div>
               </div>
 
-              {/* Balance */}
-              <div className="mb-6">
-                <div className="h-10 sm:h-12 w-64 bg-gray-700/50 rounded shimmer" />
-              </div>
+              <div className="h-10 sm:h-12 w-48 sm:w-64 bg-gray-700/50 rounded shimmer mb-4 sm:mb-6" />
 
-              {/* Recent Activity (Mobile) */}
-              <div className="block md:hidden space-y-2">
-                <div className="h-4 w-32 bg-gray-700/50 rounded shimmer" />
-                <div className="h-5 w-full bg-gray-700/50 rounded shimmer" />
-                <div className="h-5 w-full bg-gray-700/50 rounded shimmer" />
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-3 mt-8">
-                <div className="h-11 sm:h-12 flex-1 bg-indigo-600/50 rounded-2xl shimmer" />
-                <div className="h-11 sm:h-12 flex-1 bg-indigo-600/50 rounded-2xl shimmer" />
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-6">
+                <div className="h-10 sm:h-12 flex-1 bg-indigo-600/50 rounded-2xl shimmer" />
+                <div className="h-10 sm:h-12 flex-1 bg-indigo-600/50 rounded-2xl shimmer" />
               </div>
             </div>
           </div>
 
           {/* Quick Actions Skeleton */}
-          <div className="px-2 sm:px-4 mb-6">
-            <div className="grid grid-cols-3 gap-4">
+          <div className="px-2 sm:px-4 mb-8">
+            <div className="grid grid-cols-3 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
               {Array(9).fill().map((_, i) => (
-                <div key={i} className="flex flex-col items-center justify-center p-4 rounded-2xl bg-gray-800 border border-indigo-600/20">
-                  <div className="w-10 h-10 bg-gray-700/50 rounded-full shimmer mb-2" />
-                  <div className="h-3 w-12 bg-gray-700/50 rounded shimmer" />
+                <div
+                  key={i}
+                  className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl bg-gray-800 border border-indigo-600/20"
+                >
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gray-700/50 rounded-full shimmer mb-1.5 sm:mb-2" />
+                  <div className="h-3 w-10 sm:w-12 bg-gray-700/50 rounded shimmer" />
                 </div>
               ))}
             </div>
@@ -206,16 +198,17 @@ export default function Dashboard() {
 
           {/* Event Carousel Skeleton */}
           <div className="px-2 sm:px-4">
-            <div className="h-5 w-32 bg-gray-700/50 rounded shimmer mb-3" />
-            <div className="bg-gray-800/60 backdrop-blur-md p-4 rounded-xl border border-gray-700/50 h-28">
+            <div className="h-4 sm:h-5 w-24 sm:w-32 bg-gray-700/50 rounded shimmer mb-2 sm:mb-3" />
+            <div className="bg-gray-800/60 backdrop-blur-md p-3 sm:p-4 rounded-xl border border-gray-700/50 h-24 sm:h-28">
               <div className="flex flex-col sm:flex-row justify-between h-full">
                 <div className="space-y-2 flex-1">
-                  <div className="h-4 w-48 bg-gray-700/50 rounded shimmer" />
-                  <div className="h-5 w-64 bg-gray-700/50 rounded shimmer" />
+                  <div className="h-4 w-36 sm:w-48 bg-gray-700/50 rounded shimmer" />
+                  <div className="h-5 w-48 sm:w-64 bg-gray-700/50 rounded shimmer" />
                 </div>
-                <div className="h-7 w-16 bg-indigo-600/30 rounded-full shimmer mt-4 sm:mt-0" />
+                <div className="h-6 sm:h-7 w-14 sm:w-16 bg-indigo-600/30 rounded-full shimmer mt-3 sm:mt-0" />
               </div>
             </div>
+
             <div className="flex justify-center gap-1.5 mt-3">
               <div className="w-4 h-1.5 bg-indigo-400 rounded-full pulse-slow" />
               <div className="w-1.5 h-1.5 bg-gray-600 rounded-full pulse-slow" />
@@ -226,6 +219,7 @@ export default function Dashboard() {
       </>
     );
   }
+
 
   return (
     <>
