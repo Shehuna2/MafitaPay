@@ -14,13 +14,16 @@ class AssetCardErrorBoundary extends React.Component {
   componentDidCatch(e, i) { console.error("AssetCard error:", e, i); }
   render() {
     return this.state.hasError
-      ? <div className="p-5 rounded-xl bg-red-900/20 border border-red-500/30 text-red-400 text-center text-sm">Failed to load</div>
+      ? <div className="p-4 rounded-xl bg-red-900/20 border border-red-500/30 text-red-400 text-center text-xs">Failed to load</div>
       : this.props.children;
   }
 }
 
-const Sparkline = React.memo(({ points = [], color = "#10B981", width = 90, height = 36 }) => {
+const Sparkline = React.memo(({ points = [], color = "#10B981" }) => {
   if (!points?.length) return null;
+
+  const width = 90;
+  const height = 36;
   const min = Math.min(...points);
   const max = Math.max(...points);
   const range = max - min || 1;
@@ -88,13 +91,14 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) =
     <AssetCardErrorBoundary>
       <div
         onClick={handleClick}
-        className="group relative w-full bg-gray-800/80 backdrop-blur-xl p-3.5 rounded-xl border border-gray-700/50 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:border-indigo-500/50 cursor-pointer"
+        className="group relative w-full bg-gray-800/80 backdrop-blur-xl p-3 rounded-xl border border-gray-700/50 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:border-indigo-500/50 cursor-pointer"
       >
         <div className="absolute inset-0 rounded-xl bg-indigo-600/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-        <div className="relative flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-600/50 bg-gray-700/50 flex-shrink-0">
+        <div className="relative flex items-center gap-2 sm:gap-3">
+          {/* Logo + Name */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden border border-gray-600/50 bg-gray-700/50 flex-shrink-0">
               <img
                 src={logo}
                 alt={asset.name}
@@ -102,7 +106,7 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) =
                 className="w-full h-full rounded-full object-contain bg-gray-900"
               />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h3 className="text-sm font-bold text-white truncate group-hover:text-indigo-300 transition">
                 {asset.name}
               </h3>
@@ -110,17 +114,19 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) =
             </div>
           </div>
 
-          <div className="flex-shrink-0">
-            <Sparkline points={points} color={color} width={window.innerWidth < 640 ? 70 : 90} height={36} />
+          {/* Sparkline */}
+          <div className="hidden xs:block flex-shrink-0">
+            <Sparkline points={points} color={color} />
           </div>
 
-          <div className="text-right flex-shrink-0 flex items-center gap-2">
-            <div>
-              <p className="text-sm font-mono font-bold text-white">
+          {/* Price + Star */}
+          <div className="text-right flex-shrink-0 flex items-center gap-1.5 sm:gap-2">
+            <div className="text-right">
+              <p className="text-sm font-mono font-bold text-white leading-tight">
                 ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
               <p className={`text-xs font-medium flex items-center justify-end gap-0.5 ${isPositive ? "text-green-400" : "text-red-400"}`}>
-                {isPositive ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
+                {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
                 {Math.abs(change)}%
               </p>
             </div>
@@ -132,7 +138,7 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) =
                   : "text-gray-500 hover:text-yellow-400 hover:bg-yellow-400/10"
               }`}
             >
-              <Star className={`w-4 h-4 ${isFavorite ? "fill-current" : ""}`} />
+              <Star className={`w-3.5 h-3.5 ${isFavorite ? "fill-current" : ""}`} />
             </button>
           </div>
         </div>
@@ -239,17 +245,15 @@ export default function Assets() {
 
   const skeletonCards = () =>
     Array(5).fill().map((_, i) => (
-      <div key={i} className="w-full bg-gray-800/60 backdrop-blur-md p-3.5 rounded-xl border border-gray-700/50 animate-pulse">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 flex-1">
-            <div className="w-10 h-10 rounded-full bg-gray-700/50 flex-shrink-0" />
-            <div className="flex-1">
-              <div className="h-4 w-28 bg-gray-700/50 rounded mb-1" />
-              <div className="h-3 w-14 bg-gray-700/50 rounded" />
-            </div>
+      <div key={i} className="w-full bg-gray-800/60 backdrop-blur-md p-3 rounded-xl border border-gray-700/50 animate-pulse">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gray-700/50 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="h-4 w-24 sm:w-28 bg-gray-700/50 rounded mb-1" />
+            <div className="h-3 w-12 sm:w-14 bg-gray-700/50 rounded" />
           </div>
-          <div className="w-20 h-9 bg-gray-700/50 rounded" />
-          <div className="w-20 h-8 bg-gray-700/50 rounded text-right" />
+          <div className="hidden xs:block w-20 h-9 bg-gray-700/50 rounded" />
+          <div className="w-16 sm:w-20 h-8 bg-gray-700/50 rounded" />
         </div>
       </div>
     ));
@@ -257,7 +261,7 @@ export default function Assets() {
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-3 text-center">
-        <div className="bg-red-900/20 backdrop-blur-xl p-6 rounded-2xl border border-red-500/30 max-w-md w-full">
+        <div className="bg-red-900/20 backdrop-blur-xl p-6 rounded-2xl border border-red-500/30 w-full max-w-xs sm:max-w-md">
           <p className="text-red-400 font-medium text-sm">{error}</p>
           <button
             onClick={fetchAssets}
@@ -296,20 +300,22 @@ export default function Assets() {
           scrollbar-width: none;
         }
         .hide-scroll-bar::-webkit-scrollbar { display: none; }
+
+        @media (max-width: 340px) {
+          .xs\\:block { display: none !important; }
+        }
       `}</style>
 
       <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none" />
-
         <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10">
           {/* Header */}
           <div className="flex items-center gap-2 mb-5">
-            <ArrowLeft className="w-5 h-5 text-indigo-400" />
-            <h1 className="text-xl sm:text-2xl font-bold text-indigo-400">Crypto Assets</h1>
+            <ArrowLeft className="w-5 h-5 text-indigo-400 flex-shrink-0" />
+            <h1 className="text-lg sm:text-xl font-bold text-indigo-400 truncate">Crypto Assets</h1>
           </div>
 
           {/* Search */}
-          <div className="relative max-w-md mx-auto sm:mx-0 mb-5">
+          <div className="relative w-full mb-5">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
@@ -334,7 +340,7 @@ export default function Assets() {
                       triggerHaptic();
                       window.location.href = `/buy-crypto/${asset.id}`;
                     }}
-                    className="flex-shrink-0 flex items-center gap-2 bg-gray-800/60 backdrop-blur-md border border-gray-700/50 rounded-full px-3 py-1.5 text-xs font-bold text-gray-300 hover:bg-indigo-600/20 hover:border-indigo-500/50 hover:scale-105 transition-all duration-300 haptic-feedback"
+                    className="flex-shrink-0 flex items-center gap-2 bg-gray-800/60 backdrop-blur-md border border-gray-700/50 rounded-full px-2.5 py-1.5 text-xs font-bold text-gray-300 hover:bg-indigo-600/20 hover:border-indigo-500/50 hover:scale-105 transition-all duration-300 haptic-feedback"
                   >
                     <img
                       src={`/images/${asset.symbol?.toLowerCase()}.png`}
@@ -342,8 +348,7 @@ export default function Assets() {
                       alt={asset.symbol}
                       className="w-5 h-5 rounded-full bg-gray-900 object-contain"
                     />
-
-                    <span>{asset.symbol}</span>
+                    <span className="truncate max-w-16">{asset.symbol}</span>
                   </button>
                 ))}
               </div>
@@ -352,7 +357,7 @@ export default function Assets() {
 
           {/* Assets List */}
           <div>
-            <h2 className="text-lg font-bold mb-3 text-white">Supported Assets</h2>
+            <h2 className="text-base sm:text-lg font-bold mb-3 text-white">Supported Assets</h2>
             {loading ? (
               <div className="space-y-3">{skeletonCards()}</div>
             ) : filteredAssets.length === 0 ? (
