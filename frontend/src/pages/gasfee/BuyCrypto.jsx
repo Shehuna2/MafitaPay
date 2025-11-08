@@ -249,7 +249,7 @@ export default function BuyCrypto() {
           )}
 
           <div className="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-4 sm:p-5 shadow-2xl border border-gray-700/50 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 to-gray-900/5 pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 to-gray-900/5 p-4 pointer-events-none" />
 
             <div className="flex items-center gap-2 mb-5 z-10 relative">
               <button

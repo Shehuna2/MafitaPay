@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     AssetSellOrder, ExchangeInfo, PaymentProof, ExchangeRate, Crypto, 
-    CryptoPurchase, ExchangeRateMargin
+    CryptoPurchase, ExchangeRateMargin, Asset   
 )
 
 
@@ -40,6 +40,11 @@ class CryptoPurchaseAdmin(admin.ModelAdmin):
             "fields": ("created_at",)
         }),
     )
+
+@admin.register(Asset)
+class AssetAdmin(admin.ModelAdmin):
+    list_display = ("name", "symbol")
+    search_fields = ("name", "symbol")
 
 @admin.register(ExchangeRateMargin)
 class ExchangeRateMarginAdmin(admin.ModelAdmin):

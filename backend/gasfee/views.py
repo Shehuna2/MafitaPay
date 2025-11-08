@@ -39,6 +39,8 @@ SENDERS = {
     "NEAR": send_near,
     "ETH": send_evm,
     "BASE-ETH": send_evm,
+    "BASE-ARB": send_evm,
+    "BASE-OPT": send_evm,
 }
 
 class AssetListAPI(APIView):
@@ -237,29 +239,60 @@ def refund_user(purchase):
         return False
 
 class ExchangeInfoAPI(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request):
+        """
+        Return a specific exchange's details based on query param.
+        """
         exchange = request.query_params.get("exchange")
         if not exchange:
-            return Response({"error": "Exchange parameter is required"}, status=400)
-        
-        try:
-            exchange_info = ExchangeInfo.objects.get(exchange=exchange)
-            serializer = ExchangeInfoSerializer(exchange_info)
-            return Response({"exchanges": [serializer.data]}, status=200)
-        except ExchangeInfo.DoesNotExist:
-            return Response({"error": "Exchange not found"}, status=404)
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": "Exchange parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        mapping = {
+            "Binance": settings.BINANCE_RECEIVE_DETAILS,
+            "Bybit": settings.BYBIT_RECEIVE_DETAILS,
+            "Mexc": settings.MEXC_RECEIVE_DETAILS,
+            "Gate.io": settings.GATEIO_RECEIVE_DETAILS,
+            "Bitget": settings.BITGET_RECEIVE_DETAILS,
+        }
+
+        if exchange not in mapping:
+            return Response({"error": "Exchange not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        details = mapping[exchange]
+        return Response({
+            "exchange": exchange,
+            "receive_qr": details.get("receive_qr"),
+            "contact_info": details.get("contact_info"),
+        }, status=status.HTTP_200_OK)
             
 class ExchangeListAPI(APIView):
-    permission_classes = [AllowAny]  # users don’t need to log in just to see exchange list
+    permission_classes = [AllowAny]
 
     def get(self, request):
-        exchanges = ExchangeInfo.objects.all()
-        serializer = ExchangeInfoSerializer(exchanges, many=True)
-        return Response({"exchanges": serializer.data}, status=status.HTTP_200_OK)
+        """
+        Return all available exchanges and their details (from env/settings).
+        """
+        exchanges = {
+            "Binance": settings.BINANCE_RECEIVE_DETAILS,
+            "Bybit": settings.BYBIT_RECEIVE_DETAILS,
+            "Mexc": settings.MEXC_RECEIVE_DETAILS,
+            "Gate.io": settings.GATEIO_RECEIVE_DETAILS,
+            "Bitget": settings.BITGET_RECEIVE_DETAILS,
+        }
+
+        # Shape the data for frontend
+        data = []
+        for name, details in exchanges.items():
+            data.append({
+                "exchange": name,
+                "receive_qr": details.get("receive_qr"),
+                "contact_info": details.get("contact_info"),
+            })
+
+        return Response({"exchanges": data}, status=status.HTTP_200_OK)
+
 
 class ExchangeRateAPI(APIView):
     permission_classes = [AllowAny]

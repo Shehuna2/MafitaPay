@@ -79,20 +79,21 @@ class ExchangeRateMargin(models.Model):
     
 
 EXCHANGE_CHOICES = [
-    ('binance', 'Binance'),
-    ('bybit',   'Bybit'),
-    ('mexc',    'MEXC'),
-    ('gateio',  'Gate.io'),
-    ('bitget',  'Bitget'),
-    ('wallet',  'External Wallet'),
+    ('Binance', 'Binance'),
+    ('Bybit',   'Bybit'),
+    ('Mexc',    'MEXC'),
+    ('Gate.io',  'Gate.io'),
+    ('Bitget',  'Bitget'),
+    ('Web wallet',  'Web wallet'),
 ]
 
-ASSET_CHOICES = [
-    ('usdt', 'USDT'),
-    ('sidra',  'SIDRA'),
-    ('pi',  'PI'),
-    ('bnb',  'BNB'),
-]
+# ASSET_CHOICES = [
+#     ('usdt', 'USDT'),
+#     ('usdc', 'USDC'),
+#     ('sidra',  'SIDRA'),
+#     ('pi',  'PI'),
+# ]
+
 
 
 class ExchangeInfo(models.Model):
@@ -104,19 +105,27 @@ class ExchangeInfo(models.Model):
         return self.get_exchange_display()
 
 
-class ExchangeRate(models.Model):
-    asset = models.CharField(max_length=10, choices=ASSET_CHOICES, unique=True)
-    rate_ngn = models.DecimalField(max_digits=20, decimal_places=4)
+class Asset(models.Model):
+    symbol = models.CharField(max_length=10, unique=True)  # e.g. 'usdt'
+    name = models.CharField(max_length=50)                 # e.g. 'Tether USD'
+    is_active = models.BooleanField(default=True)
 
+    def __str__(self):
+        return self.name
+
+class ExchangeRate(models.Model):
+    asset = models.ForeignKey('Asset', on_delete=models.CASCADE, related_name='rates')
+    rate_ngn = models.DecimalField(max_digits=20, decimal_places=4)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"1 {self.asset.upper()} = ₦{self.rate_ngn}"
 
+
 class AssetSellOrder(models.Model):
     user         = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     order_id     = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)  # ✅ added
-    asset        = models.CharField(max_length=10, choices=ASSET_CHOICES)
+    asset        = models.ForeignKey('Asset', on_delete=models.CASCADE)
     source       = models.CharField(max_length=20, choices=EXCHANGE_CHOICES)
     amount_asset = models.DecimalField(max_digits=18, decimal_places=8)
     rate_ngn     = models.DecimalField(max_digits=20, decimal_places=4)   # snapshot of rate

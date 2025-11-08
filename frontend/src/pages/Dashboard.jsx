@@ -31,7 +31,7 @@ export default function Dashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showBalance, setShowBalance] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState(""); // "deposit" or "withdraw"
+  const [modalType, setModalType] = useState("");
   const [currentEventIndex, setCurrentEventIndex] = useState(0);
   const [recentTx, setRecentTx] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
@@ -55,7 +55,7 @@ export default function Dashboard() {
       const data = Array.isArray(txRes.data) ? txRes.data : txRes.data.results || [];
       const formattedTx = data.map(tx => ({
         id: tx.id,
-        type: tx.category === "crypto" ? "Crypto" : tx.category === "airtime" ? "Airtime" : tx.category === "data" ? "Data" : "Other",
+        type: tx.category === "crypto" ? "Gas fee" : tx.category === "airtime" ? "Airtime" : tx.category === "data" ? "Data" : "Other",
         amount: parseFloat(tx.amount),
         time: new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         icon: tx.tx_type === "credit" ? (
@@ -137,14 +137,93 @@ export default function Dashboard() {
     );
   };
 
+  // FULL SKELETON LOADER
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="bg-indigo-600/30 backdrop-blur-xl p-6 sm:p-10 rounded-3xl shadow-wallet w-full max-w-sm sm:max-w-lg animate-pulse border border-indigo-600/20">
-          <div className="h-7 sm:h-8 bg-gray-700 rounded w-36 sm:w-44 mb-4 sm:mb-6" />
-          <div className="h-12 sm:h-14 bg-gray-700 rounded w-48 sm:w-64" />
+      <>
+        <style jsx>{`
+          @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+          .shimmer {
+            background: linear-gradient(90deg, #1a1a2e 25%, #2a2a3e 50%, #1a1a2e 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.8s infinite;
+          }
+          .pulse-slow { animation: pulse 2s ease-in-out infinite; }
+          @keyframes pulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 0.4; } }
+        `}</style>
+
+        <div className="min-h-screen bg-gray-900 text-white px-1 sm:px-2 py-6 animate-fade-in">
+          {/* Wallet Card Skeleton */}
+          <div className="mx-2 mb-6">
+            <div className="bg-indigo-600/30 backdrop-blur-2xl p-6 sm:p-8 rounded-3xl border border-indigo-600/20">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-700/50 rounded-full shimmer" />
+                  <div className="h-6 sm:h-7 w-40 bg-gray-700/50 rounded shimmer" />
+                </div>
+                <div className="flex gap-2">
+                  <div className="w-10 h-10 rounded-xl bg-gray-700/50 shimmer" />
+                  <div className="w-10 h-10 rounded-xl bg-gray-700/50 shimmer" />
+                  <div className="w-10 h-10 rounded-xl bg-gray-700/50 shimmer" />
+                </div>
+              </div>
+
+              {/* Balance */}
+              <div className="mb-6">
+                <div className="h-10 sm:h-12 w-64 bg-gray-700/50 rounded shimmer" />
+              </div>
+
+              {/* Recent Activity (Mobile) */}
+              <div className="block md:hidden space-y-2">
+                <div className="h-4 w-32 bg-gray-700/50 rounded shimmer" />
+                <div className="h-5 w-full bg-gray-700/50 rounded shimmer" />
+                <div className="h-5 w-full bg-gray-700/50 rounded shimmer" />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 mt-8">
+                <div className="h-11 sm:h-12 flex-1 bg-indigo-600/50 rounded-2xl shimmer" />
+                <div className="h-11 sm:h-12 flex-1 bg-indigo-600/50 rounded-2xl shimmer" />
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Actions Skeleton */}
+          <div className="px-2 sm:px-4 mb-6">
+            <div className="grid grid-cols-3 gap-4">
+              {Array(9).fill().map((_, i) => (
+                <div key={i} className="flex flex-col items-center justify-center p-4 rounded-2xl bg-gray-800 border border-indigo-600/20">
+                  <div className="w-10 h-10 bg-gray-700/50 rounded-full shimmer mb-2" />
+                  <div className="h-3 w-12 bg-gray-700/50 rounded shimmer" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Event Carousel Skeleton */}
+          <div className="px-2 sm:px-4">
+            <div className="h-5 w-32 bg-gray-700/50 rounded shimmer mb-3" />
+            <div className="bg-gray-800/60 backdrop-blur-md p-4 rounded-xl border border-gray-700/50 h-28">
+              <div className="flex flex-col sm:flex-row justify-between h-full">
+                <div className="space-y-2 flex-1">
+                  <div className="h-4 w-48 bg-gray-700/50 rounded shimmer" />
+                  <div className="h-5 w-64 bg-gray-700/50 rounded shimmer" />
+                </div>
+                <div className="h-7 w-16 bg-indigo-600/30 rounded-full shimmer mt-4 sm:mt-0" />
+              </div>
+            </div>
+            <div className="flex justify-center gap-1.5 mt-3">
+              <div className="w-4 h-1.5 bg-indigo-400 rounded-full pulse-slow" />
+              <div className="w-1.5 h-1.5 bg-gray-600 rounded-full pulse-slow" />
+              <div className="w-1.5 h-1.5 bg-gray-600 rounded-full pulse-slow" />
+            </div>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -278,7 +357,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* UNIVERSAL MODAL: Deposit or Withdraw */}
+        {/* UNIVERSAL MODAL */}
         {showModal && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
             <div className="relative bg-indigo-600/40 backdrop-blur-xl p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-sm sm:max-w-md border border-indigo-600/30">
