@@ -91,7 +91,7 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
 SECURE_HSTS_PRELOAD = not DEBUG
 
 # --------------------------------------------------
-# 9. CORS
+# 9. CORS — FINAL FIX
 # --------------------------------------------------
 CORS_ALLOWED_ORIGINS = [
     o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
@@ -100,8 +100,22 @@ if DEBUG:
     CORS_ALLOWED_ORIGINS += ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.onrender\.com$",
     r"^https://.*\.ngrok\.io$",
-    r"^httpsாக://.*\.onrender\.com$",
+]
+
+# ADD THESE 3 LINES ↓↓↓
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
 # --------------------------------------------------
@@ -202,6 +216,37 @@ SIMPLE_JWT = {
 # --------------------------------------------------
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
+
+
+# --------------------------------------------------
+# 15. LOGGING — SEE EVERYTHING
+# --------------------------------------------------
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "DEBUG" if DEBUG else "INFO",
+    },
+    "loggers": {
+        "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "accounts": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
+        "wallet": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
+        "p2p": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
+    },
+}
 
 # --------------------------------------------------
 # 14. ALL YOUR API KEYS (unchanged)
