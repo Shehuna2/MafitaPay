@@ -76,7 +76,7 @@ export default function BuyAirtime() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 p-6 text-white relative overflow-hidden">
+    <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
       <ToastContainer />
       <div className="absolute inset-0 pointer-events-none" />
 
