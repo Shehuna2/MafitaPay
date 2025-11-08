@@ -1,7 +1,7 @@
 // src/pages/BuyData.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle, XCircle } from "lucide-react";
 import client from "../../api/client";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -15,10 +15,12 @@ export default function BuyData() {
   });
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [loadingPlans, setLoadingPlans] = useState(true); // New: track plan loading
+  const [loadingPlans, setLoadingPlans] = useState(true);
   const [message, setMessage] = useState(null);
   const [receiptData, setReceiptData] = useState(null);
+  const [showConfirm, setShowConfirm] = useState(false); // NEW: Modal state
   const navigate = useNavigate();
+  const modalRef = useRef(null); // For click-outside
 
   const resetForm = () => {
     setForm({
@@ -53,11 +55,41 @@ export default function BuyData() {
   };
 
   const formatPlanTitle = (text = "") => {
-    return text.replace(/^N\d+\s*/i, "").trim();
+    if (!text) return "Unknown Plan";
+
+    const str = text.toLowerCase().trim();
+
+    const dataMatch = str.match(/(\d+(\.\d+)?\s*(mb|gb|tb))/i);
+    const dataAmount = dataMatch ? dataMatch[0].toUpperCase() : "";
+
+    const validityMatch = str.match(/\b(\d+\s*(day|days|week|weeks|month|months))\b/i);
+    let validity = validityMatch
+      ? validityMatch[0]
+          .replace(/days?/i, "Day")
+          .replace(/weeks?/i, "Week")
+          .replace(/months?/i, "Month")
+          .replace(/\s+/g, "")
+      : "";
+
+    if (!validity) {
+      const fallback = str.match(/\b(daily|weekly|monthly)\b/i)?.[0];
+      validity = fallback ? fallback.replace("ly", "y") : "";
+    }
+
+    const finalValidity = validity || "Valid";
+
+    return dataAmount ? `${dataAmount} - ${finalValidity}` : "View Plan";
   };
 
-  const handleSubmit = async (e) => {
+  // NEW: Open confirmation modal
+  const handleSubmit = (e) => {
     e.preventDefault();
+    setShowConfirm(true);
+  };
+
+  // NEW: Confirm purchase
+  const confirmPurchase = async () => {
+    setShowConfirm(false);
     setLoading(true);
     setMessage(null);
 
@@ -100,21 +132,57 @@ export default function BuyData() {
     }
   };
 
+  // NEW: Back button
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/dashboard");
+    }
+  };
+
+  // NEW: Click outside modal to close
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (modalRef.current && !modalRef.current.contains(e.target)) {
+        setShowConfirm(false);
+      }
+    };
+    if (showConfirm) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showConfirm]);
+
+  // NEW: Escape key to close modal
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === "Escape") setShowConfirm(false);
+    };
+    if (showConfirm) {
+      document.addEventListener("keydown", handleEsc);
+    }
+    return () => document.removeEventListener("keydown", handleEsc);
+  }, [showConfirm]);
+
   return (
     <>
       <style jsx>{`
         @keyframes shimmer {
-          0% {
-            background-position: -200% 0;
-          }
-          100% {
-            background-position: 200% 0;
-          }
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
         }
         .shimmer {
           background: linear-gradient(90deg, #374151 25%, #4B5563 50%, #374151 75%);
           background-size: 200% 100%;
           animation: shimmer 1.8s infinite;
+        }
+        @keyframes modalFade {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .modal-enter {
+          animation: modalFade 0.2s ease-out forwards;
         }
       `}</style>
 
@@ -129,10 +197,14 @@ export default function BuyData() {
             </div>
           )}
 
-          <div className="flex items-center gap-2 mb-5">
-            <ArrowLeft className="w-5 h-5 text-indigo-400" />
-            <h2 className="text-xl sm:text-2xl font-bold text-indigo-400">Buy Data</h2>
-          </div>
+          {/* BACK BUTTON */}
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-2 mb-5 text-indigo-400 hover:text-indigo-300 transition-colors group"
+          >
+            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+            <h2 className="text-xl sm:text-2xl font-bold">Buy Data</h2>
+          </button>
 
           {message && (
             <div
@@ -185,7 +257,7 @@ export default function BuyData() {
               </div>
             </div>
 
-            {/* QUICK PICK PLANS WITH SKELETON */}
+            {/* QUICK PICK PLANS */}
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1.5">Quick Pick Plans</label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -214,7 +286,9 @@ export default function BuyData() {
                       <span className="block font-bold">
                         {formatPlanTitle(plan.name || plan.description)}
                       </span>
-                      <span className="text-xs text-gray-400">₦{plan.variation_amount}</span>
+                      <span className="text-xs text-gray-400">
+                        ₦{plan.variation_amount || "???"}
+                      </span>
                     </button>
                   ))
                 ) : (
@@ -225,7 +299,7 @@ export default function BuyData() {
               </div>
             </div>
 
-            {/* SELECT PLAN DROPDOWN WITH SKELETON */}
+            {/* SELECT PLAN DROPDOWN */}
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1.5">Select Plan</label>
               {loadingPlans ? (
@@ -267,6 +341,69 @@ export default function BuyData() {
               {loading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Buy Data"}
             </button>
           </form>
+
+          {/* CONFIRMATION MODAL */}
+          {showConfirm && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div
+                ref={modalRef}
+                className="bg-gray-800/90 backdrop-blur-xl rounded-2xl border border-gray-700/50 shadow-2xl p-6 max-w-sm w-full modal-enter"
+              >
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-400" />
+                  Confirm Purchase
+                </h3>
+
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Phone:</span>
+                    <span className="font-medium text-white">{form.phone}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Network:</span>
+                    <span className="font-medium text-white">
+                      {form.network.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Plan:</span>
+                    <span className="font-medium text-white">
+                      {(() => {
+                        const plan = plans.find(p => p.variation_code === form.variation_code);
+                        return plan ? formatPlanTitle(plan.name || plan.description) : "Unknown";
+                      })()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Amount:</span>
+                    <span className="font-bold text-indigo-400">
+                      ₦{(() => {
+                        const plan = plans.find(p => p.variation_code === form.variation_code);
+                        return plan?.variation_amount || "0";
+                      })()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={confirmPurchase}
+                    className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-xl font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-xl hover:shadow-green-500/30 transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => setShowConfirm(false)}
+                    className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2.5 rounded-xl font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-xl hover:shadow-red-500/30 transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <Receipt
             type="data"
