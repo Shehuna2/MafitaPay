@@ -98,7 +98,7 @@ export default function OffersHub() {
             }`}
           >
             <ArrowDownRight className="w-4 h-4" />
-            Deposit Offers
+            Deposit
           </button>
           <button
             onClick={() => setActiveTab("withdraw")}
@@ -109,7 +109,7 @@ export default function OffersHub() {
             }`}
           >
             <ArrowUpRight className="w-4 h-4" />
-            Withdraw Offers
+            Withdraw
           </button>
         </div>
       </div>

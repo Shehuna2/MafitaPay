@@ -1,7 +1,8 @@
 from django.contrib import admin
+from django import forms
 from .models import (
-    AssetSellOrder, ExchangeInfo, PaymentProof, ExchangeRate, Crypto, 
-    CryptoPurchase, ExchangeRateMargin, Asset   
+    AssetSellOrder, PaymentProof, ExchangeRate, Crypto,
+    CryptoPurchase, ExchangeRateMargin, Asset
 )
 
 
@@ -46,12 +47,38 @@ class AssetAdmin(admin.ModelAdmin):
     list_display = ("name", "symbol")
     search_fields = ("name", "symbol")
 
+class ExchangeRateMarginForm(forms.ModelForm):
+    class Meta:
+        model = ExchangeRateMargin
+        fields = "__all__"
+
+    def clean_profit_margin(self):
+        profit_margin = self.cleaned_data.get("profit_margin")
+        if profit_margin < 0:
+            raise forms.ValidationError("Profit margin cannot be negative.")
+        if profit_margin > 100000:
+            raise forms.ValidationError("Profit margin seems unusually high — please review.")
+        return profit_margin
+
+
 @admin.register(ExchangeRateMargin)
 class ExchangeRateMarginAdmin(admin.ModelAdmin):
-    list_display = ("currency_pair", "profit_margin", "updated_at")
-    list_editable = ("profit_margin",)  # Edit margin directly in list view
+    form = ExchangeRateMarginForm
+    list_display = ("currency_pair", "margin_type", "profit_margin", "updated_at")
+    list_editable = ("profit_margin",)
+    list_filter = ("margin_type",)
     search_fields = ("currency_pair",)
+    ordering = ("currency_pair",)
 
+    fieldsets = (
+        (None, {
+            "fields": ("currency_pair", "margin_type", "profit_margin")
+        }),
+        ("Metadata", {
+            "fields": ("updated_at",),
+        }),
+    )
+    readonly_fields = ("updated_at",)
 
 @admin.register(AssetSellOrder)
 class SellOrderAdmin(admin.ModelAdmin):
@@ -79,11 +106,6 @@ class SellOrderAdmin(admin.ModelAdmin):
             'fields': ('rate_ngn', 'amount_ngn', 'status', 'details', 'created_at'),
         }),
     )
-
-
-@admin.register(ExchangeInfo)
-class ExchangeInfoAdmin(admin.ModelAdmin):
-    list_display = ('exchange',)
 
 
 @admin.register(ExchangeRate)

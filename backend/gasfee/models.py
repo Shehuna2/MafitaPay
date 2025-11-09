@@ -70,12 +70,36 @@ class CryptoPurchase(models.Model):
 
 
 class ExchangeRateMargin(models.Model):
-    currency_pair = models.CharField(max_length=20, default="USDT/NGN", unique=True)
-    profit_margin = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # NGN amount to add
+    MARGIN_TYPE_CHOICES = [
+        ('buy', 'Buy Margin'),
+        ('sell', 'Sell Margin'),
+    ]
+
+    currency_pair = models.CharField(max_length=20, default="USDT/NGN")
+    margin_type = models.CharField(max_length=10, choices=MARGIN_TYPE_CHOICES, default='buy')
+    profit_margin = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        unique_together = ('currency_pair', 'margin_type')
+        verbose_name = "Exchange Rate Margin"
+        verbose_name_plural = "Exchange Rate Margins"
+
+    def clean(self):
+        """Ensure profit margin is non-negative."""
+        from django.core.exceptions import ValidationError
+        if self.profit_margin < 0:
+            raise ValidationError("Profit margin cannot be negative.")
+        if self.profit_margin > 100000:
+            raise ValidationError("Profit margin seems unusually high — please review.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()  # triggers clean() before saving
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.currency_pair} Margin: ₦{self.profit_margin}"
+        return f"{self.currency_pair} ({self.margin_type}) → ₦{self.profit_margin}"
+
     
 
 EXCHANGE_CHOICES = [
@@ -93,16 +117,6 @@ EXCHANGE_CHOICES = [
 #     ('sidra',  'SIDRA'),
 #     ('pi',  'PI'),
 # ]
-
-
-
-class ExchangeInfo(models.Model):
-    exchange = models.CharField(max_length=20, choices=EXCHANGE_CHOICES, unique=True)
-    receive_qr = models.ImageField(upload_to='exchange_qrcodes/', blank=True, null=True,)
-    contact_info = models.JSONField(blank=True, null=True, default=dict)
-    
-    def __str__(self):
-        return self.get_exchange_display()
 
 
 class Asset(models.Model):

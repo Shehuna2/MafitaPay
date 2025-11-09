@@ -174,7 +174,7 @@ export default function CreateOffer() {
         }
       );
 
-      setTimeout(() => navigate("/p2p/merchant-orders"), 800);
+      setTimeout(() => navigate("/p2p/marketplace"), 800);
     } catch (err) {
       const msg =
         err?.response?.data?.detail ||

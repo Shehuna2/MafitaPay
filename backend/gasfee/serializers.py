@@ -1,18 +1,23 @@
 # serializers.py
 
 from rest_framework import serializers
-from .models import AssetSellOrder, ExchangeInfo, ExchangeRate, PaymentProof
+from .models import AssetSellOrder, ExchangeRate, PaymentProof, Asset
 
+class AssetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Asset
+        fields = ["id", "symbol", "name"]
 
 class AssetSellOrderSerializer(serializers.ModelSerializer):
+    asset = AssetSerializer(read_only=True)
     class Meta:
         model = AssetSellOrder
         fields = [
             "id",
             "order_id",
-            "asset",          # ✅ fixed (was asset_type)
-            "source",         # ✅ fixed (was exchange_id)
-            "amount_asset",   # ✅ fixed (was amount)
+            "asset",
+            "source",
+            "amount_asset",
             "rate_ngn",
             "amount_ngn",
             "status",
@@ -20,15 +25,7 @@ class AssetSellOrderSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = [
-            "id",
-            "order_id",
-            "rate_ngn",
-            "amount_ngn",
-            "status",
-            "created_at",
-            "updated_at",
-        ]
+        read_only_fields = ["id", "order_id", "rate_ngn", "amount_ngn", "status", "created_at", "updated_at"]
 
 
 class PaymentProofSerializer(serializers.Serializer):
@@ -40,25 +37,10 @@ class PaymentProofSerializer(serializers.Serializer):
         return value
 
 
-class ExchangeInfoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ExchangeInfo
-        fields = [
-            "id",
-            "exchange",
-            "receive_qr",
-            "contact_info",
-        ]
-        read_only_fields = ["id", "exchange", "receive_qr", "contact_info"]
 
-    def get_qr_url(self, obj):
-        if obj.receive_qr:
-            return obj.receive_qr.url
-        return None
 
 class ExchangeRateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExchangeRate
         fields = ["asset", "rate_ngn", "updated_at"]
-
 

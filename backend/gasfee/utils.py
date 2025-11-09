@@ -181,21 +181,20 @@ def get_crypto_price(coingecko_id, network="Ethereum"):
     )
     return Decimal("500")
 
-def get_exchange_rate():
-    # 1) Keys: fresh (5 min) and last‑known (never expire)
-    fresh_key     = "exchange_rate_usd_ngn"
+def get_exchange_rate(margin_type: str = "buy"):
+    """
+    Fetches the live USD→NGN rate from Coingecko (cached 5 min) and applies platform margin.
+    margin_type: "buy" or "sell" — to apply different profit margins.
+    """
+    fresh_key = "exchange_rate_usd_ngn"
     last_known_key = "exchange_rate_last_known_usd_ngn"
 
-    # 2) Try fresh cache
+    # ✅ Step 1: Try cache first
     rate = cache.get(fresh_key)
     if rate is not None:
         logger.info(f"Using fresh cached USD→NGN rate: {rate}")
     else:
-        # 3) Fetch from Coingecko
-        url = (
-            "https://api.coingecko.com/api/v3/simple/price"
-            "?ids=tether&vs_currencies=ngn"
-        )
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=ngn"
         logger.info(f"Fetching USD→NGN rate from: {url}")
         try:
             resp = requests.get(url, timeout=5)
@@ -204,43 +203,24 @@ def get_exchange_rate():
             ngn_price = data["tether"]["ngn"]
             rate = Decimal(str(ngn_price))
 
-            # update both caches
-            cache.set(fresh_key, rate, timeout=300)       # 5 min
-            cache.set(last_known_key, rate, timeout=None) # never expire
-
-            logger.info(f"Cached fresh USD→NGN rate: {rate}")
+            cache.set(fresh_key, rate, timeout=300)        # 5 min
+            cache.set(last_known_key, rate, timeout=None)  # backup
 
         except (requests.RequestException, KeyError, ValueError) as e:
-            logger.error(
-                f"Failed to fetch USD→NGN rate: {e}\n"
-                + traceback.format_exc()
-            )
+            logger.error(f"Failed to fetch USD→NGN rate: {e}\n{traceback.format_exc()}")
+            rate = cache.get(fresh_key) or cache.get(last_known_key) or Decimal("1500")
+            logger.warning(f"Using fallback USD→NGN rate: {rate}")
 
-            # 4) On error, re‑check fresh cache (race)…
-            rate = cache.get(fresh_key)
-            if rate is not None:
-                logger.info(
-                    f"Using just‑set fresh cache after error: {rate}"
-                )
-            else:
-                # 5) …then fall back to last‑known
-                rate = cache.get(last_known_key)
-                if rate is not None:
-                    logger.info(f"Using last‑known USD→NGN rate: {rate}")
-                else:
-                    # 6) Ultimate default
-                    rate = Decimal("1500")
-                    logger.warning(
-                        "No cached USD→NGN rate available; falling back to 1500"
-                    )
-
-    # 7) Apply your margin
+    # ✅ Step 2: Apply profit margin based on type
     try:
         from .models import ExchangeRateMargin
         margin = ExchangeRateMargin.objects.get(
-            currency_pair="USDT/NGN"
+            currency_pair="USDT/NGN",
+            margin_type=margin_type.lower(),  # e.g. 'buy' or 'sell'
         ).profit_margin
     except ExchangeRateMargin.DoesNotExist:
         margin = Decimal("0")
-    return rate + margin
 
+    final_rate = rate + margin
+    logger.info(f"USD→NGN rate ({margin_type.upper()}): Base ₦{rate} + Margin ₦{margin} = ₦{final_rate}")
+    return final_rate

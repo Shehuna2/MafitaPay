@@ -2,11 +2,13 @@
 import uuid
 import logging
 import requests
+import traceback
 
 from decimal import Decimal
 from django.db import transaction
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
+
 
 from rest_framework import status
 from rest_framework.views import APIView
@@ -22,11 +24,10 @@ from .near_utils import send_near
 from .sol_utils import send_solana
 from .ton_utils import send_ton
 from .models import (
-    Crypto, CryptoPurchase, AssetSellOrder, ExchangeInfo,  ExchangeRate, PaymentProof
+    Crypto, CryptoPurchase, AssetSellOrder,  ExchangeRate, PaymentProof, Asset
 )
 from .serializers import (
-    AssetSellOrderSerializer, PaymentProofSerializer, ExchangeInfoSerializer, 
-    ExchangeRateSerializer,
+    AssetSellOrderSerializer, PaymentProofSerializer, ExchangeRateSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -90,8 +91,39 @@ class AssetListAPI(APIView):
         })
 
 class BuyCryptoAPI(APIView):
+    """
+    GET  → Fetch live buy rate (includes profit margin)
+    POST → Execute crypto purchase
+    """
     permission_classes = [permissions.IsAuthenticated]
 
+    # ✅ 1. GET: Rate preview
+    def get(self, request, crypto_id):
+        try:
+            crypto = get_object_or_404(Crypto, id=crypto_id)
+            coingecko_id = crypto.coingecko_id
+
+            # live crypto price (USD)
+            crypto_price_usd = get_crypto_price(coingecko_id, network=crypto.network)
+
+            # USD→NGN rate + BUY margin
+            usd_ngn_rate = get_exchange_rate(margin_type="buy")
+
+            price_ngn = crypto_price_usd * usd_ngn_rate
+
+            return Response({
+                "crypto": crypto.symbol,
+                "network": crypto.network,
+                "price_usd": round(crypto_price_usd, 2),
+                "usd_ngn_rate": round(usd_ngn_rate, 2),
+                "price_ngn": round(price_ngn, 2),
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Error fetching buy rate for {crypto_id}: {str(e)}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # ✅ 2. POST: Execute purchase
     def post(self, request, crypto_id):
         crypto = get_object_or_404(Crypto, id=crypto_id)
 
@@ -105,8 +137,8 @@ class BuyCryptoAPI(APIView):
         currency = request.data.get("currency", "NGN").upper()
         wallet_address = request.data.get("wallet_address", "").strip()
 
-        # ✅ Pricing
-        exchange_rate = cache.get("exchange_rate_usd_ngn") or get_exchange_rate()
+        # ✅ Use unified margin-based rate
+        exchange_rate = cache.get("exchange_rate_usd_ngn") or get_exchange_rate(margin_type="buy")
         crypto_price = get_crypto_price(crypto.coingecko_id, crypto.network)
 
         if currency == "NGN":
@@ -145,12 +177,11 @@ class BuyCryptoAPI(APIView):
                     crypto_amount=crypto_received,
                     total_price=total_ngn,
                     wallet_address=wallet_address,
-                    request_id=req_id,   # ✅ NEW
+                    request_id=req_id,
                     status="pending",
                 )
 
-                # 🔹 Create WalletTransaction (pending)
-                tx = WalletTransaction.objects.create(
+                WalletTransaction.objects.create(
                     user=request.user,
                     wallet=wallet,
                     tx_type="debit",
@@ -162,56 +193,47 @@ class BuyCryptoAPI(APIView):
                     status="pending",
                 )
 
-            # 🔹 On-chain send
             sender = SENDERS.get(crypto.symbol.upper())
             if not sender:
                 order.status = "failed"
                 order.save()
-                tx.status = "failed"
-                tx.save()
                 return Response({"success": False, "error": "Unsupported token"}, status=400)
 
-            if crypto.symbol.upper() == "NEAR":
-                result = sender(wallet_address, float(crypto_received))
-            else:
-                result = sender(wallet_address, float(crypto_received), order.id)
+            result = (
+                sender(wallet_address, float(crypto_received))
+                if crypto.symbol.upper() == "NEAR"
+                else sender(wallet_address, float(crypto_received), order.id)
+            )
 
             tx_hash = result if isinstance(result, str) else result[0]
 
-            # ✅ Mark both as success
             order.tx_hash = tx_hash
             order.status = "completed"
             order.save(update_fields=["tx_hash", "status"])
 
-            tx.status = "success"
-            tx.reference = tx_hash
-            tx.save(update_fields=["status", "reference"])
-
-            return Response(
-                {
-                    "success": True,
-                    "crypto": crypto.symbol,
-                    "crypto_amount": str(crypto_received),
-                    "total_ngn": str(total_ngn),
-                    "wallet_address": wallet_address,
-                    "tx_hash": tx_hash,
-                },
-                status=200,
+            WalletTransaction.objects.filter(request_id=req_id).update(
+                status="success", reference=tx_hash
             )
 
+            return Response({
+                "success": True,
+                "crypto": crypto.symbol,
+                "crypto_amount": str(crypto_received),
+                "total_ngn": str(total_ngn),
+                "wallet_address": wallet_address,
+                "tx_hash": tx_hash,
+            }, status=200)
+
         except Exception as e:
-            err_str = str(e)
-            if "InsufficientFunds" in err_str:
+            logger.error(f"Buy transaction error: {str(e)}")
+            msg = "Transaction failed. Please try again later."
+            if "InsufficientFunds" in str(e):
                 msg = "Insufficient funds. Please top up your wallet."
-            elif "InvalidAddress" in err_str:
-                msg = "The wallet address appears invalid. Please check and try again."
-            elif "network" in err_str.lower():
+            elif "InvalidAddress" in str(e):
+                msg = "The wallet address appears invalid."
+            elif "network" in str(e).lower():
                 msg = "Network issue — please retry in a few seconds."
-            else:
-                msg = "Transaction failed. Please try again later."
-
             return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
-
 
 def refund_user(purchase):
     """Refunds a user if an order fails, and updates WalletTransaction."""
@@ -238,73 +260,99 @@ def refund_user(purchase):
     except Wallet.DoesNotExist:
         return False
 
-class ExchangeInfoAPI(APIView):
-    permission_classes = [AllowAny]
 
-    def get(self, request):
-        """
-        Return a specific exchange's details based on query param.
-        """
-        exchange = request.query_params.get("exchange")
-        if not exchange:
-            return Response({"error": "Exchange parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+         
+# ---------- Helpers ----------
+def _normalize_name(raw: str) -> str:
+    # normalizes env var name -> display name
+    return raw.replace("_RECEIVE_DETAILS", "").replace("_", " ").title()
 
-        mapping = {
-            "Binance": settings.BINANCE_RECEIVE_DETAILS,
-            "Bybit": settings.BYBIT_RECEIVE_DETAILS,
-            "Mexc": settings.MEXC_RECEIVE_DETAILS,
-            "Gate.io": settings.GATEIO_RECEIVE_DETAILS,
-            "Bitget": settings.BITGET_RECEIVE_DETAILS,
-        }
+def get_exchange_details_map():
+    """
+    Auto-detect all settings that end with _RECEIVE_DETAILS and build a map.
+    Example: BINANCE_RECEIVE_DETAILS -> 'Binance': {uid: ..., email: ...}
+    """
+    exchanges = {}
+    for attr in dir(settings):
+        if not attr.endswith("_RECEIVE_DETAILS"):
+            continue
+        try:
+            details = getattr(settings, attr, None) or {}
+            # try to ensure dict (if loaded via json in settings it's already a dict)
+            if isinstance(details, str):
+                details = json.loads(details)
+        except Exception:
+            details = {}
+        # normalize key
+        key = _normalize_name(attr)
+        exchanges[key] = details or {}
+    return exchanges
 
-        if exchange not in mapping:
-            return Response({"error": "Exchange not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        details = mapping[exchange]
-        return Response({
-            "exchange": exchange,
-            "receive_qr": details.get("receive_qr"),
-            "contact_info": details.get("contact_info"),
-        }, status=status.HTTP_200_OK)
-            
+# ---------- Exchange endpoints ----------
 class ExchangeListAPI(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        """
-        Return all available exchanges and their details (from env/settings).
-        """
-        exchanges = {
-            "Binance": settings.BINANCE_RECEIVE_DETAILS,
-            "Bybit": settings.BYBIT_RECEIVE_DETAILS,
-            "Mexc": settings.MEXC_RECEIVE_DETAILS,
-            "Gate.io": settings.GATEIO_RECEIVE_DETAILS,
-            "Bitget": settings.BITGET_RECEIVE_DETAILS,
-        }
+        exchanges = list(get_exchange_details_map().keys())
+        return Response({"exchanges": exchanges}, status=drf_status.HTTP_200_OK)
 
-        # Shape the data for frontend
-        data = []
-        for name, details in exchanges.items():
-            data.append({
-                "exchange": name,
-                "receive_qr": details.get("receive_qr"),
-                "contact_info": details.get("contact_info"),
-            })
-
-        return Response({"exchanges": data}, status=status.HTTP_200_OK)
-
-
-class ExchangeRateAPI(APIView):
+class ExchangeInfoAPI(APIView):
     permission_classes = [AllowAny]
 
-    def get(self, request, asset):
-        try:
-            rate = get_object_or_404(ExchangeRate, asset=asset.lower())
-            serializer = ExchangeRateSerializer(rate)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except:
-            return Response({"error": "Rate not found"}, status=status.HTTP_404_NOT_FOUND)
+    def get(self, request):
+        exchange = request.query_params.get("exchange")
+        if not exchange:
+            return Response({"error": "Exchange parameter is required"}, status=drf_status.HTTP_400_BAD_REQUEST)
 
+        # normalize incoming exchange names (allow case-insensitive)
+        exchanges = get_exchange_details_map()
+        # attempt exact match, then case-insensitive match
+        details = exchanges.get(exchange)
+        if not details:
+            # case-insensitive search
+            match = next((v for k, v in exchanges.items() if k.lower() == exchange.lower()), None)
+            details = match
+            exchange = next((k for k in exchanges if k.lower() == exchange.lower()), exchange)
+
+        if not details:
+            return Response({"error": "Exchange not found"}, status=drf_status.HTTP_404_NOT_FOUND)
+
+        return Response({"exchange": exchange, "contact_info": details}, status=drf_status.HTTP_200_OK)
+
+class ExchangeRateAPI(APIView):
+    """
+    Returns the current NGN rate for a given asset (used in sell flow).
+    Applies 'sell' profit margin dynamically.
+    """
+
+    def get(self, request, asset):
+        # ✅ Normalize and get asset
+        asset = asset.upper()
+        asset_obj = get_object_or_404(Asset, symbol__iexact=asset)
+
+        # ✅ Step 1: Get live USD→NGN rate (with SELL margin)
+        usd_to_ngn = get_exchange_rate(margin_type="sell")
+
+        # ✅ Step 2: Lookup asset→USD conversion (from your ExchangeRate table)
+        try:
+            rate_obj = ExchangeRate.objects.filter(asset=asset_obj).latest("updated_at")
+            asset_to_ngn = Decimal(rate_obj.rate_ngn)
+            logger.info(f"Fetched custom stored rate for {asset}: ₦{asset_to_ngn}")
+        except ExchangeRate.DoesNotExist:
+            # fallback: use 1:1 to USD if missing
+            asset_to_ngn = usd_to_ngn
+            logger.warning(f"No stored rate for {asset}, using fallback ₦{usd_to_ngn}")
+
+        # ✅ Step 3: Calculate and respond
+        result = {
+            "success": True,
+            "asset": asset_obj.symbol,
+            "rate_ngn": str(asset_to_ngn),
+            "margin_type": "sell",
+        }
+        return Response(result, status=status.HTTP_200_OK)
+
+# ---------- Sell endpoints ----------
 class StartSellOrderAPI(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -314,71 +362,102 @@ class StartSellOrderAPI(APIView):
             "source": request.data.get("source"),
             "amount_asset": request.data.get("amount_asset"),
         }
-        serializer = AssetSellOrderSerializer(data=data)
-        if serializer.is_valid():
-            try:
-                with transaction.atomic():
-                    amount_asset = Decimal(serializer.validated_data["amount_asset"])
 
-                    # 🔹 fetch live rate
-                    rate_obj = get_object_or_404(ExchangeRate, asset=serializer.validated_data["asset"])
-                    rate_ngn = rate_obj.rate_ngn
-                    amount_ngn = amount_asset * rate_ngn
+        # Basic validation
+        if not data["asset"] or not data["source"] or not data["amount_asset"]:
+            return Response({"error": "asset, source and amount_asset are required."}, status=drf_status.HTTP_400_BAD_REQUEST)
 
-                    order = serializer.save(
-                        user=request.user,
-                        rate_ngn=rate_ngn,
-                        amount_ngn=amount_ngn,
-                        status="pending_payment",
-                    )
+        # validate numeric amount
+        try:
+            amount_asset = Decimal(str(data["amount_asset"]))
+            if amount_asset <= 0:
+                return Response({"error": "amount_asset must be greater than 0."}, status=drf_status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({"error": "Invalid amount_asset."}, status=drf_status.HTTP_400_BAD_REQUEST)
 
-                return Response(
-                    {"success": True, "order": AssetSellOrderSerializer(order).data},
-                    status=status.HTTP_201_CREATED,
+        # validate asset exists (case-insensitive symbol)
+        try:
+            asset = Asset.objects.get(symbol__iexact=data["asset"])
+        except Asset.DoesNotExist:
+            return Response({"error": "Asset not found."}, status=drf_status.HTTP_404_NOT_FOUND)
+
+        # validate source (exchange) exists in settings map
+        exchanges = get_exchange_details_map()
+        exchange_key = next((k for k in exchanges if k.lower() == str(data["source"]).lower()), None)
+        if not exchange_key:
+            return Response({"error": "Exchange/source not supported."}, status=drf_status.HTTP_400_BAD_REQUEST)
+        exchange_details = exchanges[exchange_key] or {}
+
+        # get latest exchange rate for the asset
+        try:
+            rate_obj = ExchangeRate.objects.filter(asset=asset).latest("updated_at")
+            rate_ngn = Decimal(rate_obj.rate_ngn)
+        except ExchangeRate.DoesNotExist:
+            logger.exception("ExchangeRate missing for asset %s", asset)
+            return Response({"error": "Rate for asset not available."}, status=drf_status.HTTP_400_BAD_REQUEST)
+
+        # compute amount in NGN
+        amount_ngn = (amount_asset * rate_ngn).quantize(Decimal("0.01"))
+
+        try:
+            with transaction.atomic():
+                order = AssetSellOrder.objects.create(
+                    user=request.user,
+                    asset=asset,
+                    source=exchange_key,
+                    amount_asset=amount_asset,
+                    rate_ngn=rate_ngn,
+                    amount_ngn=amount_ngn,
+                    status="pending",
+                    details={"exchange_contact": exchange_details}
                 )
-            except Exception as e:
-                logger.error(f"Error creating sell order: {e}", exc_info=True)
-                return Response(
-                    {"success": False, "message": "Could not create sell order"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            # expiration (seconds) — keep your frontend timer logic in sync (30 min = 1800s)
+            expires_in = 30 * 60
+
+            serializer = AssetSellOrderSerializer(order)
+            resp = {
+                "success": True,
+                "order": serializer.data,
+                "exchange_details": exchange_details,
+                "expires_in": expires_in,
+            }
+            return Response(resp, status=drf_status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.exception("Error creating sell order: %s", e)
+            return Response({"success": False, "message": "Could not create sell order"}, status=drf_status.HTTP_400_BAD_REQUEST)
+
 
 class UploadPaymentProofAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, order_id):
-        """
-        Step 2: Upload payment proof for an existing order.
-        """
-        order = get_object_or_404(AssetSellOrder, order_id=order_id, user=request.user)  # ✅ use order_id
-        serializer = PaymentProofSerializer(data=request.data)
-        if serializer.is_valid():
-            PaymentProof.objects.create(
-                order=order,
-                image=serializer.validated_data["payment_proof"],
-            )
-            order.status = "proof_submitted"
+        order = get_object_or_404(AssetSellOrder, order_id=order_id, user=request.user)
+
+        # allow upload only while order is pending
+        if order.status not in ["pending"]:
+            return Response({"error": "Order cannot accept proof in current status."}, status=drf_status.HTTP_400_BAD_REQUEST)
+
+        # validate file existence
+        file = request.FILES.get("payment_proof") or request.data.get("payment_proof")
+        if not file:
+            return Response({"payment_proof": ["Please upload payment proof"]}, status=drf_status.HTTP_400_BAD_REQUEST)
+
+        # validate size <= 5MB
+        max_size = 5 * 1024 * 1024
+        if hasattr(file, "size") and file.size > max_size:
+            return Response({"payment_proof": ["Image size should not exceed 5MB."]}, status=drf_status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # create or update proof (OneToOne relationship in your model)
+            PaymentProof.objects.update_or_create(order=order, defaults={"image": file})
+            order.status = "awaiting_admin"
             order.save(update_fields=["status"])
-            return Response(
-                {"success": True, "message": "Proof uploaded successfully"},
-                status=status.HTTP_200_OK,
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"success": True, "message": "Proof uploaded successfully"}, status=drf_status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception("Error uploading proof: %s", e)
+            return Response({"error": "Failed to upload proof"}, status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class PendingSellOrdersAPI(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        """
-        Return user's incomplete sell orders so frontend can let the user resume.
-        """
-        orders = AssetSellOrder.objects.filter(
-            user=request.user,
-            status__in=["pending_payment", "proof_submitted"]
-        ).order_by("-created_at")
-        serializer = AssetSellOrderSerializer(orders, many=True)
-        return Response({"orders": serializer.data}, status=status.HTTP_200_OK)
         
 class SellOrderUpdateAPI(APIView):
     permission_classes = [IsAuthenticated]
@@ -415,18 +494,25 @@ class SellOrderUpdateAPI(APIView):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class PendingSellOrdersAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        orders = AssetSellOrder.objects.filter(user=request.user, status__in=["pending", "awaiting_admin"]).order_by("-created_at")
+        serializer = AssetSellOrderSerializer(orders, many=True)
+        return Response({"orders": serializer.data}, status=drf_status.HTTP_200_OK)
+
 class SellOrderStatusAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, order_id):
-        """
-        Step 3: Get full status of a sell order.
-        """
-        order = get_object_or_404(AssetSellOrder, order_id=order_id, user=request.user)  # ✅ use order_id
-        return Response(
-            {"success": True, "order": AssetSellOrderSerializer(order).data},
-            status=status.HTTP_200_OK,
-        )
+        order = get_object_or_404(AssetSellOrder, order_id=order_id, user=request.user)
+        serializer = AssetSellOrderSerializer(order)
+        # include exchange details from settings if not present
+        exchanges = get_exchange_details_map()
+        exchange_details = exchanges.get(order.source) or exchanges.get(order.source.title()) or {}
+        resp = {"success": True, "order": serializer.data, "exchange_details": exchange_details}
+        return Response(resp, status=drf_status.HTTP_200_OK)
 
 class CancelSellOrderAPI(APIView):
     permission_classes = [IsAuthenticated]
