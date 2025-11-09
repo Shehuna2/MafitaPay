@@ -1,4 +1,5 @@
-# views.py
+import logging
+
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -16,6 +17,8 @@ from .serializers import (
     DepositOfferSerializer, CreateDepositOfferSerializer, DepositOrderSerializer, 
     WithdrawOfferSerializer, CreateWithdrawOfferSerializer, WithdrawOrderSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10  # Number of offers per page

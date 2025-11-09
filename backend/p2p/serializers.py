@@ -9,7 +9,7 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
     success_rate = serializers.FloatField(read_only=True)
     class Meta:
         model = UserProfile
-        fields = ["full_name", "bank_name", "account_no", "phone_number", "total_trades", "success_rate"]
+        fields = ["first_name", "last_name", "bank_name", "account_no", "phone_number", "total_trades", "success_rate"]
 
 class DepositOfferSerializer(serializers.ModelSerializer):
     merchant_email = serializers.EmailField(source="merchant.email", read_only=True)
