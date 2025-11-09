@@ -90,31 +90,35 @@ class DepositOfferListCreateAPIView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
-        merchant = self.request.user
+    merchant = self.request.user
+    amount_available = Decimal(str(serializer.validated_data["amount_available"]))
+    min_amount = Decimal(str(serializer.validated_data["min_amount"]))
+    max_amount = Decimal(str(serializer.validated_data["max_amount"]))
+
+    # Everything that touches the DB and needs locking must be inside atomic()
+    with transaction.atomic():
+        # Now safe: select_for_update inside transaction
         wallet = Wallet.objects.select_for_update().get(user=merchant)
-        amount_available = Decimal(str(serializer.validated_data["amount_available"]))
-        min_amount = Decimal(str(serializer.validated_data["min_amount"]))
-        max_amount = Decimal(str(serializer.validated_data["max_amount"]))
 
-        with transaction.atomic():
-            available_balance = wallet.available_balance()
-            if amount_available > available_balance:
-                logger.error(f"Insufficient balance for offer: merchant {merchant.id}, required={amount_available}, available={available_balance}")
-                raise serializers.ValidationError({"error": "Insufficient available balance to lock this offer amount."})
-            if max_amount > available_balance:
-                logger.error(f"Max amount exceeds balance: merchant {merchant.id}, max_amount={max_amount}, available={available_balance}")
-                raise serializers.ValidationError({"error": "Max amount exceeds available balance."})
-            if min_amount > max_amount or min_amount > amount_available:
-                logger.error(f"Invalid min/max amounts: min_amount={min_amount}, max_amount={max_amount}, amount_available={amount_available}")
-                raise serializers.ValidationError({"error": "Min amount must be less than or equal to max amount and amount available."})
+        available_balance = wallet.available_balance()
+        if amount_available > available_balance:
+            logger.error(f"Insufficient balance for offer: merchant {merchant.id}, required={amount_available}, available={available_balance}")
+            raise serializers.ValidationError({"error": "Insufficient available balance to lock this offer amount."})
+        if max_amount > available_balance:
+            logger.error(f"Max amount exceeds balance: merchant {merchant.id}, max_amount={max_amount}, available={available_balance}")
+            raise serializers.ValidationError({"error": "Max amount exceeds available balance."})
+        if min_amount > max_amount or min_amount > amount_available:
+            logger.error(f"Invalid min/max amounts: min_amount={min_amount}, max_amount={max_amount}, amount_available={amount_available}")
+            raise serializers.ValidationError({"error": "Min amount must be less than or equal to max amount and amount available."})
 
-            if not wallet.lock_funds(amount_available):
-                logger.error(f"Failed to lock funds for merchant {merchant.id}: amount={amount_available}")
-                raise serializers.ValidationError({"error": "Unable to lock funds. Please try again."})
+        if not wallet.lock_funds(amount_available):
+            logger.error(f"Failed to lock funds for merchant {merchant.id}: amount={amount_available}")
+            raise serializers.ValidationError({"error": "Unable to lock funds. Please try again."})
 
-            serializer.save(merchant=merchant)
-            logger.info(f"Offer created by merchant {merchant.id}: amount_available={amount_available}")
-            
+        # Save the offer inside the same transaction
+        serializer.save(merchant=merchant)
+        logger.info(f"Offer created by merchant {merchant.id}: amount_available={amount_available}")
+        
 class CreateDepositOrderAPIView(APIView):
     """Buyer creates a P2P deposit order."""
     permission_classes = [permissions.IsAuthenticated]
