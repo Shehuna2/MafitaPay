@@ -99,12 +99,73 @@ export default function Profile() {
     ? encodeURIComponent(`Hi, I am ${user.email}. I want to apply to become a merchant on MafitaPay.`)
     : encodeURIComponent("Hi, I want to apply to become a merchant on MafitaPay.");
 
-  if (loading)
+  if (loading) {
     return (
-      <div className="flex justify-center mt-16 text-gray-400">
-        <Loader2 className="animate-spin w-6 h-6" /> Loading profile...
-      </div>
+      <>
+        <style>{`
+          @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+          .shimmer {
+            background: linear-gradient(90deg, #1a1a2e 25%, #2a2a3e 50%, #1a1a2e 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.8s infinite linear;
+          }
+        `}</style>
+
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 pt-6 pb-12 text-white min-h-screen">
+          <div className="bg-gray-900 rounded-2xl shadow-xl p-4 sm:p-5 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/30 to-gray-900/10" />
+            <div className="relative z-10 space-y-5">
+
+              {/* Header */}
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 sm:w-7 sm:h-7 bg-gray-700/50 rounded-full shimmer" />
+                <div className="h-6 w-40 sm:w-48 bg-gray-700/50 rounded shimmer" />
+              </div>
+
+              {/* Merchant Info Card */}
+              <div className="bg-gray-800 p-3 sm:p-4 rounded-xl space-y-3">
+                {Array(3).fill().map((_, i) => (
+                  <div key={i} className="h-4 w-full bg-gray-700/50 rounded shimmer" />
+                ))}
+                <div className="h-10 w-1/2 bg-green-700/50 rounded-lg shimmer mx-auto mt-3" />
+              </div>
+
+              {/* Profile Info Skeleton */}
+              <div className="bg-gray-800 p-3 sm:p-4 rounded-xl space-y-3">
+                {Array(5).fill().map((_, i) => (
+                  <div key={i} className="flex justify-between items-center">
+                    <div className="h-4 w-1/3 bg-gray-700/50 rounded shimmer" />
+                    <div className="h-4 w-1/2 bg-gray-700/50 rounded shimmer" />
+                  </div>
+                ))}
+              </div>
+
+              {/* Edit Form Skeleton */}
+              <div className="bg-gray-800 p-3 sm:p-4 rounded-xl space-y-3">
+                <div className="h-5 w-1/3 bg-gray-700/50 rounded shimmer mb-2" />
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {Array(5).fill().map((_, i) => (
+                    <div key={i} className="h-10 bg-gray-700/50 rounded-lg shimmer" />
+                  ))}
+                </div>
+                <div className="flex justify-center gap-3 mt-4">
+                  <div className="h-9 w-28 bg-green-700/50 rounded-lg shimmer" />
+                  <div className="h-9 w-28 bg-red-700/50 rounded-lg shimmer" />
+                </div>
+              </div>
+
+              {/* Footer Link */}
+              <div className="h-4 w-32 bg-gray-700/50 rounded shimmer mx-auto" />
+            </div>
+          </div>
+        </div>
+      </>
     );
+  }
+
 
   if (!profile)
     return <div className="text-center text-gray-400 mt-16">Profile not found.</div>;
@@ -216,10 +277,10 @@ export default function Profile() {
       </div>
 
       <Link
-        to="/p2p/marketplace"
+        to="/dashboard"
         className="mt-5 inline-block text-indigo-400 hover:underline text-sm"
       >
-        Back to Marketplace
+        Back to Home
       </Link>
     </div>
   );

@@ -255,7 +255,7 @@ export default function BuyData() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1.5">Select Plan</label>
+          <label className="block text-xs font-medium text-gray-400 mb-1.5">More Plans</label>
           {loadingPlans ? (
             <div className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl animate-pulse">
               <div className="h-4 bg-gray-700/60 rounded w-3/4 shimmer"></div>

@@ -55,7 +55,7 @@ export default function Dashboard() {
       const data = Array.isArray(txRes.data) ? txRes.data : txRes.data.results || [];
       const formattedTx = data.map(tx => ({
         id: tx.id,
-        type: tx.category === "crypto" ? "Gas fee" : tx.category === "airtime" ? "Airtime" : tx.category === "data" ? "Data" : "Other",
+        type: tx.category === "crypto" ? "Crypto" : tx.category === "airtime" ? "Airtime" : tx.category === "data" ? "Data" : "Other",
         amount: parseFloat(tx.amount),
         time: new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         icon: tx.tx_type === "credit" ? (
@@ -137,8 +137,6 @@ export default function Dashboard() {
     );
   };
 
-  // FULL SKELETON LOADER
-
   if (loading) {
     return (
       <>
@@ -150,47 +148,56 @@ export default function Dashboard() {
           .shimmer {
             background: linear-gradient(90deg, #1a1a2e 25%, #2a2a3e 50%, #1a1a2e 75%);
             background-size: 200% 100%;
-            animation: shimmer 1.8s infinite;
+            animation: shimmer 1.8s infinite linear;
           }
           .pulse-slow { animation: pulse 2s ease-in-out infinite; }
           @keyframes pulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 0.4; } }
         `}</style>
 
-        <div className="min-h-screen bg-gray-900 text-white px-2 py-6 animate-fade-in">
-          {/* Wallet Skeleton */}
-          <div className="mx-auto mb-6 w-full max-w-lg sm:max-w-2xl">
+        <div className="min-h-screen bg-gray-900 text-white px-3 py-6 animate-fade-in">
+          {/* Wallet Card Skeleton */}
+          <div className="w-full max-w-md sm:max-w-lg md:max-w-2xl mx-auto mb-6">
             <div className="bg-indigo-600/30 backdrop-blur-2xl p-4 sm:p-6 rounded-3xl border border-indigo-600/20">
-              <div className="flex items-center justify-between mb-4 sm:mb-6">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-700/50 rounded-full shimmer" />
-                  <div className="h-5 sm:h-6 w-32 sm:w-40 bg-gray-700/50 rounded shimmer" />
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3 w-full">
+                  <div className="w-8 h-8 bg-gray-700/50 rounded-full shimmer" />
+                  <div className="h-6 flex-1 bg-gray-700/50 rounded shimmer" />
                 </div>
-                <div className="flex gap-1 sm:gap-2">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gray-700/50 shimmer" />
+                <div className="hidden sm:flex gap-2 ml-4 shrink-0">
+                  {Array(3).fill().map((_, i) => (
+                    <div key={i} className="w-9 h-9 rounded-xl bg-gray-700/50 shimmer" />
                   ))}
                 </div>
               </div>
 
-              <div className="h-10 sm:h-12 w-48 sm:w-64 bg-gray-700/50 rounded shimmer mb-4 sm:mb-6" />
+              {/* Balance */}
+              <div className="mb-6">
+                <div className="h-10 w-3/4 bg-gray-700/50 rounded shimmer mx-auto" />
+              </div>
 
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-6">
-                <div className="h-10 sm:h-12 flex-1 bg-indigo-600/50 rounded-2xl shimmer" />
-                <div className="h-10 sm:h-12 flex-1 bg-indigo-600/50 rounded-2xl shimmer" />
+              {/* Recent Activity (Mobile) */}
+              <div className="block md:hidden space-y-2">
+                {Array(3).fill().map((_, i) => (
+                  <div key={i} className="h-5 w-full bg-gray-700/50 rounded shimmer" />
+                ))}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 mt-8">
+                <div className="h-11 flex-1 bg-indigo-600/50 rounded-2xl shimmer" />
+                <div className="h-11 flex-1 bg-indigo-600/50 rounded-2xl shimmer" />
               </div>
             </div>
           </div>
 
           {/* Quick Actions Skeleton */}
-          <div className="px-2 sm:px-4 mb-8">
-            <div className="grid grid-cols-3 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+          <div className="px-2 sm:px-4 mb-6">
+            <div className="grid grid-cols-3 gap-3 sm:gap-4">
               {Array(9).fill().map((_, i) => (
-                <div
-                  key={i}
-                  className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl bg-gray-800 border border-indigo-600/20"
-                >
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gray-700/50 rounded-full shimmer mb-1.5 sm:mb-2" />
-                  <div className="h-3 w-10 sm:w-12 bg-gray-700/50 rounded shimmer" />
+                <div key={i} className="flex flex-col items-center justify-center p-3 rounded-2xl bg-gray-800 border border-indigo-600/20">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-700/50 rounded-full shimmer mb-2" />
+                  <div className="h-3 w-1/2 bg-gray-700/50 rounded shimmer" />
                 </div>
               ))}
             </div>
@@ -198,17 +205,14 @@ export default function Dashboard() {
 
           {/* Event Carousel Skeleton */}
           <div className="px-2 sm:px-4">
-            <div className="h-4 sm:h-5 w-24 sm:w-32 bg-gray-700/50 rounded shimmer mb-2 sm:mb-3" />
-            <div className="bg-gray-800/60 backdrop-blur-md p-3 sm:p-4 rounded-xl border border-gray-700/50 h-24 sm:h-28">
-              <div className="flex flex-col sm:flex-row justify-between h-full">
-                <div className="space-y-2 flex-1">
-                  <div className="h-4 w-36 sm:w-48 bg-gray-700/50 rounded shimmer" />
-                  <div className="h-5 w-48 sm:w-64 bg-gray-700/50 rounded shimmer" />
-                </div>
-                <div className="h-6 sm:h-7 w-14 sm:w-16 bg-indigo-600/30 rounded-full shimmer mt-3 sm:mt-0" />
+            <div className="h-5 w-1/3 bg-gray-700/50 rounded shimmer mb-3" />
+            <div className="bg-gray-800/60 backdrop-blur-md p-4 rounded-xl border border-gray-700/50 h-28 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="h-4 w-2/3 bg-gray-700/50 rounded shimmer" />
+                <div className="h-5 w-5/6 bg-gray-700/50 rounded shimmer" />
               </div>
+              <div className="h-7 w-20 bg-indigo-600/30 rounded-full shimmer self-end" />
             </div>
-
             <div className="flex justify-center gap-1.5 mt-3">
               <div className="w-4 h-1.5 bg-indigo-400 rounded-full pulse-slow" />
               <div className="w-1.5 h-1.5 bg-gray-600 rounded-full pulse-slow" />

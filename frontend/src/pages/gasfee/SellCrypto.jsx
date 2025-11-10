@@ -25,6 +25,18 @@ export default function SellCrypto() {
   const [loadingPending, setLoadingPending] = useState(false);
   const [confirmCancelId, setConfirmCancelId] = useState(null);
 
+  const [calculatedNaira, setCalculatedNaira] = useState(0);
+
+  useEffect(() => {
+    if (!form.amount_asset || !rate) {
+      setCalculatedNaira(0);
+      return;
+    }
+    const val = Number(form.amount_asset) * Number(rate);
+    setCalculatedNaira(val);
+  }, [form.amount_asset, rate]);
+
+
   // ---------- fetch available exchanges (for dropdown) ----------
   useEffect(() => {
     async function fetchExchanges() {
@@ -381,14 +393,19 @@ export default function SellCrypto() {
                 </div>
 
                 {form.amount_asset && rate && (
-                  <div className="bg-indigo-900/30 backdrop-blur-md p-3 rounded-xl text-xs text-gray-300 border border-indigo-800/30">
+                  <div className="bg-indigo-900/30 backdrop-blur-md p-3 rounded-xl text-xs text-gray-300 border border-indigo-800/30 transition-all duration-300 ease-in-out">
                     <p className="flex items-center justify-between">
                       <span>You will receive:</span>
-                      <span className="text-green-400 font-bold">₦{formatFiat(Number(form.amount_asset) * Number(rate))}</span>
+                      <span className="text-green-400 font-bold text-base">
+                        ₦{formatFiat(calculatedNaira)}
+                      </span>
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">Rate: 1 {form.asset.toUpperCase()} = ₦{formatFiat(rate)}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Rate: 1 {form.asset.toUpperCase()} = ₦{formatFiat(rate)}
+                    </p>
                   </div>
                 )}
+
 
                 {errors.general && <p className="text-red-400 text-xs mt-1">{Array.isArray(errors.general) ? errors.general[0] : errors.general}</p>}
 
