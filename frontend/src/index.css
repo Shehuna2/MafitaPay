@@ -2,8 +2,28 @@
 @import "react-tooltip/dist/react-tooltip.css";
 @import "react-toastify/dist/ReactToastify.css";
 
-html, body, #root {
-  @apply bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-white min-h-screen;
+/* ───────────────────────────────────────────────────────
+   BASE: Lock body/html for Median WebView – NO BOUNCE/SCROLL
+   ─────────────────────────────────────────────────────── */
+/* index.css – SAFE VERSION */
+@layer base {
+  html,
+  body,
+  #root {
+    @apply bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-white min-h-screen;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Smooth scroll only when we allow it */
+  .scroll-smooth {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  ::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* ─────────── Animations (unchanged) ─────────── */
@@ -73,7 +93,7 @@ html, body, #root {
 
 /* ─────────── FIXED RESPONSIVE HELPERS ─────────── */
 @layer utilities {
-  /* ✅ FIX: 1 column base layout for smallest phones */
+  /* 1 column base layout for smallest phones */
   .grid-responsive {
     @apply grid grid-cols-1 gap-4;
   }
@@ -113,8 +133,9 @@ html, body, #root {
     }
   }
 }
+
 /* ───────────────────────────────────────────────────────
-   ASSETS LIST: LINE SEPARATOR (add to index.css)
+   ASSETS LIST: LINE SEPARATOR
    ─────────────────────────────────────────────────────── */
 @layer utilities {
   .asset-divider {
