@@ -60,7 +60,7 @@ export default function ShortFormLayout({ children, title }) {
       )}
 
       <div className="flex-1 overflow-y-auto px-3 sm:px-4 pb-6">
-        <div className="max-w-4xl mx-auto">{children}</div>
+        <div className="max-w-4xl mx-auto pt-8">{children}</div>
       </div>
     </div>
   );
