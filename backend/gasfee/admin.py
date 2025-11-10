@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 from .models import (
-    AssetSellOrder, PaymentProof, ExchangeRate, Crypto,
+    AssetSellOrder, PaymentProof, Crypto,
     CryptoPurchase, ExchangeRateMargin, Asset
 )
 
@@ -106,12 +106,6 @@ class SellOrderAdmin(admin.ModelAdmin):
             'fields': ('rate_ngn', 'amount_ngn', 'status', 'details', 'created_at'),
         }),
     )
-
-
-@admin.register(ExchangeRate)
-class ExchangeRateAdmin(admin.ModelAdmin):
-    list_display = ('asset', 'rate_ngn', 'updated_at')
-    readonly_fields = ('updated_at',)
 
 
 @admin.register(PaymentProof)

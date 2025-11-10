@@ -1,7 +1,7 @@
 # serializers.py
 
 from rest_framework import serializers
-from .models import AssetSellOrder, ExchangeRate, PaymentProof, Asset
+from .models import AssetSellOrder, PaymentProof, Asset
 
 class AssetSerializer(serializers.ModelSerializer):
     class Meta:
@@ -37,10 +37,4 @@ class PaymentProofSerializer(serializers.Serializer):
         return value
 
 
-
-
-class ExchangeRateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ExchangeRate
-        fields = ["asset", "rate_ngn", "updated_at"]
 

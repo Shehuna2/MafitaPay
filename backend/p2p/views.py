@@ -95,9 +95,7 @@ class DepositOfferListCreateAPIView(generics.ListCreateAPIView):
         min_amount = Decimal(str(serializer.validated_data["min_amount"]))
         max_amount = Decimal(str(serializer.validated_data["max_amount"]))
 
-        # Everything that touches the DB and needs locking must be inside atomic()
         with transaction.atomic():
-            # Now safe: select_for_update inside transaction
             wallet = Wallet.objects.select_for_update().get(user=merchant)
 
             available_balance = wallet.available_balance()

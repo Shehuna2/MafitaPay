@@ -1,19 +1,21 @@
 # gasfee/api_views.py
 import uuid
+import json
 import logging
 import requests
 import traceback
 
+
 from decimal import Decimal
+from django.conf import settings
 from django.db import transaction
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 
 
-from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import status, permissions, status as drf_status
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 
 from wallet.models import Wallet, WalletTransaction
@@ -24,10 +26,10 @@ from .near_utils import send_near
 from .sol_utils import send_solana
 from .ton_utils import send_ton
 from .models import (
-    Crypto, CryptoPurchase, AssetSellOrder,  ExchangeRate, PaymentProof, Asset
+    Crypto, CryptoPurchase, AssetSellOrder, PaymentProof, Asset, ExchangeRateMargin
 )
 from .serializers import (
-    AssetSellOrderSerializer, PaymentProofSerializer, ExchangeRateSerializer,
+    AssetSellOrderSerializer, PaymentProofSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -322,35 +324,44 @@ class ExchangeInfoAPI(APIView):
 class ExchangeRateAPI(APIView):
     """
     Returns the current NGN rate for a given asset (used in sell flow).
-    Applies 'sell' profit margin dynamically.
+    Unified: uses ExchangeRateMargin for 'sell' rates, not the old ExchangeRate table.
     """
 
     def get(self, request, asset):
-        # ✅ Normalize and get asset
         asset = asset.upper()
+
+        # Validate asset existence
         asset_obj = get_object_or_404(Asset, symbol__iexact=asset)
 
-        # ✅ Step 1: Get live USD→NGN rate (with SELL margin)
+        # ✅ Get base USD→NGN rate with 'sell' margin applied
         usd_to_ngn = get_exchange_rate(margin_type="sell")
 
-        # ✅ Step 2: Lookup asset→USD conversion (from your ExchangeRate table)
-        try:
-            rate_obj = ExchangeRate.objects.filter(asset=asset_obj).latest("updated_at")
-            asset_to_ngn = Decimal(rate_obj.rate_ngn)
-            logger.info(f"Fetched custom stored rate for {asset}: ₦{asset_to_ngn}")
-        except ExchangeRate.DoesNotExist:
-            # fallback: use 1:1 to USD if missing
+        # ✅ For simplicity, treat every asset as 1:1 to USD (USDT, USDC, etc.)
+        #    If you add special tokens later (e.g. PI or SIDRA), handle conversion here.
+        if asset_obj.symbol.lower() in ["usdt", "usdc"]:
             asset_to_ngn = usd_to_ngn
-            logger.warning(f"No stored rate for {asset}, using fallback ₦{usd_to_ngn}")
+        else:
+            # fallback same rate, but you can customize this per asset later
+            asset_to_ngn = usd_to_ngn
 
-        # ✅ Step 3: Calculate and respond
-        result = {
-            "success": True,
-            "asset": asset_obj.symbol,
-            "rate_ngn": str(asset_to_ngn),
-            "margin_type": "sell",
-        }
-        return Response(result, status=status.HTTP_200_OK)
+        logger.info(f"[SELL RATE] 1 {asset_obj.symbol} = ₦{asset_to_ngn}")
+
+        return Response(
+            {
+                "success": True,
+                "asset": asset_obj.symbol,
+                "rate_ngn": str(asset_to_ngn),
+                "margin_type": "sell",
+            },
+            status=drf_status.HTTP_200_OK,
+        )
+
+class SellAssetListAPI(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        assets = Asset.objects.values("id", "name", "symbol")
+        return Response({"assets": list(assets)}, status=drf_status.HTTP_200_OK)
 
 # ---------- Sell endpoints ----------
 class StartSellOrderAPI(APIView):
@@ -362,43 +373,63 @@ class StartSellOrderAPI(APIView):
             "source": request.data.get("source"),
             "amount_asset": request.data.get("amount_asset"),
         }
+        print("Incoming source:", request.data.get("source"))
 
-        # Basic validation
+        # --- Basic validation ---
         if not data["asset"] or not data["source"] or not data["amount_asset"]:
-            return Response({"error": "asset, source and amount_asset are required."}, status=drf_status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "asset, source and amount_asset are required."},
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
 
-        # validate numeric amount
         try:
             amount_asset = Decimal(str(data["amount_asset"]))
             if amount_asset <= 0:
-                return Response({"error": "amount_asset must be greater than 0."}, status=drf_status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "amount_asset must be greater than 0."},
+                    status=drf_status.HTTP_400_BAD_REQUEST,
+                )
         except Exception:
-            return Response({"error": "Invalid amount_asset."}, status=drf_status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Invalid amount_asset."},
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
 
-        # validate asset exists (case-insensitive symbol)
+        # --- Validate asset ---
         try:
             asset = Asset.objects.get(symbol__iexact=data["asset"])
         except Asset.DoesNotExist:
-            return Response({"error": "Asset not found."}, status=drf_status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Asset not found."},
+                status=drf_status.HTTP_404_NOT_FOUND,
+            )
 
-        # validate source (exchange) exists in settings map
+        # --- Validate source/exchange ---
         exchanges = get_exchange_details_map()
-        exchange_key = next((k for k in exchanges if k.lower() == str(data["source"]).lower()), None)
+        exchange_key = next(
+            (k for k in exchanges if k.lower() == str(data["source"]).lower()), None
+        )
         if not exchange_key:
-            return Response({"error": "Exchange/source not supported."}, status=drf_status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Exchange/source not supported."},
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
         exchange_details = exchanges[exchange_key] or {}
 
-        # get latest exchange rate for the asset
         try:
-            rate_obj = ExchangeRate.objects.filter(asset=asset).latest("updated_at")
-            rate_ngn = Decimal(rate_obj.rate_ngn)
-        except ExchangeRate.DoesNotExist:
-            logger.exception("ExchangeRate missing for asset %s", asset)
-            return Response({"error": "Rate for asset not available."}, status=drf_status.HTTP_400_BAD_REQUEST)
+            rate_ngn = get_exchange_rate(margin_type="sell")
+        except ExchangeRateMargin.DoesNotExist:
+            logger.warning("ExchangeRateMargin missing for asset %s", asset)
+            # fallback if rate not found — use live USD→NGN
+            usd_to_ngn = get_exchange_rate(margin_type="sell")
+            rate_ngn = Decimal(usd_to_ngn)
 
-        # compute amount in NGN
+        # --- Compute amount in NGN ---
         amount_ngn = (amount_asset * rate_ngn).quantize(Decimal("0.01"))
-
+        logger.info(f"[SELL ORDER] User {request.user.id} selling {amount_asset} {asset.symbol} at rate ₦{rate_ngn} = ₦{amount_ngn}")
+        
+        
+        # --- Create sell order ---
         try:
             with transaction.atomic():
                 order = AssetSellOrder.objects.create(
@@ -409,11 +440,10 @@ class StartSellOrderAPI(APIView):
                     rate_ngn=rate_ngn,
                     amount_ngn=amount_ngn,
                     status="pending",
-                    details={"exchange_contact": exchange_details}
+                    details={"exchange_contact": exchange_details},
                 )
 
-            # expiration (seconds) — keep your frontend timer logic in sync (30 min = 1800s)
-            expires_in = 30 * 60
+            expires_in = 30 * 60  # 30 min
 
             serializer = AssetSellOrderSerializer(order)
             resp = {
@@ -425,7 +455,10 @@ class StartSellOrderAPI(APIView):
             return Response(resp, status=drf_status.HTTP_201_CREATED)
         except Exception as e:
             logger.exception("Error creating sell order: %s", e)
-            return Response({"success": False, "message": "Could not create sell order"}, status=drf_status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"success": False, "message": "Could not create sell order"},
+                status=drf_status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class UploadPaymentProofAPI(APIView):
@@ -457,7 +490,6 @@ class UploadPaymentProofAPI(APIView):
         except Exception as e:
             logger.exception("Error uploading proof: %s", e)
             return Response({"error": "Failed to upload proof"}, status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR)
-
         
 class SellOrderUpdateAPI(APIView):
     permission_classes = [IsAuthenticated]

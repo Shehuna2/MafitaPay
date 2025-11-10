@@ -108,16 +108,8 @@ EXCHANGE_CHOICES = [
     ('Mexc',    'MEXC'),
     ('Gate.io',  'Gate.io'),
     ('Bitget',  'Bitget'),
-    ('Web wallet',  'Web wallet'),
+    ('Web3 wallet',  'Web3 wallet'),
 ]
-
-# ASSET_CHOICES = [
-#     ('usdt', 'USDT'),
-#     ('usdc', 'USDC'),
-#     ('sidra',  'SIDRA'),
-#     ('pi',  'PI'),
-# ]
-
 
 class Asset(models.Model):
     symbol = models.CharField(max_length=10, unique=True)  # e.g. 'usdt'
@@ -126,14 +118,6 @@ class Asset(models.Model):
 
     def __str__(self):
         return self.name
-
-class ExchangeRate(models.Model):
-    asset = models.ForeignKey('Asset', on_delete=models.CASCADE, related_name='rates')
-    rate_ngn = models.DecimalField(max_digits=20, decimal_places=4)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"1 {self.asset.upper()} = ₦{self.rate_ngn}"
 
 
 class AssetSellOrder(models.Model):
