@@ -404,6 +404,20 @@ export default function Dashboard() {
                   </div>
                   <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
                 </Link>
+                <Link
+                  to="/p2p/marketplace"
+                  onClick={closeModal}
+                  className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 hover:bg-indigo-600/20 hover:border-indigo-500/50 transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3">
+                    <Repeat2 className="w-6 h-6 text-indigo-400" />
+                    <div>
+                      <p className="font-medium text-white">Cards Deposit</p>
+                      <p className="text-xs text-gray-400">Instant Card Deposit</p>
+                    </div>
+                  </div>
+                  <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
+                </Link>
               </div>
             </div>
           </div>

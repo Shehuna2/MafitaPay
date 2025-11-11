@@ -13,6 +13,7 @@ import paystack
 from paystack import DedicatedVirtualAccount
 from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit
 from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer
+from wallet.services.flutterwave_service import FlutterwaveService
 
 
 from django.contrib.auth import get_user_model
@@ -117,6 +118,52 @@ class GenerateDVAAPIView(APIView):
                 return Response({
                     "success": True,
                     "message": "9PSB virtual account generated successfully.",
+                    "account_number": va.account_number,
+                    "bank_name": va.bank_name,
+                    "account_name": va.account_name,
+                }, status=status.HTTP_201_CREATED)
+
+            # =============== FLUTTERWAVE DVA FLOW ===============
+            elif provider == "flutterwave":
+                from .services.flutterwave_service import FlutterwaveService
+                fw = FlutterwaveService()
+
+                existing_va = VirtualAccount.objects.filter(
+                    user=user, provider="flutterwave", assigned=True
+                ).first()
+                if existing_va:
+                    return Response({
+                        "success": True,
+                        "message": "Flutterwave virtual account already exists.",
+                        "account_number": existing_va.account_number,
+                        "bank_name": existing_va.bank_name,
+                        "account_name": existing_va.account_name,
+                    }, status=status.HTTP_200_OK)
+
+                response = fw.create_virtual_account(user)
+                if not response:
+                    return Response({"error": "Failed to generate Flutterwave VA"}, status=status.HTTP_400_BAD_REQUEST)
+
+                va = VirtualAccount.objects.create(
+                    user=user,
+                    provider="flutterwave",
+                    provider_account_id=response.get("order_ref"),
+                    account_number=response.get("account_number"),
+                    bank_name=response.get("bank_name"),
+                    account_name=response.get("account_name"),
+                    metadata=response,
+                    assigned=True,
+                )
+
+                wallet, _ = Wallet.objects.get_or_create(user=user)
+                wallet.van_account_number = va.account_number
+                wallet.van_bank_name = va.bank_name
+                wallet.van_provider = "flutterwave"
+                wallet.save()
+
+                return Response({
+                    "success": True,
+                    "message": "Flutterwave virtual account generated successfully.",
                     "account_number": va.account_number,
                     "bank_name": va.bank_name,
                     "account_name": va.account_name,

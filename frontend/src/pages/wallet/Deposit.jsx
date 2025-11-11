@@ -40,7 +40,12 @@ export default function Deposit() {
     try {
       const response = await client.post("/wallet/dva/generate/", {
         provider,
-        preferred_bank: provider === "paystack" ? "titan-paystack" : "9psb",
+        preferred_bank:
+        provider === "paystack"
+        ? "titan-paystack"
+        : provider === "flutterwave"
+        ? "wema-bank"
+        : "9psb",
       });
       if (response.data.success) {
         setDvaDetails({
@@ -129,8 +134,7 @@ export default function Deposit() {
               <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
               Back
             </button>
-            <h1 className="text-xl sm:text-2xl font-bold text-indigo-400 flex items-center gap-2">
-              <Banknote className="w-6 h-6" />
+            <h1 className="text-xl sm:text-2xl font-bold text-indigo-400 flex items-right gap-2">
               Deposit via Bank Transfer
             </h1>
           </div>
@@ -152,8 +156,8 @@ export default function Deposit() {
                 }}
               >
                 <option value="paystack">Paystack</option>
-                <option value="9psb">9PSB Bank</option>
-                <option value="flutterwave" disabled>Flutterwave (Coming Soon)</option>
+                <option value="flutterwave">Flutterwave</option>
+                <option value="9psb" disabled>9PSB Bank (Coming Soon)</option>
                 <option value="monnify" disabled>Monnify (Coming Soon)</option>
               </select>
             </div>
@@ -167,7 +171,6 @@ export default function Deposit() {
                 </p>
                 <button
                   onClick={fetchDVA}
-                  disabled={true}
                   className="bg-indigo-600 hover:bg-indigo-500 text-white px-7 py-3 rounded-xl font-bold text-sm transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center gap-2.5 mx-auto"
                 >
                   Generate Virtual Account

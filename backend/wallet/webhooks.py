@@ -179,3 +179,60 @@ def psb_webhook(request):
     except Exception as e:
         logger.error(f"❌ Error processing 9PSB webhook: {str(e)}", exc_info=True)
         return Response({"status": "error", "message": str(e)}, status=500)
+
+        
+
+# wallet/webhooks.py
+@api_view(["POST"])
+@permission_classes([])
+def flutterwave_webhook(request):
+    """Handle Flutterwave transfer webhooks."""
+    from .models import Deposit, Wallet, VirtualAccount
+    try:
+        payload = json.loads(request.body.decode())
+        logger.info(f"Flutterwave webhook: {payload}")
+
+        # Verify signature (optional but recommended)
+        secret_hash = settings.FLW_HASH_SECRET
+        signature = request.headers.get("verif-hash")
+        if secret_hash and signature != secret_hash:
+            return Response({"error": "Invalid signature"}, status=401)
+
+        event = payload.get("event")
+        data = payload.get("data", {})
+
+        if event == "transfer.completed" and data.get("status") == "successful":
+            ref = data.get("reference")
+            account_number = data.get("account_number")
+            amount = Decimal(str(data.get("amount", 0)))
+
+            va = VirtualAccount.objects.filter(
+                account_number=account_number, provider="flutterwave"
+            ).first()
+            if not va:
+                logger.warning(f"No VA found for Flutterwave transfer: {account_number}")
+                return Response({"status": "ignored"})
+
+            wallet = Wallet.objects.get(user=va.user)
+
+            with transaction.atomic():
+                if not Deposit.objects.filter(provider_reference=ref).exists():
+                    Deposit.objects.create(
+                        user=va.user,
+                        virtual_account=va,
+                        amount=amount,
+                        provider_reference=ref,
+                        status="credited",
+                        raw=payload,
+                    )
+                    wallet.deposit(
+                        amount,
+                        reference=ref,
+                        metadata={"provider": "flutterwave", "event": event},
+                    )
+            return Response({"status": "success"}, status=200)
+        return Response({"status": "ignored"}, status=200)
+    except Exception as e:
+        logger.error(f"Flutterwave webhook error: {str(e)}", exc_info=True)
+        return Response({"error": "internal error"}, status=500)
+

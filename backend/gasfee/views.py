@@ -367,6 +367,7 @@ class SellAssetListAPI(APIView):
 class StartSellOrderAPI(APIView):
     permission_classes = [IsAuthenticated]
 
+
     def post(self, request):
         data = {
             "asset": request.data.get("asset"),
@@ -439,7 +440,7 @@ class StartSellOrderAPI(APIView):
                     amount_asset=amount_asset,
                     rate_ngn=rate_ngn,
                     amount_ngn=amount_ngn,
-                    status="pending",
+                    status="pending_payment",
                     details={"exchange_contact": exchange_details},
                 )
 
@@ -467,7 +468,7 @@ class UploadSellOrderProofAPI(APIView):
     def post(self, request, order_id):
         order = get_object_or_404(AssetSellOrder, order_id=order_id, user=request.user)
 
-        if order.status != "pending_payment":
+        if order.status not in ["pending", "pending_payment"]:
             return Response(
                 {"success": False, "message": "This order cannot accept proof uploads at this stage."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -479,15 +480,13 @@ class UploadSellOrderProofAPI(APIView):
 
         order.payment_proof = proof
         order.status = "proof_submitted"
-        order.save(update_fields=["payment_proof", "status", "updated_at"])
+        order.save()
 
-        Notification.objects.create(
-            user=order.user,
-            message=f"Payment proof submitted for order {order.order_id}. Awaiting admin review.",
-            is_read=False,
+        return Response(
+            {"success": True, "message": "Payment proof uploaded successfully."},
+            status=status.HTTP_200_OK,
         )
 
-        return Response({"success": True, "message": "Payment proof uploaded successfully."})
 
 class SellOrderUpdateAPI(APIView):
     permission_classes = [IsAuthenticated]

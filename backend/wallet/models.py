@@ -14,11 +14,11 @@ import uuid
 logger = logging.getLogger(__name__)
 
 PROVIDER_CHOICES = [
-    ("palmpay", "PalmPay"),
+    ("flutterwave", "Flutterwave"),
     ("paystack", "Paystack"),
     ("monnify", "Monnify"),
+    ("palmpay", "PalmPay"),
     ("opay", "OPay"),
-    ("flutterwave", "Flutterwave"),  # Added for future integration
 ]
 
 DEPOSIT_STATUS = [
