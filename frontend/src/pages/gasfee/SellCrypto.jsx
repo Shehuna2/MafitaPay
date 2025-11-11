@@ -243,20 +243,28 @@ export default function SellCrypto() {
   };
 
   const handleCancelOrder = async (orderId) => {
-    try {
-      await client.delete(`/sell/${orderId}/cancel/`);
-      if (order?.order_id === orderId) {
-        const res = await client.get(`/sell/${orderId}/`);
-        setOrder(res.data.order);
-        setStatus(res.data.order.status);
-      }
-      const res = await client.get("/sell/pending/");
-      setPendingOrders(res.data.orders || []);
-      setConfirmCancelId(null);
-    } catch {
-      toast.error("Failed to cancel order");
+  try {
+    await client.delete(`/sell/${orderId}/cancel/`);
+
+    // If the active order is the one you cancelled
+    if (order?.order_id === orderId) {
+      setOrder(null);
+      setStatus("cancelled");
+      setStep(1);
     }
-  };
+
+    // Refresh pending orders to clean up the modal list
+    const res = await client.get("/sell/pending/");
+    setPendingOrders(res.data.orders || []);
+    setConfirmCancelId(null);
+
+    toast.success("Order cancelled successfully");
+  } catch (err) {
+    console.error("Cancel failed:", err);
+    toast.error("Failed to cancel order");
+  }
+};
+
 
   const handleCopy = (text) => {
     if (!text) return;

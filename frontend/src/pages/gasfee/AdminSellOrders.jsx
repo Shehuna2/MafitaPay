@@ -19,13 +19,10 @@ export default function AdminSellOrders() {
   const [toast, setToast] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [ordersPerPage] = useState(10);
-
   const [modalIsOpen, setModalIsOpen] = useState(false);
   const [modalImage, setModalImage] = useState("");
-
   const [highlighted, setHighlighted] = useState([]);
   const prevOrderIds = useRef(new Set());
-
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -34,9 +31,10 @@ export default function AdminSellOrders() {
     cancelled: 0,
   });
 
-  const fetchOrders = async () => {
+  // ---------------- Fetch Orders ----------------
+  const fetchOrders = async (silent = false) => {
     try {
-      if (!refreshing) setLoading(true);
+      if (!silent && !refreshing) setLoading(true);
       const res = await client.get("/admin/sell-orders/");
       const newOrders = res.data.orders || [];
 
@@ -56,9 +54,7 @@ export default function AdminSellOrders() {
       if (unseen.length > 0) {
         showToast(`${unseen.length} new order(s) awaiting review`, "success");
         setHighlighted((prev) => [...prev, ...unseen]);
-        setTimeout(() => {
-          setHighlighted((prev) => prev.filter((id) => !unseen.includes(id)));
-        }, 6000);
+        setTimeout(() => setHighlighted((prev) => prev.filter((id) => !unseen.includes(id))), 6000);
       }
 
       prevOrderIds.current = new Set(newOrders.map((o) => o.order_id));
@@ -76,6 +72,38 @@ export default function AdminSellOrders() {
     fetchOrders();
   }, []);
 
+  // ---------------- Real-time Polling ----------------
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await client.get("/admin/sell-orders/");
+        const newOrders = res.data.orders || [];
+
+        const existingIds = new Set(orders.map((o) => o.order_id));
+        const newOnes = newOrders.filter((o) => !existingIds.has(o.order_id));
+        const updatedOnes = newOrders.filter((o) => {
+          const old = orders.find((x) => x.order_id === o.order_id);
+          return old && old.status !== o.status;
+        });
+
+        if (newOnes.length > 0 || updatedOnes.length > 0) {
+          setOrders([...newOrders].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+
+          if (newOnes.length > 0) {
+            showToast(`${newOnes.length} new order(s) detected`, "success");
+            new Audio("/media/notify.mp3").play().catch(() => {});
+            setHighlighted(newOnes.map((o) => o.order_id));
+            setTimeout(() => setHighlighted([]), 6000);
+          }
+        }
+      } catch (e) {
+        console.warn("Auto-refresh failed:", e);
+      }
+    }, 12000);
+    return () => clearInterval(interval);
+  }, [orders]);
+
+  // ---------------- Update Order Status ----------------
   const handleUpdateStatus = async (orderId, status) => {
     setUpdating(orderId);
     try {
@@ -91,6 +119,7 @@ export default function AdminSellOrders() {
     }
   };
 
+  // ---------------- CSV Export ----------------
   const exportToCSV = () => {
     const headers = ["Order ID", "Asset", "Amount Asset", "Amount NGN", "Source", "Status", "Created At"];
     const rows = [
@@ -98,7 +127,7 @@ export default function AdminSellOrders() {
       ...orders.map((o) =>
         [
           o.order_id,
-          o.asset,
+          typeof o.asset === "object" ? o.asset.symbol : o.asset,
           o.amount_asset,
           o.amount_ngn,
           o.source || "N/A",
@@ -116,14 +145,16 @@ export default function AdminSellOrders() {
     URL.revokeObjectURL(url);
   };
 
+  // ---------------- Filtering, Sorting, Pagination ----------------
   const filteredOrders = orders
     .filter((o) => {
       if (filter !== "all" && o.status !== filter) return false;
       if (!search) return true;
       const s = search.toLowerCase();
+      const assetName = typeof o.asset === "object" ? o.asset.symbol : o.asset;
       return (
         o.order_id.toString().includes(s) ||
-        String(o.asset || "").toLowerCase().includes(s) ||
+        String(assetName || "").toLowerCase().includes(s) ||
         String(o.source || "").toLowerCase().includes(s)
       );
     })
@@ -161,56 +192,10 @@ export default function AdminSellOrders() {
     setTimeout(() => setToast(null), 4000);
   };
 
+  // ---------------- Loading ----------------
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white px-3 sm:px-4 py-8">
-        <style>{`
-          @keyframes shimmer {
-            0% { background-position: -200% 0; }
-            100% { background-position: 200% 0; }
-          }
-          .shimmer {
-            background: linear-gradient(
-              110deg,
-              rgba(55, 65, 81, 0.3) 8%,
-              rgba(147, 197, 253, 0.2) 18%,
-              rgba(55, 65, 81, 0.3) 33%
-            );
-            background-size: 200% 100%;
-            animation: shimmer 2.2s infinite linear;
-          }
-        `}</style>
-        <div className="w-full max-w-4xl bg-gray-800/80 rounded-2xl p-6 sm:p-8 shadow-xl border border-gray-700">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-5 gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-5 h-5 bg-gray-700 rounded-full shimmer"></div>
-              <div className="h-5 w-32 rounded shimmer"></div>
-            </div>
-            <div className="flex gap-2">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="w-7 h-7 rounded-full shimmer"></div>
-              ))}
-            </div>
-          </div>
-          <div className="h-10 rounded-lg mb-3 w-2/3 md:w-1/2 shimmer"></div>
-          <div className="h-4 rounded w-1/4 mb-6 shimmer"></div>
-          <div className="flex justify-start md:justify-end gap-3">
-            <div className="h-10 w-10 rounded-full shimmer"></div>
-            <div className="h-10 w-10 rounded-full shimmer"></div>
-          </div>
-        </div>
-        <div className="w-full max-w-6xl mt-8 px-2 sm:px-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-            {Array(8)
-              .fill()
-              .map((_, i) => (
-                <div
-                  key={i}
-                  className="h-20 sm:h-24 rounded-xl border border-gray-700 shimmer"
-                ></div>
-              ))}
-          </div>
-        </div>
         <p className="text-gray-400 mt-8 text-sm animate-pulse text-center">
           Fetching your data securely...
         </p>
@@ -218,6 +203,7 @@ export default function AdminSellOrders() {
     );
   }
 
+  // ---------------- Main Render ----------------
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 rounded-xl text-white">
       <div className="max-w-8xl mx-auto px-3 sm:px-4 py-6">
@@ -257,7 +243,7 @@ export default function AdminSellOrders() {
             <button
               onClick={() => {
                 setRefreshing(true);
-                fetchOrders();
+                fetchOrders(true);
               }}
               className="px-3 sm:px-4 py-2 bg-indigo-600/60 hover:bg-indigo-600 rounded-lg flex items-center gap-1.5 sm:gap-2 text-sm transition"
             >
@@ -300,7 +286,7 @@ export default function AdminSellOrders() {
           ))}
         </div>
 
-        {/* Orders */}
+        {/* Orders List */}
         {currentOrders.length === 0 ? (
           <div className="flex flex-col items-center py-10 text-gray-400">
             <AlertCircle className="w-8 h-8 mb-2 text-gray-500" />
@@ -311,18 +297,35 @@ export default function AdminSellOrders() {
             {currentOrders.map((o) => (
               <div
                 key={o.order_id}
-                className={`flex justify-between items-center bg-gray-900/70 border border-gray-800 rounded-xl p-3 sm:p-4 shadow-sm transition ${
+                className={`relative flex justify-between items-center bg-gray-900/70 border border-gray-800 rounded-xl p-3 sm:p-4 shadow-sm transition-all overflow-hidden ${
                   highlighted.includes(o.order_id)
-                    ? "border-blue-600/50 shadow-blue-500/20 animate-pulse"
+                    ? "ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-950 animate-blink focus-within:ring-indigo-400"
                     : "hover:border-indigo-500/30"
                 }`}
               >
+                {highlighted.includes(o.order_id) && (
+                  <div className="absolute inset-0 rounded-xl border-2 border-blue-500 animate-glow-ring pointer-events-none"></div>
+                )}
                 <div className="text-xs sm:text-sm space-y-0.5">
-                  <p><span className="text-gray-500">Asset:</span> <span className="font-semibold text-yellow-400">{o.asset?.toUpperCase()}</span></p>
-                  <p><span className="text-gray-500">Amount:</span> {o.amount_asset} → ₦{o.amount_ngn}</p>
-                  <p><span className="text-gray-500">Source:</span> {o.source || "N/A"}</p>
-                  <p><span className="text-gray-500">Status:</span> <span className={getStatusClass(o.status)}>{o.status.replace("_", " ")}</span></p>
-                  <p className="text-xs text-gray-500">Created: {new Date(o.created_at).toLocaleString()}</p>
+                  <p>
+                    <span className="text-gray-500">Asset:</span>{" "}
+                    <span className="font-semibold text-yellow-400">
+                      {o.asset?.symbol?.toUpperCase?.() || o.asset?.toUpperCase?.() || o.asset || "—"}
+                    </span>
+                  </p>
+                  <p>
+                    <span className="text-gray-500">Amount:</span> {o.amount_asset} → ₦{o.amount_ngn}
+                  </p>
+                  <p>
+                    <span className="text-gray-500">Source:</span> {o.source || "N/A"}
+                  </p>
+                  <p>
+                    <span className="text-gray-500">Status:</span>{" "}
+                    <span className={getStatusClass(o.status)}>{o.status.replace("_", " ")}</span>
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Created: {new Date(o.created_at).toLocaleString()}
+                  </p>
                 </div>
 
                 <div className="flex flex-col items-end gap-2">
@@ -331,24 +334,56 @@ export default function AdminSellOrders() {
                       src={o.payment_proof}
                       alt="proof"
                       className="w-20 sm:w-24 h-20 sm:h-24 object-cover rounded-lg cursor-pointer border border-gray-700 hover:border-indigo-500 transition"
-                      onClick={() => { setModalImage(o.payment_proof); setModalIsOpen(true); }}
+                      onClick={() => {
+                        setModalImage(o.payment_proof);
+                        setModalIsOpen(true);
+                      }}
                     />
                   )}
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleUpdateStatus(o.order_id, "completed")}
-                      disabled={updating === o.order_id}
-                      className="px-3 sm:px-4 py-1.5 bg-green-600/70 hover:bg-green-600 rounded-lg text-xs sm:text-sm flex items-center gap-1 transition"
+                      disabled={
+                        updating === o.order_id ||
+                        o.status === "completed" ||
+                        o.status === "cancelled"
+                      }
+                      className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm flex items-center gap-1 transition ${
+                        updating === o.order_id
+                          ? "bg-green-600/50"
+                          : o.status === "completed" || o.status === "cancelled"
+                          ? "bg-gray-700/70 cursor-not-allowed text-gray-400"
+                          : "bg-green-600/70 hover:bg-green-600"
+                      }`}
                     >
-                      {updating === o.order_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      {updating === o.order_id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Check className="w-4 h-4" />
+                      )}
                       Approve
                     </button>
+
                     <button
                       onClick={() => handleUpdateStatus(o.order_id, "cancelled")}
-                      disabled={updating === o.order_id}
-                      className="px-3 sm:px-4 py-1.5 bg-red-600/70 hover:bg-red-600 rounded-lg text-xs sm:text-sm flex items-center gap-1 transition"
+                      disabled={
+                        updating === o.order_id ||
+                        o.status === "completed" ||
+                        o.status === "cancelled"
+                      }
+                      className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm flex items-center gap-1 transition ${
+                        updating === o.order_id
+                          ? "bg-red-600/50"
+                          : o.status === "completed" || o.status === "cancelled"
+                          ? "bg-gray-700/70 cursor-not-allowed text-gray-400"
+                          : "bg-red-600/70 hover:bg-red-600"
+                      }`}
                     >
-                      {updating === o.order_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                      {updating === o.order_id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <X className="w-4 h-4" />
+                      )}
                       Reject
                     </button>
                   </div>
@@ -368,7 +403,9 @@ export default function AdminSellOrders() {
             >
               Prev
             </button>
-            <span className="text-xs sm:text-sm text-gray-400">Page {currentPage} of {totalPages}</span>
+            <span className="text-xs sm:text-sm text-gray-400">
+              Page {currentPage} of {totalPages}
+            </span>
             <button
               onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
               disabled={currentPage === totalPages}

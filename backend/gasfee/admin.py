@@ -2,7 +2,7 @@ from django.contrib import admin
 from django import forms
 from .models import (
     AssetSellOrder, PaymentProof, Crypto,
-    CryptoPurchase, ExchangeRateMargin, Asset
+    CryptoPurchase, ExchangeRateMargin, Asset,  # AssetPrice
 )
 
 
@@ -46,6 +46,12 @@ class CryptoPurchaseAdmin(admin.ModelAdmin):
 class AssetAdmin(admin.ModelAdmin):
     list_display = ("name", "symbol")
     search_fields = ("name", "symbol")
+
+
+# @admin.register(AssetPrice)
+# class AssetPriceAdmin(admin.ModelAdmin):
+#     list_display = ("asset", "price_usd", "last_updated")
+#     search_fields = ("asset__symbol",)
 
 class ExchangeRateMarginForm(forms.ModelForm):
     class Meta:

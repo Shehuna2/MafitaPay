@@ -245,6 +245,8 @@ LOGGING = {
         "accounts": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
         "wallet": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
         "p2p": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
+        "gasfee": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
+        "bills": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
     },
 }
 
@@ -256,8 +258,8 @@ BITGET_RECEIVE_DETAILS = json.loads(os.getenv("BITGET_RECEIVE_DETAILS", "{}"))
 MEXC_RECEIVE_DETAILS = json.loads(os.getenv("MEXC_RECEIVE_DETAILS", "{}"))
 GATEIO_RECEIVE_DETAILS = json.loads(os.getenv("GATEIO_RECEIVE_DETAILS", "{}"))
 BINANCE_RECEIVE_DETAILS = json.loads(os.getenv("BINANCE_RECEIVE_DETAILS", "{}"))
-EVM_RECEIVE_DETAILS = json.loads(os.getenv("EVM_RECEIVE_DETAILS", "{}"))
-SIDRA_RECEIVE_DETAILS = json.loads(os.getenv("SIDRA_RECEIVE_DETAILS", "{}"))
+# EVM_RECEIVE_DETAILS = json.loads(os.getenv("EVM_RECEIVE_DETAILS", "{}"))
+# SIDRA_RECEIVE_DETAILS = json.loads(os.getenv("SIDRA_RECEIVE_DETAILS", "{}"))
 
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET")

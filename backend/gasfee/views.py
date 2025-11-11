@@ -461,36 +461,34 @@ class StartSellOrderAPI(APIView):
             )
 
 
-class UploadPaymentProofAPI(APIView):
+class UploadSellOrderProofAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, order_id):
         order = get_object_or_404(AssetSellOrder, order_id=order_id, user=request.user)
 
-        # allow upload only while order is pending
-        if order.status not in ["pending"]:
-            return Response({"error": "Order cannot accept proof in current status."}, status=drf_status.HTTP_400_BAD_REQUEST)
+        if order.status != "pending_payment":
+            return Response(
+                {"success": False, "message": "This order cannot accept proof uploads at this stage."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        # validate file existence
-        file = request.FILES.get("payment_proof") or request.data.get("payment_proof")
-        if not file:
-            return Response({"payment_proof": ["Please upload payment proof"]}, status=drf_status.HTTP_400_BAD_REQUEST)
+        proof = request.FILES.get("proof")
+        if not proof:
+            return Response({"success": False, "message": "No file uploaded."}, status=400)
 
-        # validate size <= 5MB
-        max_size = 5 * 1024 * 1024
-        if hasattr(file, "size") and file.size > max_size:
-            return Response({"payment_proof": ["Image size should not exceed 5MB."]}, status=drf_status.HTTP_400_BAD_REQUEST)
+        order.payment_proof = proof
+        order.status = "proof_submitted"
+        order.save(update_fields=["payment_proof", "status", "updated_at"])
 
-        try:
-            # create or update proof (OneToOne relationship in your model)
-            PaymentProof.objects.update_or_create(order=order, defaults={"image": file})
-            order.status = "awaiting_admin"
-            order.save(update_fields=["status"])
-            return Response({"success": True, "message": "Proof uploaded successfully"}, status=drf_status.HTTP_200_OK)
-        except Exception as e:
-            logger.exception("Error uploading proof: %s", e)
-            return Response({"error": "Failed to upload proof"}, status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+        Notification.objects.create(
+            user=order.user,
+            message=f"Payment proof submitted for order {order.order_id}. Awaiting admin review.",
+            is_read=False,
+        )
+
+        return Response({"success": True, "message": "Payment proof uploaded successfully."})
+
 class SellOrderUpdateAPI(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -538,7 +536,10 @@ class SellOrderStatusAPI(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, order_id):
-        order = get_object_or_404(AssetSellOrder, order_id=order_id, user=request.user)
+        order = AssetSellOrder.objects.filter(order_id=order_id, user=request.user).first()
+        if not order:
+            return Response({"error": "Order not found"}, status=404)
+
         serializer = AssetSellOrderSerializer(order)
         # include exchange details from settings if not present
         exchanges = get_exchange_details_map()
@@ -565,7 +566,7 @@ class CancelSellOrderAPI(APIView):
             {"success": True, "message": "Order cancelled"},
             status=status.HTTP_200_OK,
         )
-
+        
 class AdminSellOrdersAPI(APIView):
     permission_classes = [IsAdminUser]
 
@@ -579,23 +580,13 @@ class AdminUpdateSellOrderAPI(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request, order_id):
-        order = get_object_or_404(AssetSellOrder, order_id=order_id)
+        order = get_object_or_404(SellOrder, order_id=order_id)
         new_status = request.data.get("status")
 
         if new_status not in ["completed", "cancelled", "reversed"]:
-            return Response(
-                {"success": False, "message": "Invalid status"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"success": False, "message": "Invalid status."}, status=400)
 
-        # Create notification
-        def create_notification(message):
-            Notification.objects.create(
-                user=order.user,
-                message=message,
-                is_read=False
-            )
-
+        # ✅ Approve
         if new_status == "completed" and order.status == "proof_submitted":
             try:
                 with transaction.atomic():
@@ -619,28 +610,36 @@ class AdminUpdateSellOrderAPI(APIView):
 
                     order.status = "completed"
                     order.save(update_fields=["status", "updated_at"])
-                    create_notification(f"Sell order {order.order_id} approved and wallet credited.")
+
+                    Notification.objects.create(
+                        user=order.user,
+                        message=f"Sell order {order.order_id} approved and wallet credited.",
+                        is_read=False,
+                    )
+
                 return Response(
-                    {"success": True, "message": "Order approved and wallet credited"},
+                    {"success": True, "message": "Order approved and wallet credited."},
                     status=status.HTTP_200_OK,
                 )
-            except Exception as e:
-                logger.error(f"Failed to credit wallet for order {order.order_id}: {e}", exc_info=True)
-                return Response(
-                    {"success": False, "message": "Error crediting wallet"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
 
-        # ✅ Handle cancel
-        elif new_status == "cancelled" and order.status in ["pending_payment", "proof_submitted"]:
+            except Exception as e:
+                logger.error(f"Wallet credit failed for order {order.order_id}: {e}", exc_info=True)
+                return Response({"success": False, "message": "Error crediting wallet."}, status=500)
+
+        # ❌ Reject
+        elif new_status == "cancelled" and order.status == "proof_submitted":
             order.status = "cancelled"
             order.save(update_fields=["status", "updated_at"])
-            return Response(
-                {"success": True, "message": "Order cancelled"},
-                status=status.HTTP_200_OK,
+
+            Notification.objects.create(
+                user=order.user,
+                message=f"Sell order {order.order_id} was rejected by admin.",
+                is_read=False,
             )
 
-        # ✅ Handle reverse (undo credit)
+            return Response({"success": True, "message": "Order cancelled."}, status=200)
+
+        # 🔁 Reverse (undo credit)
         elif new_status == "reversed" and order.status == "completed":
             try:
                 with transaction.atomic():
@@ -648,7 +647,7 @@ class AdminUpdateSellOrderAPI(APIView):
 
                     if wallet.balance < order.amount_ngn:
                         return Response(
-                            {"success": False, "message": "Insufficient wallet balance to reverse"},
+                            {"success": False, "message": "Insufficient wallet balance to reverse."},
                             status=status.HTTP_400_BAD_REQUEST,
                         )
 
@@ -671,20 +670,27 @@ class AdminUpdateSellOrderAPI(APIView):
 
                     order.status = "reversed"
                     order.save(update_fields=["status", "updated_at"])
+
+                    Notification.objects.create(
+                        user=order.user,
+                        message=f"Sell order {order.order_id} has been reversed and funds debited.",
+                        is_read=False,
+                    )
+
+                return Response(
+                    {"success": True, "message": "Order reversed and funds debited."},
+                    status=status.HTTP_200_OK,
+                )
+
             except Exception as e:
                 logger.error(f"Failed to reverse wallet for order {order.order_id}: {e}", exc_info=True)
                 return Response(
-                    {"success": False, "message": "Error reversing wallet"},
+                    {"success": False, "message": "Error reversing wallet."},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
-            return Response(
-                {"success": True, "message": "Order reversed and funds debited"},
-                status=status.HTTP_200_OK,
-            )
-
+        # 🚫 Invalid state transition
         return Response(
-            {"success": False, "message": "Invalid transition for this order"},
-            status=status.HTTP_400_BAD_REQUEST,
+            {"success": False, "message": "Invalid transition for this order."},
+            status=400,
         )
-

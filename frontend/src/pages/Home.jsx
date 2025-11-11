@@ -1,11 +1,22 @@
 // src/pages/Home.jsx
-import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+
 import { ArrowRight, Zap, Smartphone, Shield, Users, Wallet, Globe, ChevronRight, Star, Sparkles } from "lucide-react";
 
 export default function Home() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const access = localStorage.getItem("access");
+    if (access) {
+      navigate("/dashboard");
+    }
+  }, [navigate]);
+
   return (
     <>
-      <style jsx>{`
+      <style>{`
         @keyframes float {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-12px); }

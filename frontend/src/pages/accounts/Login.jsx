@@ -1,14 +1,14 @@
-// src/components/Login.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import client from "../../api/client";
 import { Loader2, ArrowLeft, Mail, Lock, Eye, EyeOff } from "lucide-react";
-import { useAuth } from "../../context/AuthContext"; // ← Correct
+import { useAuth } from "../../context/AuthContext";
+import useBiometricAuth from "../../hooks/useBiometricAuth";
 
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth(); // ← Fixed: Use `login` directly
+  const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: localStorage.getItem("rememberedEmail") || "",
@@ -18,6 +18,21 @@ export default function Login() {
   const [showResend, setShowResend] = useState(false);
   const [rememberMe, setRememberMe] = useState(!!localStorage.getItem("rememberedEmail"));
   const [showPassword, setShowPassword] = useState(false);
+
+  // Reauth detection
+  const urlParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const shouldReauth = urlParams.get("reauth") === "true";
+  const reauthUserRaw = localStorage.getItem("reauth_user");
+  const reauthUser = useMemo(() => {
+    try {
+      return reauthUserRaw ? JSON.parse(reauthUserRaw) : null;
+    } catch {
+      return null;
+    }
+  }, [reauthUserRaw]);
+
+  // Biometric hook
+  const { isSupported: biometricSupported, authenticateWithRefresh, checking: biometricChecking } = useBiometricAuth();
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -29,8 +44,30 @@ export default function Login() {
     }
   }, [location]);
 
+  // If user is already logged in (access token exists), redirect to dashboard
+    useEffect(() => {
+    const access = localStorage.getItem("access");
+    if (!access) return;
+
+    try {
+      const [, payloadBase64] = access.split(".");
+      const payload = JSON.parse(atob(payloadBase64));
+      const now = Math.floor(Date.now() / 1000);
+      if (payload.exp > now) {
+        navigate("/dashboard", { replace: true });
+      } else {
+        localStorage.removeItem("access");
+      }
+    } catch {
+      localStorage.removeItem("access");
+    }
+  }, [navigate]);
+
+
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    setErrorMessage("");
   };
 
   const handleSubmit = async (e) => {
@@ -39,8 +76,15 @@ export default function Login() {
     setErrorMessage("");
     setShowResend(false);
 
+    // If reauthUser exists and we are in reauth mode, use that email
+    const submitEmail = shouldReauth && reauthUser ? reauthUser.email : formData.email;
+
     try {
-      const res = await client.post("/login/", formData);
+      const res = await client.post("/login/", {
+        email: submitEmail,
+        password: formData.password,
+      });
+
       const { access, refresh } = res.data;
 
       // Save tokens
@@ -48,37 +92,45 @@ export default function Login() {
       localStorage.setItem("refresh", refresh);
 
       if (rememberMe) {
-        localStorage.setItem("rememberedEmail", formData.email);
+        localStorage.setItem("rememberedEmail", submitEmail);
       } else {
         localStorage.removeItem("rememberedEmail");
       }
 
       // Fetch profile
-      const profileRes = await client.get(`/profile-api/?t=${Date.now()}`);
-      const userData = {
-        email: profileRes.data.email,
-        id: profileRes.data.id,
-        is_merchant: profileRes.data.is_merchant,
-        is_staff: profileRes.data.is_staff,
-        full_name: profileRes.data.full_name || null,
-        phone_number: profileRes.data.phone_number || null,
-        date_of_birth: profileRes.data.date_of_birth || null,
-      };
-      localStorage.setItem("user", JSON.stringify(userData));
-      localStorage.setItem("last_user_fetch", Date.now().toString());
+      try {
+        const profileRes = await client.get(`/profile-api/?t=${Date.now()}`);
+        const userData = {
+          email: profileRes.data.email,
+          id: profileRes.data.id,
+          is_merchant: profileRes.data.is_merchant,
+          is_staff: profileRes.data.is_staff,
+          full_name: profileRes.data.full_name || null,
+          phone_number: profileRes.data.phone_number || null,
+          date_of_birth: profileRes.data.date_of_birth || null,
+        };
+        localStorage.setItem("user", JSON.stringify(userData));
+        localStorage.setItem("last_user_fetch", Date.now().toString());
 
-      // ← Fixed: Call `login` from context
-      login({ access, refresh }, userData);
+        // Remove any reauth marker after successful login
+        localStorage.removeItem("reauth_user");
+      } catch (profileErr) {
+        // ignore profile fetch failure but continue (user still logged in)
+      }
 
+      // Call context login and notify
+      login({ access, refresh }, JSON.parse(localStorage.getItem("user") || "null"));
       window.dispatchEvent(new Event("login"));
 
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      const errors = err.response?.data?.errors || {};
+      const errors = err.response?.data || {};
       const msg = errors.detail || "Login failed. Please check your credentials.";
       if (errors.action === "resend_verification") {
         setShowResend(true);
         setErrorMessage("Your account is not verified. Check your email or resend verification.");
+      } else if (errors?.non_field_errors && Array.isArray(errors.non_field_errors)) {
+        setErrorMessage(errors.non_field_errors[0]);
       } else {
         setErrorMessage(msg);
       }
@@ -96,6 +148,55 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Biometric flow: attempt to refresh tokens and sign in silently
+  const handleBiometric = async () => {
+    setErrorMessage("");
+    if (!biometricSupported) return;
+
+    // Optionally: prompt native wrapper to show biometric UI (if available)
+    // e.g., if (window.Android && window.Android.promptBiometric) { await window.Android.promptBiometric(); }
+
+    const { success, access, error } = await authenticateWithRefresh();
+    if (success) {
+      // fetch profile (if missing)
+      try {
+        const profileRes = await client.get(`/profile-api/?t=${Date.now()}`);
+        const userData = {
+          email: profileRes.data.email,
+          id: profileRes.data.id,
+          is_merchant: profileRes.data.is_merchant,
+          is_staff: profileRes.data.is_staff,
+          full_name: profileRes.data.full_name || null,
+          phone_number: profileRes.data.phone_number || null,
+        };
+        localStorage.setItem("user", JSON.stringify(userData));
+        login({ access, refresh: localStorage.getItem("refresh") }, userData);
+        window.dispatchEvent(new Event("login"));
+        localStorage.removeItem("reauth_user");
+        navigate("/dashboard", { replace: true });
+      } catch (e) {
+        // If profile fetch fails, still proceed
+        login({ access, refresh: localStorage.getItem("refresh") }, JSON.parse(localStorage.getItem("user") || "null"));
+        window.dispatchEvent(new Event("login"));
+        localStorage.removeItem("reauth_user");
+        navigate("/dashboard", { replace: true });
+      }
+    } else {
+      setErrorMessage("Biometric login failed. Please enter your password.");
+    }
+  };
+
+  const renderGreeting = () => {
+    const displayName = reauthUser?.full_name || reauthUser?.email || formData.email;
+    return shouldReauth && reauthUser ? (
+      <h2 className="text-2xl font-bold text-center text-indigo-400 mb-6">
+        Welcome back, {displayName}
+      </h2>
+    ) : (
+      <h2 className="text-2xl font-bold text-center text-indigo-400 mb-6">Welcome Back</h2>
+    );
   };
 
   return (
@@ -140,9 +241,7 @@ export default function Login() {
 
         <div className="max-w-md w-full relative z-10">
           <div className="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 shadow-2xl border border-gray-700/50 animate-fade-in-up">
-            <h2 className="text-2xl font-bold text-center text-indigo-400 mb-6">
-              Welcome Back
-            </h2>
+            {renderGreeting()}
 
             {errorMessage && (
               <div className="mb-5 p-3.5 bg-red-900/20 backdrop-blur-sm border border-red-500/30 rounded-xl text-sm text-red-300 text-center">
@@ -151,22 +250,24 @@ export default function Login() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Email */}
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                    placeholder="you@example.com"
-                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
-                  />
+              {/* Email: show only when not reauth (or if no reauth_user) */}
+              {!shouldReauth && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      required
+                      placeholder="you@example.com"
+                      className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Password */}
               <div>
@@ -227,6 +328,55 @@ export default function Login() {
                 )}
               </button>
             </form>
+
+            {/* Biometric / Fingerprint placeholder */}
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={biometricSupported && localStorage.getItem("refresh") ? handleBiometric : undefined}
+                disabled={biometricChecking || !biometricSupported}
+                className={`w-full mt-2 inline-flex items-center justify-center gap-2 border border-gray-700/40 rounded-xl py-2 text-sm transition ${
+                  biometricSupported && localStorage.getItem("refresh")
+                    ? "text-indigo-300 hover:bg-gray-800/60"
+                    : "text-gray-600 cursor-not-allowed"
+                }`}
+              >
+                {biometricChecking ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="w-4 h-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={1.6}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 11.5c0-.833.667-1.5 1.5-1.5S15 10.667 15 11.5v1a4 4 0 01-8 0v-1a1.5 1.5 0 013 0v1a1 1 0 002 0v-1z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 4C7.582 4 4 7.582 4 12a8 8 0 0016 0c0-4.418-3.582-8-8-8z"
+                      />
+                    </svg>
+                    {biometricSupported && localStorage.getItem("refresh")
+                      ? "Sign in with fingerprint"
+                      : "Fingerprint login unavailable"}
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-gray-500 mt-2">
+                {biometricSupported
+                  ? "Use device biometrics to quickly sign back in."
+                  : "Fingerprint login coming soon."}
+              </p>
+            </div>
+
 
             {/* Resend Verification */}
             {showResend && (

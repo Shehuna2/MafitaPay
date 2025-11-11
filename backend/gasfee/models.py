@@ -119,6 +119,14 @@ class Asset(models.Model):
     def __str__(self):
         return self.name
 
+# class AssetPrice(models.Model):
+#     asset = models.OneToOneField('Asset', on_delete=models.CASCADE, related_name='price')
+#     price_usd = models.DecimalField(max_digits=20, decimal_places=8, default=1)
+#     last_updated = models.DateTimeField(auto_now=True)
+
+#     def __str__(self):
+#         return f"{self.asset.symbol.upper()} → ${self.price_usd}"
+
 
 class AssetSellOrder(models.Model):
     user         = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -134,7 +142,7 @@ class AssetSellOrder(models.Model):
     updated_at   = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.user.username} → {self.amount_asset} {self.asset.upper()} for ₦{self.amount_ngn}"
+        return f"{self.user.username} → {self.amount_asset} {self.asset} for ₦{self.amount_ngn}"
 
 class PaymentProof(models.Model):
     order = models.OneToOneField(AssetSellOrder, on_delete=models.CASCADE, related_name="proof")
