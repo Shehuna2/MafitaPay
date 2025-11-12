@@ -3,28 +3,12 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Loader2, ArrowLeft, Mail, Lock, User, Phone, Hash, Eye, EyeOff, ChevronRight, ChevronDown, } from "lucide-react";
 import client from "../../api/client";
+import { COUNTRY_DATA } from "../../hooks/countries";
 import { parsePhoneNumberFromString, AsYouType } from "libphonenumber-js";
 
-// Country data (add more as needed)
-const COUNTRY_DATA = [
-  { code: "us", name: "United States", flag: "🇺🇸", dialCode: "1" },
-  { code: "gb", name: "United Kingdom", flag: "🇬🇧", dialCode: "44" },
-  { code: "ng", name: "Nigeria", flag: "🇳🇬", dialCode: "234" },
-  { code: "in", name: "India", flag: "🇮🇳", dialCode: "91" },
-  { code: "ca", name: "Canada", flag: "🇨🇦", dialCode: "1" },
-  { code: "au", name: "Australia", flag: "🇦🇺", dialCode: "61" },
-  { code: "de", name: "Germany", flag: "🇩🇪", dialCode: "49" },
-  { code: "fr", name: "France", flag: "🇫🇷", dialCode: "33" },
-  { code: "za", name: "South Africa", flag: "🇿🇦", dialCode: "27" },
-  { code: "ke", name: "Kenya", flag: "🇰🇪", dialCode: "254" },
-  { code: "br", name: "Brazil", flag: "🇧🇷", dialCode: "55" },
-  { code: "mx", name: "Mexico", flag: "🇲🇽", dialCode: "52" },
-  { code: "jp", name: "Japan", flag: "🇯🇵", dialCode: "81" },
-  { code: "cn", name: "China", flag: "🇨🇳", dialCode: "86" },
-  { code: "ru", name: "Russia", flag: "🇷🇺", dialCode: "7" },
-];
 
-// Custom Phone Input Component (Embedded)
+
+// Custom Phone Input Component
 function CustomPhoneInput({ value, onChange, country: initialCountry = "us" }) {
   const [country, setCountry] = useState(initialCountry);
   const [phone, setPhone] = useState("");
@@ -34,14 +18,12 @@ function CustomPhoneInput({ value, onChange, country: initialCountry = "us" }) {
   const dropdownRef = useRef(null);
   const inputRef = useRef(null);
 
-  const selectedCountry =
-    COUNTRY_DATA.find((c) => c.code === country) || COUNTRY_DATA[0];
+  const selectedCountry = COUNTRY_DATA.find((c) => c.code === country) || COUNTRY_DATA[0];
 
-  // --- Auto Detect Country on Mount ---
+  // --- Auto Detect Country ---
   useEffect(() => {
     async function detectCountry() {
       try {
-        // 1️⃣ Try IP-based lookup
         const res = await fetch("https://ipapi.co/json/");
         const data = await res.json();
         if (data?.country_code) {
@@ -55,7 +37,6 @@ function CustomPhoneInput({ value, onChange, country: initialCountry = "us" }) {
           }
         }
 
-        // 2️⃣ Fallback: Browser geolocation
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
             const { latitude, longitude } = pos.coords;
@@ -66,8 +47,7 @@ function CustomPhoneInput({ value, onChange, country: initialCountry = "us" }) {
               const data2 = await res2.json();
               if (data2?.countryCode) {
                 const found2 = COUNTRY_DATA.find(
-                  (c) =>
-                    c.code.toUpperCase() === data2.countryCode.toUpperCase()
+                  (c) => c.code.toUpperCase() === data2.countryCode.toUpperCase()
                 );
                 if (found2) setCountry(found2.code);
               }
@@ -87,11 +67,10 @@ function CustomPhoneInput({ value, onChange, country: initialCountry = "us" }) {
         setDetecting(false);
       }
     }
-
     detectCountry();
   }, []);
 
-  // --- Parse value on mount/update ---
+  // --- Parse initial value ---
   useEffect(() => {
     if (value && value !== `${selectedCountry.dialCode}${phone}`) {
       try {
@@ -127,12 +106,9 @@ function CustomPhoneInput({ value, onChange, country: initialCountry = "us" }) {
       c.code.toLowerCase().includes(search)
   );
 
+  // --- Handle phone input ---
   const handlePhoneChange = (e) => {
     const raw = e.target.value.replace(/\D/g, "");
-    setPhone(raw);
-    const formatted = new AsYouType(selectedCountry.code.toUpperCase()).input(
-      raw
-    );
     setPhone(raw);
     onChange(`${selectedCountry.dialCode}${raw}`);
   };
@@ -141,16 +117,14 @@ function CustomPhoneInput({ value, onChange, country: initialCountry = "us" }) {
     setCountry(c.code);
     setIsOpen(false);
     setSearch("");
-    const full = `${c.dialCode}${phone}`;
-    onChange(full);
+    onChange(`${c.dialCode}${phone}`);
     inputRef.current?.focus();
   };
 
+  // --- Format phone for display ---
   let formattedPhone = phone;
   try {
-    const parsed = parsePhoneNumberFromString(
-      `${selectedCountry.dialCode}${phone}`
-    );
+    const parsed = parsePhoneNumberFromString(`${selectedCountry.dialCode}${phone}`);
     if (parsed) formattedPhone = parsed.formatNational();
   } catch {
     formattedPhone = phone;
@@ -170,30 +144,27 @@ function CustomPhoneInput({ value, onChange, country: initialCountry = "us" }) {
               : "hover:bg-gray-700/60 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
           }`}
         >
-          <span className="text-lg">
-            {detecting ? "🌐" : selectedCountry.flag}
-          </span>
-          <ChevronDown
-            className={`w-3.5 h-3.5 transition ${
-              isOpen ? "rotate-180" : ""
-            }`}
-          />
+          <span className="text-lg">{detecting ? "🌐" : selectedCountry.flag}</span>
+          <ChevronDown className={`w-3.5 h-3.5 transition ${isOpen ? "rotate-180" : ""}`} />
         </button>
 
         {/* Phone Input */}
         <div className="relative flex-1">
           <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 z-10" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={formattedPhone || phone}
-            onChange={handlePhoneChange}
-            placeholder=" "
-            className="w-full h-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-r-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
-          />
-          <span className="absolute left-10 top-1/2 -translate-y-1/2 text-gray-500 text-xs pointer-events-none">
-            {selectedCountry.dialCode}
-          </span>
+          <div className="relative">
+            {/* Dial code displayed, not editable */}
+            <span className="absolute left-10 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none">
+              {selectedCountry.dialCode}
+            </span>
+            <input
+              ref={inputRef}
+              type="text"
+              value={phone}
+              onChange={handlePhoneChange}
+              placeholder=" Enter number"
+              className="w-full h-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-16 pr-3 py-2.5 placeholder-gray-400 rounded-r-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+            />
+          </div>
         </div>
       </div>
 
@@ -237,6 +208,8 @@ function CustomPhoneInput({ value, onChange, country: initialCountry = "us" }) {
     </div>
   );
 }
+
+
 
 export default function Register() {
   const navigate = useNavigate();
@@ -509,7 +482,7 @@ export default function Register() {
                         value={form.first_name}
                         onChange={handleChange}
                         required
-                        className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                        className="w-full bg-gray-800/60 backdrop-blur-md placeholder-gray-400 border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
                       />
                     </div>
                   </div>
@@ -526,7 +499,7 @@ export default function Register() {
                         value={form.last_name}
                         onChange={handleChange}
                         required
-                        className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                        className="w-full bg-gray-800/60 backdrop-blur-md placeholder-gray-400 border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
                       />
                     </div>
                   </div>
@@ -552,7 +525,7 @@ export default function Register() {
                         placeholder="ABC123"
                         value={form.referral_code}
                         onChange={handleChange}
-                        className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                        className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-xl text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
                       />
                     </div>
                   </div>
