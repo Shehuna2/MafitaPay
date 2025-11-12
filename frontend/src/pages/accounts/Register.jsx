@@ -1,6 +1,8 @@
 // src/pages/Register.jsx
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import PhoneInput from 'react-phone-input-2';
+import 'react-phone-input-2/lib/style.css';
 import client from "../../api/client";
 import { Loader2, ArrowLeft, Mail, Lock, User, Phone, Hash, Eye, EyeOff, ChevronRight } from "lucide-react";
 
@@ -65,28 +67,35 @@ export default function Register() {
     e.preventDefault();
     setError("");
     setLoading(true);
+
     try {
-      const res = await client.post("register/", form);
-      if (res.data.access && res.data.refresh) {
-        localStorage.setItem("access", res.data.access);
-        localStorage.setItem("refresh", res.data.refresh);
-        setTimeout(() => navigate("/dashboard"), 300);
-      } else {
-        setTimeout(() => navigate("/verify-email", { state: { email: form.email } }), 300);
-      }
+        // Make a copy of form
+        const submitData = { ...form };
+
+        // Remove referral_code if empty
+        if (!submitData.referral_code) delete submitData.referral_code;
+
+        const res = await client.post("register/", submitData); // use submitData
+        if (res.data.access && res.data.refresh) {
+            localStorage.setItem("access", res.data.access);
+            localStorage.setItem("refresh", res.data.refresh);
+            setTimeout(() => navigate("/dashboard"), 300);
+        } else {
+            setTimeout(() => navigate("/verify-email", { state: { email: form.email } }), 300);
+        }
     } catch (err) {
-      const errors = err.response?.data?.errors || {};
-      const errorMessage =
-        errors.email?.[0] ||
-        errors.password?.[0] ||
-        errors.password2?.[0] ||
-        errors.phone_number?.[0] ||
-        errors.referral_code?.[0] ||
-        err.response?.data?.detail ||
-        "Registration failed";
-      setError(errorMessage);
+        const errors = err.response?.data?.errors || {};
+        const errorMessage =
+            errors.email?.[0] ||
+            errors.password?.[0] ||
+            errors.password2?.[0] ||
+            errors.phone_number?.[0] ||
+            errors.referral_code?.[0] ||
+            err.response?.data?.detail ||
+            "Registration failed";
+        setError(errorMessage);
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   };
 
@@ -288,15 +297,20 @@ export default function Register() {
                   <div>
                     <label className="block text-xs font-medium text-gray-400 mb-1.5">WhatsApp Number</label>
                     <div className="relative">
+                      {/* Phone Icon */}
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                      <input
-                        name="phone_number"
-                        type="text"
-                        placeholder="+2341234567890"
+
+                      <PhoneInput
+                        country={'us'} // default country
                         value={form.phone_number}
-                        onChange={handleChange}
-                        required
-                        className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                        onChange={(phone) => setForm({ ...form, phone_number: phone })}
+                        inputClass="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                        containerClass="relative"
+                        inputProps={{
+                          name: 'phone_number',
+                          required: true,
+                        }}
+                        buttonClass="bg-gray-800/60 border-r border-gray-700/80" // makes country selector match style
                       />
                     </div>
                   </div>

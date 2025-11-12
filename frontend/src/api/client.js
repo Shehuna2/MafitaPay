@@ -19,6 +19,22 @@ function markActivity() {
   } catch {}
 }
 
+// Helper: safely save user for reauth
+function saveReauthUser() {
+  try {
+    const user = localStorage.getItem("user") || localStorage.getItem("reauth_user") || "{}";
+    localStorage.setItem("reauth_user", user);
+  } catch {}
+}
+
+// Helper: safely save post-login redirect path
+function saveRedirect() {
+  try {
+    const currentPath = window.location.pathname + window.location.search;
+    localStorage.setItem("post_reauth_redirect", currentPath);
+  } catch {}
+}
+
 // Request interceptor: attach token + manage idle timeout
 client.interceptors.request.use(
   (config) => {
@@ -26,35 +42,26 @@ client.interceptors.request.use(
       const lastActive = Number(localStorage.getItem("last_active") || 0);
       const now = Date.now();
 
-      // If last activity exists and exceeded timeout, expire session (keep reauth_user)
+      // If idle timeout exceeded, expire session
       if (lastActive && now - lastActive > IDLE_TIMEOUT) {
-        // 🛡️ Prevent false re-expiry right after a successful login (grace period)
-        const justLoggedIn = now - lastActive < 5000; // 5 seconds
+        const justLoggedIn = now - lastActive < 5000; // 5 seconds grace period
         if (!justLoggedIn) {
-          // Save the current page so we can restore after reauth
-          try {
-            const currentPath = window.location.pathname + window.location.search;
-            localStorage.setItem("post_reauth_redirect", currentPath);
-          } catch {}
+          saveRedirect();
+          saveReauthUser();
 
-          // Preserve a copy of user for reauth (if present)
-          const user = localStorage.getItem("user");
-          if (user) localStorage.setItem("reauth_user", user);
-
-          // Clear only access token (keep refresh for biometric/refresh re-login)
+          // Clear only access token (keep refresh)
           localStorage.removeItem("access");
 
-          // Trigger global event for optional UI listening
+          // Trigger global event for UI listening
           window.dispatchEvent(new Event("sessionExpired"));
         } else {
           markActivity();
         }
       } else {
-        // Update last activity timestamp
         markActivity();
       }
-    } catch (e) {
-      // Ignore localStorage access errors
+    } catch {
+      // Ignore localStorage errors
     }
 
     // Attach access token if present
@@ -80,7 +87,6 @@ client.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config || {};
 
-    // If 401 and not already retried: try refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
@@ -90,7 +96,7 @@ client.interceptors.response.use(
 
         const refreshURL = `${BASE_URL.replace(/\/api\/?$/, "/")}auth/token/refresh/`;
 
-        // Use plain axios (not client) to avoid infinite loops
+        // Use plain axios to avoid infinite loops
         const res = await axios.post(refreshURL, { refresh });
 
         // Update stored access token
@@ -104,28 +110,19 @@ client.interceptors.response.use(
         originalRequest.headers = originalRequest.headers || {};
         originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
         return client(originalRequest);
-      } catch (refreshError) {
-        // Refresh failed -> prepare reauth flow but keep user for greeting
-        try {
-          const user = localStorage.getItem("user");
-          if (user) localStorage.setItem("reauth_user", user);
-        } catch {}
+      } catch {
+        // Refresh failed -> prepare reauth flow
+        saveReauthUser();
+        saveRedirect();
 
-        // Save current path so we can restore after reauth login
-        try {
-          const currentPath = window.location.pathname + window.location.search;
-          localStorage.setItem("post_reauth_redirect", currentPath);
-        } catch {}
-
-        // Remove only access (keep refresh for biometric retry)
         localStorage.removeItem("access");
 
-        // Dispatch logout/reauth events
         window.dispatchEvent(new Event("logout"));
 
-        // Redirect to login with reauth flag
+        // Redirect to login with safe redirect
         try {
-          window.location.href = "/login?reauth=true";
+          const redirect = localStorage.getItem("post_reauth_redirect") || "/dashboard";
+          window.location.href = `/login?reauth=true&next=${encodeURIComponent(redirect)}`;
         } catch {}
       }
     }
