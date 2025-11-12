@@ -87,9 +87,10 @@ export default function Login() {
 
       const { access, refresh } = res.data;
 
-      // Save tokens
+      // Save tokens and reset idle timer
       localStorage.setItem("access", access);
       localStorage.setItem("refresh", refresh);
+      localStorage.setItem("last_active", Date.now().toString()); // ✅ idle timer reset
 
       if (rememberMe) {
         localStorage.setItem("rememberedEmail", submitEmail);
@@ -111,18 +112,19 @@ export default function Login() {
         };
         localStorage.setItem("user", JSON.stringify(userData));
         localStorage.setItem("last_user_fetch", Date.now().toString());
-
-        // Remove any reauth marker after successful login
-        localStorage.removeItem("reauth_user");
+        localStorage.removeItem("reauth_user"); // remove marker
       } catch (profileErr) {
-        // ignore profile fetch failure but continue (user still logged in)
+        // ignore profile fetch failure but continue
       }
 
       // Call context login and notify
       login({ access, refresh }, JSON.parse(localStorage.getItem("user") || "null"));
       window.dispatchEvent(new Event("login"));
 
-      navigate("/dashboard", { replace: true });
+      // ✅ Restore user’s previous page if reauth, otherwise go to dashboard
+      const redirectPath = localStorage.getItem("post_reauth_redirect");
+      localStorage.removeItem("post_reauth_redirect");
+      navigate(redirectPath || "/dashboard", { replace: true });
     } catch (err) {
       const errors = err.response?.data || {};
       const msg = errors.detail || "Login failed. Please check your credentials.";
@@ -138,6 +140,7 @@ export default function Login() {
       setLoading(false);
     }
   };
+
 
   const handleResendVerification = async () => {
     setLoading(true);
@@ -155,13 +158,10 @@ export default function Login() {
     setErrorMessage("");
     if (!biometricSupported) return;
 
-    // Optionally: prompt native wrapper to show biometric UI (if available)
-    // e.g., if (window.Android && window.Android.promptBiometric) { await window.Android.promptBiometric(); }
-
     const { success, access, error } = await authenticateWithRefresh();
     if (success) {
-      // fetch profile (if missing)
       try {
+        // Fetch profile if missing or stale
         const profileRes = await client.get(`/profile-api/?t=${Date.now()}`);
         const userData = {
           email: profileRes.data.email,
@@ -172,17 +172,23 @@ export default function Login() {
           phone_number: profileRes.data.phone_number || null,
         };
         localStorage.setItem("user", JSON.stringify(userData));
+        localStorage.setItem("last_active", Date.now().toString()); // ✅ idle reset
         login({ access, refresh: localStorage.getItem("refresh") }, userData);
         window.dispatchEvent(new Event("login"));
         localStorage.removeItem("reauth_user");
-        navigate("/dashboard", { replace: true });
       } catch (e) {
-        // If profile fetch fails, still proceed
-        login({ access, refresh: localStorage.getItem("refresh") }, JSON.parse(localStorage.getItem("user") || "null"));
+        // Profile fetch failed — still log in
+        localStorage.setItem("last_active", Date.now().toString());
+        const userData = JSON.parse(localStorage.getItem("user") || "null");
+        login({ access, refresh: localStorage.getItem("refresh") }, userData);
         window.dispatchEvent(new Event("login"));
         localStorage.removeItem("reauth_user");
-        navigate("/dashboard", { replace: true });
       }
+
+      // ✅ Restore previous page or fallback to dashboard
+      const redirectPath = localStorage.getItem("post_reauth_redirect");
+      localStorage.removeItem("post_reauth_redirect");
+      navigate(redirectPath || "/dashboard", { replace: true });
     } else {
       setErrorMessage("Biometric login failed. Please enter your password.");
     }
@@ -370,11 +376,6 @@ export default function Login() {
                   </>
                 )}
               </button>
-              <p className="text-xs text-gray-500 mt-2">
-                {biometricSupported
-                  ? "Use device biometrics to quickly sign back in."
-                  : "Fingerprint login coming soon."}
-              </p>
             </div>
 
 

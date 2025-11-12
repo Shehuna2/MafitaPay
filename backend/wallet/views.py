@@ -54,7 +54,6 @@ class WalletView(generics.GenericAPIView):
             })
 
 
-
 class GenerateDVAAPIView(APIView):
     """Generate a Dedicated Virtual Account (DVA) for the user with Paystack or 9PSB."""
     permission_classes = [IsAuthenticated]
@@ -109,11 +108,11 @@ class GenerateDVAAPIView(APIView):
                 wallet.van_provider = "9psb"
                 wallet.save()
 
-                profile = getattr(user, "profile", None)
-                if profile:
-                    profile.account_no = va.account_number
-                    profile.bank_name = va.bank_name
-                    profile.save()
+                # profile = getattr(user, "profile", None)
+                # if profile:
+                #     profile.account_no = va.account_number
+                #     profile.bank_name = va.bank_name
+                #     profile.save()
 
                 return Response({
                     "success": True,
@@ -126,8 +125,10 @@ class GenerateDVAAPIView(APIView):
             # =============== FLUTTERWAVE DVA FLOW ===============
             elif provider == "flutterwave":
                 from .services.flutterwave_service import FlutterwaveService
+
                 fw = FlutterwaveService()
 
+                # Check if a Flutterwave VA already exists
                 existing_va = VirtualAccount.objects.filter(
                     user=user, provider="flutterwave", assigned=True
                 ).first()
@@ -140,26 +141,41 @@ class GenerateDVAAPIView(APIView):
                         "account_name": existing_va.account_name,
                     }, status=status.HTTP_200_OK)
 
-                response = fw.create_virtual_account(user)
+                preferred_bank = request.data.get("preferred_bank", "wema-bank")
+
+                # Create new VA via Flutterwave API
+                response = fw.create_virtual_account(user, bank=preferred_bank)
                 if not response:
-                    return Response({"error": "Failed to generate Flutterwave VA"}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"error": "Failed to generate Flutterwave VA"},
+                                    status=status.HTTP_400_BAD_REQUEST)
 
                 va = VirtualAccount.objects.create(
                     user=user,
-                    provider="flutterwave",
+                    provider=response["provider"],
                     provider_account_id=response.get("order_ref"),
-                    account_number=response.get("account_number"),
-                    bank_name=response.get("bank_name"),
-                    account_name=response.get("account_name"),
-                    metadata=response,
+                    account_number=response["account_number"],
+                    bank_name=response["bank_name"],
+                    account_name=response["account_name"],
+                    metadata=response["raw_response"],
                     assigned=True,
                 )
 
+                # Create or get user wallet
                 wallet, _ = Wallet.objects.get_or_create(user=user)
-                wallet.van_account_number = va.account_number
-                wallet.van_bank_name = va.bank_name
-                wallet.van_provider = "flutterwave"
-                wallet.save()
+
+                # Ensure account number uniqueness
+                existing = Wallet.objects.filter(van_account_number=response.get("account_number")) \
+                                        .exclude(id=wallet.id).exists()
+
+                if existing:
+                    logger.error(
+                        f"Duplicate DVA {response.get('account_number')} returned by Flutterwave for {wallet.user.email}"
+                    )
+                else:
+                    wallet.van_account_number = response.get("account_number")
+                    wallet.van_bank_name = response.get("bank_name")
+                    wallet.van_provider = "flutterwave"
+                    wallet.save()
 
                 return Response({
                     "success": True,
@@ -168,6 +184,7 @@ class GenerateDVAAPIView(APIView):
                     "bank_name": va.bank_name,
                     "account_name": va.account_name,
                 }, status=status.HTTP_201_CREATED)
+
 
             # =============== PAYSTACK DVA FLOW ===============
             else:

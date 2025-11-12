@@ -1,7 +1,8 @@
 // src/pages/Deposit.jsx
 import React, { useState, useEffect } from "react";
 import client from "../../api/client";
-import { Loader2, RefreshCcw, Banknote, Copy, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
+import { Loader2, RefreshCcw, Copy, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
+import { toast } from "react-hot-toast";
 
 export default function Deposit() {
   const [dvaDetails, setDvaDetails] = useState(null);
@@ -10,6 +11,8 @@ export default function Deposit() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [lastRequeryDate, setLastRequeryDate] = useState(new Date().toISOString().split("T")[0]);
   const [provider, setProvider] = useState("paystack");
+  const [preferredBank, setPreferredBank] = useState("wema-bank");
+  const [showBankSelector, setShowBankSelector] = useState(false);
 
   useEffect(() => {
     const fetchWallet = async () => {
@@ -36,17 +39,24 @@ export default function Deposit() {
   }, [provider]);
 
   const fetchDVA = async () => {
+    // Step 1: show bank selector for Flutterwave if not visible
+    if (provider === "flutterwave" && !showBankSelector) {
+      setShowBankSelector(true);
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await client.post("/wallet/dva/generate/", {
         provider,
         preferred_bank:
-        provider === "paystack"
-        ? "titan-paystack"
-        : provider === "flutterwave"
-        ? "wema-bank"
-        : "9psb",
+          provider === "paystack"
+            ? "titan-paystack"
+            : provider === "flutterwave"
+            ? preferredBank
+            : "9psb",
       });
+
       if (response.data.success) {
         setDvaDetails({
           account_number: response.data.account_number,
@@ -54,9 +64,14 @@ export default function Deposit() {
           account_name: response.data.account_name,
           provider,
         });
+        toast.success("Virtual account generated successfully!");
+        setShowBankSelector(false);
+      } else {
+        toast.error(response.data.message || "Failed to generate account");
       }
     } catch (err) {
       console.error(err);
+      toast.error("Error generating virtual account");
     } finally {
       setLoading(false);
     }
@@ -71,20 +86,23 @@ export default function Deposit() {
         provider_slug: provider === "paystack" ? "titan-paystack" : "9psb",
         date: lastRequeryDate,
       });
+      toast.success("Requery successful!");
     } catch (err) {
       console.error(err);
+      toast.error("Error requerying funds");
     } finally {
       setRequeryLoading(false);
     }
   };
 
-  const copyToClipboard = (text) => {
+  const copyToClipboard = (text, label = "Copied!") => {
     navigator.clipboard.writeText(text);
+    toast.success(label);
   };
 
   return (
     <>
-      <style jsx>{`
+      <style>{`
         @keyframes shimmer {
           0% { background-position: -200% 0; }
           100% { background-position: 200% 0; }
@@ -102,12 +120,9 @@ export default function Deposit() {
       `}</style>
 
       <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none" />
-
-        {/* Full-Screen Loading Overlay */}
         {loading && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-gray-800/90 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-gray-700/50 max-w-md w-full mx-4">
+            <div className="bg-gray-800/90 p-8 rounded-3xl shadow-2xl border border-gray-700/50 max-w-md w-full mx-4">
               <div className="flex flex-col items-center gap-4">
                 <div className="relative">
                   <div className="w-16 h-16 rounded-full bg-indigo-600/20 flex items-center justify-center">
@@ -115,7 +130,9 @@ export default function Deposit() {
                   </div>
                   <div className="absolute inset-0 rounded-full bg-indigo-600/30 animate-ping"></div>
                 </div>
-                <p className="text-lg font-medium text-indigo-300">Loading your virtual account...</p>
+                <p className="text-lg font-medium text-indigo-300">
+                  Loading your virtual account...
+                </p>
                 <div className="w-full h-2 bg-gray-700/50 rounded-full overflow-hidden mt-2">
                   <div className="h-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-600 shimmer"></div>
                 </div>
@@ -125,7 +142,6 @@ export default function Deposit() {
         )}
 
         <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10">
-          {/* Header */}
           <div className="flex items-center gap-2 mb-5">
             <button
               onClick={() => window.history.back()}
@@ -134,26 +150,24 @@ export default function Deposit() {
               <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
               Back
             </button>
-            <h1 className="text-xl sm:text-2xl font-bold text-indigo-400 flex items-right gap-2">
+            <h1 className="text-xl sm:text-2xl font-bold text-indigo-400">
               Deposit via Bank Transfer
             </h1>
           </div>
 
-          <div className="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-4 sm:p-5 shadow-2xl border border-gray-700/50 animate-fade-in-up">
-            {/* Provider */}
+          <div className="bg-gray-800/80 rounded-2xl p-4 sm:p-5 shadow-2xl border border-gray-700/50 animate-fade-in-up">
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Payment Provider</label>
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                Payment Provider
+              </label>
               <select
                 value={provider}
-                onChange={(e) => setProvider(e.target.value)}
-                disabled={loading}
-                className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 appearance-none cursor-pointer disabled:opacity-60"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
-                  backgroundPosition: "right 0.75rem center",
-                  backgroundRepeat: "no-repeat",
-                  backgroundSize: "12px",
+                onChange={(e) => {
+                  setProvider(e.target.value);
+                  setShowBankSelector(false);
                 }}
+                disabled={loading}
+                className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200 cursor-pointer disabled:opacity-60"
               >
                 <option value="paystack">Paystack</option>
                 <option value="flutterwave">Flutterwave</option>
@@ -162,7 +176,22 @@ export default function Deposit() {
               </select>
             </div>
 
-            {/* Generate Button */}
+            {provider === "flutterwave" && showBankSelector && (
+              <div className="mb-5 animate-fade-in-up">
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                  Choose Bank
+                </label>
+                <select
+                  value={preferredBank}
+                  onChange={(e) => setPreferredBank(e.target.value)}
+                  className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition"
+                >
+                  <option value="wema-bank">Wema Bank</option>
+                  <option value="sterling-bank">Sterling Bank</option>
+                </select>
+              </div>
+            )}
+
             {!dvaDetails && !loading && (
               <div className="text-center py-8">
                 <p className="text-sm text-gray-400 mb-5 max-w-md mx-auto">
@@ -173,49 +202,60 @@ export default function Deposit() {
                   onClick={fetchDVA}
                   className="bg-indigo-600 hover:bg-indigo-500 text-white px-7 py-3 rounded-xl font-bold text-sm transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center gap-2.5 mx-auto"
                 >
-                  Generate Virtual Account
+                  {showBankSelector && provider === "flutterwave"
+                    ? "Confirm & Generate"
+                    : "Generate Virtual Account"}
                 </button>
               </div>
             )}
 
-            {/* DVA Display */}
             {dvaDetails && (
-              <div className="bg-gray-800/60 backdrop-blur-md p-5 rounded-xl space-y-5 border border-gray-700/50">
+              <div className="bg-gray-800/60 p-5 rounded-xl space-y-5 border border-gray-700/50">
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-gray-400">Bank</span>
                     <span className="font-bold text-white text-right">
                       {dvaDetails.bank_name}
-                      <span className="block text-xs text-gray-500 mt-0.5">({dvaDetails.provider?.toUpperCase()})</span>
+                      <span className="block text-xs text-gray-500 mt-0.5">
+                        ({dvaDetails.provider?.toUpperCase()})
+                      </span>
                     </span>
                   </div>
+
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-gray-400">Account No.</span>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-lg text-indigo-300">{dvaDetails.account_number}</span>
+                      <span className="font-bold text-lg text-indigo-300">
+                        {dvaDetails.account_number}
+                      </span>
                       <button
-                        onClick={() => copyToClipboard(dvaDetails.account_number)}
+                        onClick={() =>
+                          copyToClipboard(dvaDetails.account_number, "Account number copied!")
+                        }
                         className="text-indigo-400 hover:text-indigo-300 transition"
                       >
                         <Copy className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
+
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-gray-400">Name</span>
-                    <span className="font-bold text-white">{dvaDetails.account_name}</span>
+                    <span className="font-bold text-white">
+                      {dvaDetails.account_name}
+                    </span>
                   </div>
                 </div>
 
                 <div className="pt-4 border-t border-gray-700/50">
                   <p className="text-xs text-gray-300 leading-relaxed">
-                    Funds are credited <span className="font-bold text-green-400">automatically</span> within minutes.
+                    Funds are credited{" "}
+                    <span className="font-bold text-green-400">automatically</span> within minutes.
                     <br />
                     <strong className="text-yellow-400">Note:</strong> A 1% fee (up to ₦300) applies per transfer.
                   </p>
                 </div>
 
-                {/* Requery */}
                 <div className="pt-4 border-t border-gray-700/50">
                   <div className="flex items-center justify-between mb-3">
                     <button
@@ -250,7 +290,7 @@ export default function Deposit() {
                         type="date"
                         value={lastRequeryDate}
                         onChange={(e) => setLastRequeryDate(e.target.value)}
-                        className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                        className="w-full bg-gray-800/60 border border-gray-700/80 p-2 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200"
                       />
                     </div>
                   )}

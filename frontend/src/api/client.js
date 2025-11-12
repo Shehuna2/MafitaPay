@@ -28,31 +28,43 @@ client.interceptors.request.use(
 
       // If last activity exists and exceeded timeout, expire session (keep reauth_user)
       if (lastActive && now - lastActive > IDLE_TIMEOUT) {
-        // Preserve a copy of user for reauth (if present)
-        const user = localStorage.getItem("user");
-        if (user) {
-          localStorage.setItem("reauth_user", user);
-        }
+        // 🛡️ Prevent false re-expiry right after a successful login (grace period)
+        const justLoggedIn = now - lastActive < 5000; // 5 seconds
+        if (!justLoggedIn) {
+          // Save the current page so we can restore after reauth
+          try {
+            const currentPath = window.location.pathname + window.location.search;
+            localStorage.setItem("post_reauth_redirect", currentPath);
+          } catch {}
 
-        // Clear only access token (we keep refresh to allow re-login with biometric/refresh)
-        localStorage.removeItem("access");
-        // Note: don't remove refresh here — helps biometric/refresh re-auth flows
-        window.dispatchEvent(new Event("sessionExpired"));
+          // Preserve a copy of user for reauth (if present)
+          const user = localStorage.getItem("user");
+          if (user) localStorage.setItem("reauth_user", user);
+
+          // Clear only access token (keep refresh for biometric/refresh re-login)
+          localStorage.removeItem("access");
+
+          // Trigger global event for optional UI listening
+          window.dispatchEvent(new Event("sessionExpired"));
+        } else {
+          markActivity();
+        }
       } else {
-        // update last activity
+        // Update last activity timestamp
         markActivity();
       }
     } catch (e) {
-      // ignore storage errors
+      // Ignore localStorage access errors
     }
 
+    // Attach access token if present
     const access = localStorage.getItem("access");
     if (access) {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${access}`;
     }
 
-    // prevent caching GET requests
+    // Prevent caching GET requests
     if (config.method?.toLowerCase() === "get") {
       config.params = { ...config.params, t: Date.now() };
     }
@@ -76,45 +88,45 @@ client.interceptors.response.use(
         const refresh = localStorage.getItem("refresh");
         if (!refresh) throw new Error("No refresh token found");
 
-        const refreshURL = `${BASE_URL.replace(/\/api\/?$/, "/") }auth/token/refresh/`;
-        // Use axios (not client) to avoid interceptor loops
+        const refreshURL = `${BASE_URL.replace(/\/api\/?$/, "/")}auth/token/refresh/`;
+
+        // Use plain axios (not client) to avoid infinite loops
         const res = await axios.post(refreshURL, { refresh });
 
-        // update stored access token
+        // Update stored access token
         localStorage.setItem("access", res.data.access);
         markActivity();
 
-        // notify other parts of the app
+        // Notify other parts of the app
         window.dispatchEvent(new Event("tokenRefreshed"));
 
-        // retry original request with new token
+        // Retry original request with new token
         originalRequest.headers = originalRequest.headers || {};
         originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
         return client(originalRequest);
       } catch (refreshError) {
-        // Refresh failed -> prepare reauth flow but keep profile to greet user
+        // Refresh failed -> prepare reauth flow but keep user for greeting
         try {
           const user = localStorage.getItem("user");
-          if (user) {
-            localStorage.setItem("reauth_user", user);
-          }
-        } catch (e) {
-          // ignore
-        }
+          if (user) localStorage.setItem("reauth_user", user);
+        } catch {}
 
-        // Remove access (user must re-enter password / biometric will attempt refresh)
+        // Save current path so we can restore after reauth login
+        try {
+          const currentPath = window.location.pathname + window.location.search;
+          localStorage.setItem("post_reauth_redirect", currentPath);
+        } catch {}
+
+        // Remove only access (keep refresh for biometric retry)
         localStorage.removeItem("access");
-        // Do NOT remove refresh here — keep it so biometric/refresh may attempt server refresh.
-        // If you prefer to force full logout, clear refresh as well.
 
-        // Dispatch logout/reauth events so UI can respond
+        // Dispatch logout/reauth events
         window.dispatchEvent(new Event("logout"));
+
         // Redirect to login with reauth flag
         try {
           window.location.href = "/login?reauth=true";
-        } catch (e) {
-          // ignore
-        }
+        } catch {}
       }
     }
 
