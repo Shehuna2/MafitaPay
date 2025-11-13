@@ -5,7 +5,15 @@ import { Loader2, RefreshCcw, Copy, ChevronDown, ChevronUp, ArrowLeft } from "lu
 import { toast } from "react-hot-toast";
 
 export default function Deposit() {
-  const [dvaDetails, setDvaDetails] = useState(null);
+  // Initialize with null values
+  const [dvaDetails, setDvaDetails] = useState({
+    account_number: null,
+    bank_name: null,
+    account_name: null,
+    provider: null,
+    type: null
+  });
+
   const [loading, setLoading] = useState(false);
   const [requeryLoading, setRequeryLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -13,24 +21,33 @@ export default function Deposit() {
   const [provider, setProvider] = useState("paystack");
   const [preferredBank, setPreferredBank] = useState("wema-bank");
   const [showBankSelector, setShowBankSelector] = useState(false);
+  const [bvnOrNin, setBvnOrNin] = useState("");
+  const [showBvnField, setShowBvnField] = useState(false);
 
   useEffect(() => {
     const fetchWallet = async () => {
       setLoading(true);
       try {
-        const response = await client.get(`/wallet/?provider=${provider}`);
+        const response = await client.get(`/wallet/?provider=${provider}`); // ← FIXED: Template literal
         if (response.data.van_account_number) {
           setDvaDetails({
             account_number: response.data.van_account_number,
             bank_name: response.data.van_bank_name,
             account_name: response.data.van_account_name,
             provider: response.data.van_provider || provider,
+            type: response.data.type || "dynamic"
           });
         } else {
-          setDvaDetails(null);
+          setDvaDetails({
+            account_number: null,
+            bank_name: null,
+            account_name: null,
+            provider: null,
+            type: null
+          });
         }
       } catch (err) {
-        console.error(err);
+        console.error("Failed to fetch wallet:", err);
       } finally {
         setLoading(false);
       }
@@ -39,23 +56,28 @@ export default function Deposit() {
   }, [provider]);
 
   const fetchDVA = async () => {
-    // Step 1: show bank selector for Flutterwave if not visible
     if (provider === "flutterwave" && !showBankSelector) {
       setShowBankSelector(true);
       return;
     }
 
+    if (provider === "flutterwave" && !showBvnField && preferredBank) {
+      setShowBvnField(true);
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await client.post("/wallet/dva/generate/", {
+      const payload = {
         provider,
-        preferred_bank:
-          provider === "paystack"
-            ? "titan-paystack"
-            : provider === "flutterwave"
-            ? preferredBank
-            : "9psb",
-      });
+        preferred_bank: provider === "paystack" ? "titan-paystack" : preferredBank,
+      };
+
+      if (provider === "flutterwave" && bvnOrNin) {
+        payload.bvn_or_nin = bvnOrNin;
+      }
+
+      const response = await client.post("/wallet/dva/generate/", payload);
 
       if (response.data.success) {
         setDvaDetails({
@@ -63,9 +85,13 @@ export default function Deposit() {
           bank_name: response.data.bank_name,
           account_name: response.data.account_name,
           provider,
+          type: response.data.type || "dynamic"
         });
-        toast.success("Virtual account generated successfully!");
+        toast.success(`Virtual account generated! (${response.data.type || "dynamic"})`);
         setShowBankSelector(false);
+        setShowBvnField(false);
+        setBvnOrNin("");
+        setPreferredBank("wema-bank");
       } else {
         toast.error(response.data.message || "Failed to generate account");
       }
@@ -165,6 +191,8 @@ export default function Deposit() {
                 onChange={(e) => {
                   setProvider(e.target.value);
                   setShowBankSelector(false);
+                  setShowBvnField(false);
+                  setBvnOrNin("");
                 }}
                 disabled={loading}
                 className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200 cursor-pointer disabled:opacity-60"
@@ -192,7 +220,26 @@ export default function Deposit() {
               </div>
             )}
 
-            {!dvaDetails && !loading && (
+            {provider === "flutterwave" && showBvnField && (
+              <div className="mb-5 animate-fade-in-up">
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                  Enter BVN or NIN (for reusable static account)
+                </label>
+                <input
+                  type="text"
+                  placeholder={process.env.NODE_ENV === "development" ? "12345678901 (sandbox)" : "Enter your BVN"}
+                  value={bvnOrNin}
+                  onChange={(e) => setBvnOrNin(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                  maxLength={11}
+                  className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Skip for temporary account (expires in 1 hour).
+                </p>
+              </div>
+            )}
+
+            {!dvaDetails.account_number && !loading && (
               <div className="text-center py-8">
                 <p className="text-sm text-gray-400 mb-5 max-w-md mx-auto">
                   Generate a virtual account to fund your wallet with{" "}
@@ -202,26 +249,43 @@ export default function Deposit() {
                   onClick={fetchDVA}
                   className="bg-indigo-600 hover:bg-indigo-500 text-white px-7 py-3 rounded-xl font-bold text-sm transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center gap-2.5 mx-auto"
                 >
-                  {showBankSelector && provider === "flutterwave"
-                    ? "Confirm & Generate"
+                  {provider === "flutterwave" && showBvnField
+                    ? bvnOrNin
+                      ? "Confirm & Generate Static Account"
+                      : "Skip for Temporary Account"
+                    : showBankSelector
+                    ? "Confirm Bank & Continue"
                     : "Generate Virtual Account"}
                 </button>
               </div>
             )}
 
-            {dvaDetails && (
+            {dvaDetails.account_number && (
               <div className="bg-gray-800/60 p-5 rounded-xl space-y-5 border border-gray-700/50">
                 <div className="space-y-4">
+                  {/* TYPE */}
+                  {dvaDetails.type && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-400">Type</span>
+                      <span className="font-bold text-white">
+                        {dvaDetails.type.toUpperCase()}
+                        {dvaDetails.type === "static" && " (Reusable)"}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* BANK */}
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-gray-400">Bank</span>
                     <span className="font-bold text-white text-right">
-                      {dvaDetails.bank_name}
+                      {dvaDetails.bank_name || "Mock Bank"}
                       <span className="block text-xs text-gray-500 mt-0.5">
-                        ({dvaDetails.provider?.toUpperCase()})
+                        ({dvaDetails.provider?.toUpperCase() || "FLUTTERWAVE"})
                       </span>
                     </span>
                   </div>
 
+                  {/* ACCOUNT NUMBER */}
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-gray-400">Account No.</span>
                     <div className="flex items-center gap-2">
@@ -229,9 +293,7 @@ export default function Deposit() {
                         {dvaDetails.account_number}
                       </span>
                       <button
-                        onClick={() =>
-                          copyToClipboard(dvaDetails.account_number, "Account number copied!")
-                        }
+                        onClick={() => copyToClipboard(dvaDetails.account_number, "Account number copied!")}
                         className="text-indigo-400 hover:text-indigo-300 transition"
                       >
                         <Copy className="w-4 h-4" />
@@ -239,10 +301,15 @@ export default function Deposit() {
                     </div>
                   </div>
 
+                  {/* ACCOUNT NAME — WITH FALLBACKS */}
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-gray-400">Name</span>
                     <span className="font-bold text-white">
-                      {dvaDetails.account_name}
+                      {dvaDetails.account_name?.trim()
+                        ? dvaDetails.account_name
+                        : dvaDetails.account_name === null || dvaDetails.account_name === ""
+                        ? "—"
+                        : "Loading name..."}
                     </span>
                   </div>
                 </div>

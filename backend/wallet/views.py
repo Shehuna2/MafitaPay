@@ -122,13 +122,13 @@ class GenerateDVAAPIView(APIView):
                     "account_name": va.account_name,
                 }, status=status.HTTP_201_CREATED)
 
-            # =============== FLUTTERWAVE DVA FLOW ===============
+            # =============== FLUTTERWAVE DVA FLOW (v4 OAuth2) ===============
             elif provider == "flutterwave":
                 from .services.flutterwave_service import FlutterwaveService
 
                 fw = FlutterwaveService()
 
-                # Check if a Flutterwave VA already exists
+                # Existing VA check...
                 existing_va = VirtualAccount.objects.filter(
                     user=user, provider="flutterwave", assigned=True
                 ).first()
@@ -141,50 +141,69 @@ class GenerateDVAAPIView(APIView):
                         "account_name": existing_va.account_name,
                     }, status=status.HTTP_200_OK)
 
-                preferred_bank = request.data.get("preferred_bank", "wema-bank")
+                preferred_bank = request.data.get("preferred_bank", "wema-bank").replace("-", "_").upper()
+                bvn_or_nin = request.data.get("bvn_or_nin")  # New: From frontend
 
-                # Create new VA via Flutterwave API
-                response = fw.create_virtual_account(user, bank=preferred_bank)
+                # Create VA (static if BVN provided)
+                response = fw.create_virtual_account(user, bank=preferred_bank, bvn_or_nin=bvn_or_nin)
                 if not response:
-                    return Response({"error": "Failed to generate Flutterwave VA"},
-                                    status=status.HTTP_400_BAD_REQUEST)
+                    logger.error(f"❌ Flutterwave VA generation failed for {user.email}")
+                    return Response(
+                        {"error": "Failed to generate Flutterwave virtual account. Check BVN if requesting static."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                # Existing duplicate check + VA/Wallet save (use response.get("reference"))
+                account_num = response.get("account_number")
+                ref = response.get("reference")
+                if Wallet.objects.filter(van_account_number=account_num).exists():
+                    logger.error(f"Duplicate DVA {account_num} (ref: {ref}) for {user.email}")
+                    return Response({"error": "Duplicate account number"}, status=status.HTTP_400_BAD_REQUEST)
 
                 va = VirtualAccount.objects.create(
                     user=user,
                     provider=response["provider"],
-                    provider_account_id=response.get("order_ref"),
-                    account_number=response["account_number"],
-                    bank_name=response["bank_name"],
-                    account_name=response["account_name"],
-                    metadata=response["raw_response"],
+                    provider_account_id=ref,
+                    account_number=account_num,
+                    bank_name=response.get("bank_name"),
+                    account_name=response.get("account_name"),
+                    metadata={
+                        "type": response.get("type", "dynamic"),
+                        "customer_id": response.get("customer_id"),
+                        "bvn_or_nin": bvn_or_nin,  # Store for compliance
+                        **response.get("raw_response", {})
+                    },
                     assigned=True,
                 )
 
-                # Create or get user wallet
+                # Update UserProfile with VA details
+                profile = user.profile  # ← Safe: signal creates it
+                profile.account_no = va.account_number
+                profile.bank_name = va.bank_name
+                profile.save()
+
                 wallet, _ = Wallet.objects.get_or_create(user=user)
+                wallet.van_account_number = account_num
+                wallet.van_bank_name = response.get("bank_name")
+                wallet.van_provider = "flutterwave"
+                wallet.save()
 
-                # Ensure account number uniqueness
-                existing = Wallet.objects.filter(van_account_number=response.get("account_number")) \
-                                        .exclude(id=wallet.id).exists()
+                logger.info(f"✅ Created {'Static' if bvn_or_nin else 'Dynamic'} VA ({account_num}) for {user.email}")
 
-                if existing:
-                    logger.error(
-                        f"Duplicate DVA {response.get('account_number')} returned by Flutterwave for {wallet.user.email}"
-                    )
-                else:
-                    wallet.van_account_number = response.get("account_number")
-                    wallet.van_bank_name = response.get("bank_name")
-                    wallet.van_provider = "flutterwave"
-                    wallet.save()
+                logger.info(f"SENDING API RESPONSE: type={response.get('type')}, account={account_num}")
 
                 return Response({
                     "success": True,
-                    "message": "Flutterwave virtual account generated successfully.",
+                    "message": f"Flutterwave virtual account ({'static' if bvn_or_nin else 'dynamic'}) generated successfully.",
                     "account_number": va.account_number,
                     "bank_name": va.bank_name,
-                    "account_name": va.account_name,
+                    "type": response.get("type"),
+                    "account_name": (
+                    response.get("account_name") or
+                    f"{user.profile.first_name or ''} {user.profile.last_name or ''}".strip() or
+                    user.email.split("@")[0]
+                    ),
                 }, status=status.HTTP_201_CREATED)
-
 
             # =============== PAYSTACK DVA FLOW ===============
             else:

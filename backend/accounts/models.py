@@ -78,6 +78,7 @@ class UserProfile(models.Model):
     phone_number = models.CharField(max_length=15, blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     account_no = models.CharField(max_length=20, blank=True, null=True)
+    flutterwave_customer_id = models.CharField(max_length=50, null=True, blank=True)
     bank_name = models.CharField(max_length=100, blank=True, null=True)
     total_trades = models.PositiveIntegerField(default=0)
     successful_trades = models.PositiveIntegerField(default=0)
