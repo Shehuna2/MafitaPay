@@ -64,6 +64,19 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
+    // ✅ Handle logout events triggered externally (client.js)
+  useEffect(() => {
+    const handleExternalLogout = () => {
+      setAccess(null);
+      setRefresh(null);
+      setUser(null);
+    };
+
+    window.addEventListener("logout", handleExternalLogout);
+    return () => window.removeEventListener("logout", handleExternalLogout);
+  }, []);
+
+
   const isAuthenticated = Boolean(access);
 
   return (

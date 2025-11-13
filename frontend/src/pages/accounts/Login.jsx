@@ -1,3 +1,4 @@
+// src/pages/Login.jsx
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import client from "../../api/client";
@@ -32,6 +33,7 @@ export default function Login() {
       return null;
     }
   }, [reauthUserRaw]);
+  
 
   // Biometric hook
   const { isSupported: biometricSupported, authenticateWithRefresh, checking: biometricChecking } = useBiometricAuth();
@@ -132,6 +134,7 @@ export default function Login() {
     }
   };
 
+
   // Resend verification
   const handleResendVerification = async () => {
     setLoading(true);
@@ -183,11 +186,11 @@ export default function Login() {
   const renderGreeting = () => {
     const displayName = reauthUser?.full_name || reauthUser?.email || formData.email;
     return shouldReauth && reauthUser ? (
-      <h2 className="text-2xl font-bold text-center text-indigo-400 mb-6">
+      <h2 className="text-2xl font-bold text-indigo-400">
         Welcome back, {displayName}
       </h2>
     ) : (
-      <h2 className="text-2xl font-bold text-center text-indigo-400 mb-6">Welcome Back</h2>
+      <h2 className="text-2xl font-bold text-indigo-400">Welcome Back</h2>
     );
   };
 
@@ -206,7 +209,23 @@ export default function Login() {
 
       <div className="max-w-md w-full relative z-10">
         <div className="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 shadow-2xl border border-gray-700/50">
-          {renderGreeting()}
+          
+          {/* Logo + Greeting */}
+          <div className="flex flex-col md:flex-row md:items-center md:gap-4 mb-6">
+            <img
+              src="/mafitapay.png"
+              alt="Mafita Logo"
+              className="w-24 h-24 object-contain mx-auto md:mx-0"
+            />
+            <div className="mt-2 md:mt-0 md:block hidden">
+              {renderGreeting()}
+            </div>
+          </div>
+
+          {/* Show greeting only on mobile if desired, otherwise keep hidden */}
+          <div className="block md:hidden mb-4 text-center">
+            {/* optional mobile greeting can go here */}
+          </div>
 
           {errorMessage && (
             <div className="mb-5 p-3.5 bg-red-900/20 border border-red-500/30 rounded-xl text-sm text-red-300 text-center">
@@ -227,7 +246,7 @@ export default function Login() {
                     onChange={handleChange}
                     required
                     placeholder="you@example.com"
-                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-3 py-2.5 rounded-xl text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
                   />
                 </div>
               </div>
@@ -244,7 +263,7 @@ export default function Login() {
                   onChange={handleChange}
                   required
                   placeholder="••••••••"
-                  className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-10 py-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                  className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 pl-10 pr-10 py-2.5 rounded-xl text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
                 />
                 <button
                   type="button"
