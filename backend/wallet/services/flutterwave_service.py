@@ -158,7 +158,7 @@ class FlutterwaveService:
     # ---------------------------
     # Virtual account (v4)
     # ---------------------------
-        def create_virtual_account(self, user, bank="WEMA_BANK", bvn_or_nin=None):
+    def create_virtual_account(self, user, bank="WEMA_BANK", bvn_or_nin=None):
         token = self.get_access_token()
         if not token:
             logger.error("Cannot create VA: missing access token")
