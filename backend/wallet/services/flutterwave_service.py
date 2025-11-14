@@ -23,7 +23,7 @@ class FlutterwaveService:
             self.client_secret = getattr(settings, "FLW_LIVE_CLIENT_SECRET", None)
             self.encryption_key = getattr(settings, "FLW_LIVE_ENCRYPTION_KEY", None)
             self.hash_secret = getattr(settings, "FLW_HASH_SECRET", None)
-            base_url = getattr(settings, "FLW_LIVE_BASE_URL", "https://api.flutterwave.com")
+            base_url = getattr(settings, "FLW_LIVE_BASE_URL", "https://f4bexperience.flutterwave.com")
         else:
             self.client_id = getattr(settings, "FLW_TEST_CLIENT_ID", None)
             self.client_secret = getattr(settings, "FLW_TEST_CLIENT_SECRET", None)
