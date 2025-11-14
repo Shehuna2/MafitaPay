@@ -6,6 +6,7 @@ import re
 import requests
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -14,44 +15,33 @@ class FlutterwaveService:
     def __init__(self, use_live=False):
         """
         Initialize Flutterwave v4 service.
-        use_live=True  → LIVE mode (uses FLW_LIVE_* keys)
+        use_live=True  → LIVE mode (FLW_LIVE_* keys)
         use_live=False → SANDBOX mode (default)
         """
         if use_live:
-            # LIVE MODE
             self.client_id = getattr(settings, "FLW_LIVE_CLIENT_ID", None)
             self.client_secret = getattr(settings, "FLW_LIVE_CLIENT_SECRET", None)
             self.encryption_key = getattr(settings, "FLW_LIVE_ENCRYPTION_KEY", None)
-            self.hash_secret = getattr(settings, "FLW_HASH_SECRET", None)  # Webhook secret
+            self.hash_secret = getattr(settings, "FLW_HASH_SECRET", None)
             base_url = getattr(settings, "FLW_LIVE_BASE_URL", "https://api.flutterwave.com")
         else:
-            # SANDBOX MODE
             self.client_id = getattr(settings, "FLW_TEST_CLIENT_ID", None)
             self.client_secret = getattr(settings, "FLW_TEST_CLIENT_SECRET", None)
             self.encryption_key = getattr(settings, "FLW_TEST_ENCRYPTION_KEY", None)
             self.hash_secret = getattr(settings, "FLW_TEST_HASH_SECRET", None)
-            base_url = getattr(settings, "FLW_TEST_BASE_URL", "https://api.flutterwave.com")
+            base_url = getattr(settings, "FLW_TEST_BASE_URL", "https://developersandbox-api.flutterwave.com")
 
-        # Critical validation
         if not self.client_id or not self.client_secret:
-            raise ImproperlyConfigured(
-                "Flutterwave credentials missing. Check FLW_* environment variables."
-            )
+            raise ImproperlyConfigured("Flutterwave credentials missing. Check FLW_* env vars.")
 
-        # Safe base URL
         self.base_url = str(base_url).strip().rstrip("/")
-        logger.info(
-            f"FlutterwaveService initialized → {'LIVE' if use_live else 'SANDBOX'} mode → {self.base_url}"
-        )
+        logger.info(f"FlutterwaveService initialized → {'LIVE' if use_live else 'SANDBOX'} mode → {self.base_url}")
 
         self.access_token = None
         self.token_expiry = None
 
-    # --------------------------------------------------------------------------
-    # TOKEN MANAGEMENT
-    # --------------------------------------------------------------------------
     def get_access_token(self):
-        """Fetch OAuth2 token (cached until expiry)"""
+        """Fetch OAuth2 token"""
         if self.access_token:
             return self.access_token
 
@@ -73,30 +63,27 @@ class FlutterwaveService:
             return self.access_token
 
         except Exception as e:
-            logger.error(f"Failed to get Flutterwave access token: {e}", exc_info=True)
+            logger.error(f"Failed to get access token: {e}", exc_info=True)
             return None
 
-    # --------------------------------------------------------------------------
-    # CUSTOMER MANAGEMENT
-    # --------------------------------------------------------------------------
     def create_or_get_customer(self, user):
+        """Create or get customer with UserProfile names"""
         try:
             token = self.get_access_token()
             if not token:
                 return None
-
-            # ← FIXED: Always use /v4/customers (works in both sandbox & live)
-            url = f"{self.base_url}/v4/customers"
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            }
 
             profile = getattr(user, "profile", None)
             first_name = (profile.first_name.strip() if profile and profile.first_name else user.email.split("@")[0])[:50]
             last_name = (profile.last_name.strip() if profile and profile.last_name else "User")[:50]
             phone = getattr(profile, "phone_number", "+2340000000000") or "+2340000000000"
 
+            url = f"{self.base_url}/v4/customers"
+            logger.info(f"POST to {url} for {user.email}")  # Debug log
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            }
             payload = {
                 "email": user.email,
                 "firstname": first_name,
@@ -107,33 +94,34 @@ class FlutterwaveService:
             resp = requests.post(url, json=payload, headers=headers, timeout=40)
 
             if resp.status_code == 409:
-                logger.info("Customer exists, searching...")
+                logger.info(f"Customer exists for {user.email}, searching...")
                 search_resp = requests.get(url, params={"email": user.email}, headers=headers, timeout=30)
-                if search_resp.ok and search_resp.json().get("data"):
-                    cid = search_resp.json()["data"][0]["id"]
-                    logger.info(f"Found existing customer: {cid}")
-                    return cid
+                if search_resp.ok:
+                    customers = search_resp.json().get("data", [])
+                    if customers:
+                        customer_id = customers[0]["id"]
+                        logger.info(f"Found existing customer: {customer_id}")
+                        return customer_id
 
             if resp.status_code not in (200, 201):
                 logger.error(f"Customer creation failed: {resp.status_code} {resp.text}")
                 return None
 
-            customer_id = resp.json().get("data", {}).get("id")
+            data = resp.json()
+            customer_id = data.get("data", {}).get("id")
             if not customer_id:
-                logger.error(f"Customer ID missing: {resp.json()}")
+                logger.error(f"Customer ID missing: {data}")
                 return None
 
-            logger.info(f"Customer created/found: {customer_id}")
+            logger.info(f"Customer {'created' if resp.status_code == 201 else 'found'}: {customer_id}")
             return customer_id
 
         except Exception as e:
-            logger.error(f"Customer error: {e}", exc_info=True)
+            logger.error(f"Customer error for {user.email}: {e}", exc_info=True)
             return None
 
-    # --------------------------------------------------------------------------
-    # VIRTUAL ACCOUNT CREATION
-    # --------------------------------------------------------------------------
     def create_virtual_account(self, user, bank="WEMA_BANK", bvn_or_nin=None):
+        """Create static/dynamic VA"""
         try:
             token = self.get_access_token()
             if not token:
@@ -143,8 +131,8 @@ class FlutterwaveService:
             if not customer_id:
                 return None
 
-            # ← FIXED: Always use /v4/virtual-accounts
             url = f"{self.base_url}/v4/virtual-accounts"
+            logger.info(f"POST to {url} for {user.email}")  # Debug log
             headers = {
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
@@ -175,20 +163,19 @@ class FlutterwaveService:
                 else:
                     payload["nin"] = clean_id
 
-            logger.info(f"Creating {account_type.upper()} VA → {clean_bank}")
-            resp = requests.post(url, json=payload, headers=headers, timeout=60)
+            resp = requests.post(url, json=payload, headers=headers, timeout=40)
 
             if resp.status_code not in (200, 201):
-                logger.error(f"VA failed {resp.status_code}: {resp.text}")
+                logger.error(f"VA creation failed: {resp.status_code} {resp.text}")
                 return None
 
             data = resp.json()
             if data.get("status") != "success":
-                logger.error(f"VA failed: {data}")
+                logger.error(f"VA creation failed: {data}")
                 return None
 
             va_data = data["data"]
-            logger.info(f"VA created: {va_data.get('account_number')}")
+            logger.info(f"{account_type.upper()} VA created: {va_data.get('account_number')}")
 
             return {
                 "provider": "flutterwave",
