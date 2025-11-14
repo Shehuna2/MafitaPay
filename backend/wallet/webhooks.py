@@ -273,5 +273,8 @@ def flutterwave_webhook(request):
             return Response({"status": "success"}, status=200)
 
         # --- All other events ---
-        logger.info("Unhandled Flutterwave event: %s", event)
-        return Response({"status": "ignored"}, status=200)
+            logger.info("Unhandled Flutterwave event: %s", event)
+            return Response({"status": "ignored"}, status=200)
+        except Exception as e:
+            logger.exception("Flutterwave webhook processing error")
+            return Response({"status": "error", "message": str(e)}, status=500)
