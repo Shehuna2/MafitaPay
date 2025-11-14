@@ -17,11 +17,17 @@ reference = re.sub(r'[^a-zA-Z0-9]', '', f"va{ref_hex}")
 
 class FlutterwaveService:
     def __init__(self):
-        self.client_id = settings.FLW_TEST_CLIENT_ID
-        self.client_secret = settings.FLW_TEST_CLIENT_SECRET
-        self.base_url = settings.FLW_TEST_BASE_URL.rstrip("/")
-        self.api_version = settings.FLW_TEST_API_VERSION
-        self.access_token = None
+        if use_live:
+            self.client_id = settings.FLW_LIVE_CLIENT_ID
+            self.client_secret = settings.FLW_LIVE_CLIENT_SECRET
+            self.base_url = settings.FLW_LIVE_BASE_URL.rstrip("/")
+            self.api_version = settings.FLW_API_VERSION
+        else:
+            self.client_id = settings.FLW_TEST_CLIENT_ID
+            self.client_secret = settings.FLW_TEST_CLIENT_SECRET
+            self.base_url = settings.FLW_TEST_BASE_URL.rstrip("/")
+            self.api_version = settings.FLW_TEST_API_VERSION
+            self.access_token = None
 
         logger.info(
             f"FlutterwaveService initialized for {self.api_version} "

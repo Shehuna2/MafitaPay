@@ -126,7 +126,7 @@ class GenerateDVAAPIView(APIView):
             elif provider == "flutterwave":
                 from .services.flutterwave_service import FlutterwaveService
 
-                fw = FlutterwaveService()
+                fw = FlutterwaveService(use_live=True)
 
                 # Existing VA check...
                 existing_va = VirtualAccount.objects.filter(
