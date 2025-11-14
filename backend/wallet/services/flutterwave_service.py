@@ -1,4 +1,5 @@
-# File: wallet/services/flutterwave_service.py
+# wallet/services/flutterwave_service.py
+
 import logging
 import uuid
 import re
@@ -90,7 +91,7 @@ class FlutterwaveService:
         """
         Ensure a Flutterwave v4 customer exists for this user.
         If a customer_id is stored on user.profile.flutterwave_customer_id, return it.
-        Otherwise, create via POST /v4/customers and persist id back to profile when possible.
+        Otherwise, create via POST /customers and persist id back to profile when possible.
         Returns customer_id or None.
         """
         profile = self._get_profile(user)
@@ -105,7 +106,7 @@ class FlutterwaveService:
             logger.error("Cannot create/get customer: missing access token")
             return None
 
-        endpoint = f"{self.base_url}/customers"
+        endpoint = f"{self.base_url}/customers"  # Docs: /customers (no /v4)
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         first_name = (profile.first_name.strip() if profile and getattr(profile, "first_name", None) else user.email.split("@")[0])[:50]
@@ -113,7 +114,7 @@ class FlutterwaveService:
         phone = getattr(profile, "phone_number", None) or "+2340000000000"
 
         payload = {
-            "first_name": first_name,
+            "first_name": first_name,  # Docs: first_name, last_name, phone_number
             "last_name": last_name,
             "email": user.email,
             "phone_number": phone,
@@ -129,7 +130,6 @@ class FlutterwaveService:
             # Accept 200 or 201
             if resp.status_code not in (200, 201):
                 logger.error("Customer creation HTTP %s: %s", resp.status_code, resp.text)
-                # If customer exists or returned 409/400 with useful info, try to parse id, but bail for now.
                 return None
 
             data = resp.json()
@@ -162,7 +162,7 @@ class FlutterwaveService:
         """
         v4 flow:
           1) ensure customer exists -> customer_id
-          2) POST /v4/virtual-accounts with customer_id, account_type, reference
+          2) POST /virtual-accounts with customer_id, account_type, reference
         Returns dict with keys:
           provider, account_number, bank_name, account_name, reference, type, raw_response, customer_id
         Or None on failure.
@@ -185,7 +185,7 @@ class FlutterwaveService:
             return None
 
         # v4 virtual accounts endpoint
-        endpoint = f"{self.base_url}/virtual-accounts"
+        endpoint = f"{self.base_url}/virtual-accounts"  # Docs: /virtual-accounts (no /v4)
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         # choose account_type: static if bvn_or_nin provided, else dynamic
@@ -263,3 +263,9 @@ class FlutterwaveService:
         except Exception:
             logger.exception("Failed while verifying Flutterwave webhook signature")
             return False
+
+
+# Example usage:
+# fw = FlutterwaveService(use_live=True)
+# va = fw.create_virtual_account(user, bank="WEMA_BANK", bvn_or_nin="22438891463")
+# print(va)
