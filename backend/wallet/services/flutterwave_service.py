@@ -106,7 +106,7 @@ class FlutterwaveService:
             logger.error("Cannot create/get customer: missing access token")
             return None
 
-        endpoint = f"{self.base_url}/customers"  # Docs: /customers (no /v4)
+        endpoint = f"{self.base_url}/customers"  # Docs: /customers
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         first_name = (profile.first_name.strip() if profile and getattr(profile, "first_name", None) else user.email.split("@")[0])[:50]
@@ -127,26 +127,22 @@ class FlutterwaveService:
         try:
             logger.debug("Creating customer payload: %s", payload)
             resp = requests.post(endpoint, json=payload, headers=headers, timeout=30)
-            # Accept 200 or 201
             if resp.status_code not in (200, 201):
                 logger.error("Customer creation HTTP %s: %s", resp.status_code, resp.text)
                 return None
 
             data = resp.json()
-            # v4 typically returns data.id
             cust = data.get("data") or data
             customer_id = cust.get("id") or cust.get("customer_id") or cust.get("customer", {}).get("id")
             if not customer_id:
                 logger.error("Customer creation returned no id: %s", data)
                 return None
 
-            # persist to profile if possible
             try:
                 if profile:
                     setattr(profile, "flutterwave_customer_id", customer_id)
                     profile.save(update_fields=["flutterwave_customer_id"])
             except Exception:
-                # non-fatal if profile can't be saved
                 logger.exception("Failed to persist flutterwave_customer_id to profile")
 
             logger.info("Created Flutterwave customer %s for %s", customer_id, user.email)
@@ -172,23 +168,14 @@ class FlutterwaveService:
             logger.error("Cannot create VA: missing access token")
             return None
 
-        # ensure customer exists (prefer persisted id)
-        customer_id = None
-        try:
-            customer_id = self.create_or_get_customer(user, bvn_or_nin=bvn_or_nin)
-        except Exception:
-            # already logged inside create_or_get_customer
-            customer_id = None
-
+        customer_id = self.create_or_get_customer(user, bvn_or_nin=bvn_or_nin)
         if not customer_id:
             logger.error("No Flutterwave customer_id available; aborting VA creation")
             return None
 
-        # v4 virtual accounts endpoint
-        endpoint = f"{self.base_url}/virtual-accounts"  # Docs: /virtual-accounts (no /v4)
+        endpoint = f"{self.base_url}/virtual-accounts"  # Docs: /virtual-accounts
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-        # choose account_type: static if bvn_or_nin provided, else dynamic
         account_type = "static" if (bvn_or_nin and str(bvn_or_nin).strip()) else "dynamic"
         reference = f"va{uuid.uuid4().hex[:12]}"
         clean_bank = str(bank or "").upper().replace("-", "_")
@@ -197,14 +184,12 @@ class FlutterwaveService:
             "customer_id": customer_id,
             "account_type": account_type,
             "reference": reference,
-            # metadata for your internal use (safe to include)
             "metadata": {
                 "preferred_bank": clean_bank or None,
                 "narration": f"{user.id}-wallet-funding",
             },
         }
 
-        # v4 sometimes supports is_permanent or other flags; include only metadata for safety
         if account_type == "static":
             clean_id = re.sub(r"\D", "", str(bvn_or_nin or ""))
             payload["metadata"]["id_provided"] = clean_id
@@ -219,7 +204,6 @@ class FlutterwaveService:
             data = resp.json()
             va_data = data.get("data") or data
 
-            # normalize common fields (be defensive)
             account_number = va_data.get("account_number") or va_data.get("acct_number") or va_data.get("account_no") or va_data.get("account")
             bank_name = va_data.get("bank_name") or va_data.get("bank") or va_data.get("bank_name")
             account_name = va_data.get("account_name") or va_data.get("recipient_name") or va_data.get("account_name")
