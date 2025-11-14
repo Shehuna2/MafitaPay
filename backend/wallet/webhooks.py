@@ -196,33 +196,63 @@ def flutterwave_webhook(request):
         payload = json.loads(raw.decode("utf-8") or "{}")
         logger.info("Flutterwave webhook payload: %s", payload)
 
-        # v4 events vary; try common patterns
+                # v4 events vary; try common patterns
         event = payload.get("event") or payload.get("event_type") or payload.get("type")
         data = payload.get("data", {}) or payload
 
-        # Example: transfer.completed OR transfer.successful patterns
-        # normalized fields
-        status = data.get("status") or data.get("transaction_status") or ""
-        # handle transfers to virtual accounts that completed successfully
-        if (event and "transfer" in event and status in ("successful", "success")) or (data.get("type") == "transfer.completed" and data.get("status") == "successful"):
-            ref = data.get("reference") or data.get("tx_ref") or data.get("transaction_reference")
-            account_number = data.get("account_number") or data.get("destination_account") or data.get("receiver_account")
+        # === SUPPORT FLUTTERWAVE v4 2025 VIRTUAL ACCOUNT DEPOSITS ===
+        # They now use charge.completed (and sometimes still transfer.completed)
+        if event in ("charge.completed", "transfer.completed", "transfer.successful"):
+            if data.get("status") not in ("successful", "succeeded", "success"):
+                logger.info("Flutterwave %s event ignored — status: %s", event, data.get("status"))
+                return Response({"status": "ignored"}, status=200)
+
             amount = Decimal(str(data.get("amount", "0")))
+            ref = data.get("reference") or data.get("tx_ref") or data.get("transaction_reference") or str(data.get("id", ""))
+
+            # --- Extract account_number (Flutterwave sends it in different places) ---
+            account_number = None
+
+            # 1. Direct field (old style)
+            account_number = data.get("account_number") or data.get("destination_account") or data.get("receiver_account")
+
+            # 2. New 2025 style: inside payment_method.bank_transfer
+            payment_method = data.get("payment_method", {})
+            if payment_method.get("type") == "bank_transfer":
+                bt = payment_method.get("bank_transfer", {})
+                account_number = account_number or bt.get("account_display_name")
+
+            # 3. Fallback: if reference matches our VA's provider_account_id (very reliable)
+            if not account_number and ref:
+                try:
+                    va_fallback = VirtualAccount.objects.filter(
+                        provider_account_id=ref,
+                        provider="flutterwave"
+                    ).first()
+                    if va_fallback:
+                        account_number = va_fallback.account_number
+                        logger.info("Resolved account_number via reference fallback: %s", account_number)
+                except Exception as e:
+                    logger.warning("Fallback lookup failed: %s", e)
 
             if not account_number:
-                logger.warning("No account_number in webhook data; ignoring")
+                logger.warning("Could not determine account_number from webhook payload")
                 return Response({"status": "ignored"}, status=200)
 
-            va = VirtualAccount.objects.filter(account_number=account_number, provider="flutterwave").select_related("user").first()
+            # --- Find the VirtualAccount and credit wallet ---
+            va = VirtualAccount.objects.filter(
+                account_number=account_number,
+                provider="flutterwave"
+            ).select_related("user").first()
+
             if not va:
-                logger.warning("No VA found for account %s", account_number)
+                logger.warning("No Flutterwave VA found for account_number: %s", account_number)
                 return Response({"status": "ignored"}, status=200)
 
-            wallet = Wallet.objects.get(user=va.user)
+            wallet, _ = Wallet.objects.get_or_create(user=va.user)
 
             with transaction.atomic():
-                # idempotency: ensure provider_reference not processed
-                provider_ref = ref or (data.get("id") or "")
+                provider_ref = ref or str(data.get("id", ""))
                 if not Deposit.objects.filter(provider_reference=provider_ref).exists():
                     Deposit.objects.create(
                         user=va.user,
@@ -235,15 +265,13 @@ def flutterwave_webhook(request):
                     )
                     wallet.balance = (wallet.balance or Decimal("0")) + amount
                     wallet.save(update_fields=["balance"])
-                    logger.info("Credited %s to %s via Flutterwave webhook", amount, va.user.email)
+                    logger.info("Credited %s to %s via Flutterwave webhook (event: %s)", 
+                                amount, va.user.email, event)
                 else:
-                    logger.info("Duplicate Flutterwave webhook ignored: %s", provider_ref)
+                    logger.info("Duplicate webhook ignored: %s", provider_ref)
 
             return Response({"status": "success"}, status=200)
 
+        # --- All other events ---
         logger.info("Unhandled Flutterwave event: %s", event)
         return Response({"status": "ignored"}, status=200)
-
-    except Exception as e:
-        logger.exception("Error processing Flutterwave webhook")
-        return Response({"error": "internal error"}, status=500)
