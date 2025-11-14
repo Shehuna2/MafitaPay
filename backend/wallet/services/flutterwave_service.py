@@ -15,7 +15,7 @@ class FlutterwaveService:
     def __init__(self, use_live=False):
         """
         Initialize Flutterwave v4 service.
-        use_live=True  → LIVE mode (FLW_LIVE_* keys)
+        use_live=True  → LIVE mode (FLW_LIVE_* keys, f4bexperience base)
         use_live=False → SANDBOX mode (default)
         """
         if use_live:
@@ -23,13 +23,13 @@ class FlutterwaveService:
             self.client_secret = getattr(settings, "FLW_LIVE_CLIENT_SECRET", None)
             self.encryption_key = getattr(settings, "FLW_LIVE_ENCRYPTION_KEY", None)
             self.hash_secret = getattr(settings, "FLW_HASH_SECRET", None)
-            base_url = getattr(settings, "FLW_LIVE_BASE_URL", "https://api.flutterwave.cloud")  # Fixed v4 live base
+            base_url = getattr(settings, "FLW_LIVE_BASE_URL", "https://f4bexperience.flutterwave.com")  # Docs-confirmed live base
         else:
             self.client_id = getattr(settings, "FLW_TEST_CLIENT_ID", None)
             self.client_secret = getattr(settings, "FLW_TEST_CLIENT_SECRET", None)
             self.encryption_key = getattr(settings, "FLW_TEST_ENCRYPTION_KEY", None)
             self.hash_secret = getattr(settings, "FLW_TEST_HASH_SECRET", None)
-            base_url = getattr(settings, "FLW_TEST_BASE_URL", "https://developersandbox-api.flutterwave.com")
+            base_url = getattr(settings, "FLW_TEST_BASE_URL", "https://developersandbox-api.flutterwave.com")  # Docs-confirmed sandbox base
 
         if not self.client_id or not self.client_secret:
             raise ImproperlyConfigured("Flutterwave credentials missing. Check FLW_* env vars.")
@@ -73,8 +73,8 @@ class FlutterwaveService:
             if not token:
                 return None
 
-            # v4 path: /virtual-accounts (no prefix)
-            url = f"{self.base_url}/virtual-accounts"
+            # v4 path: /v4/virtual-accounts (per docs pattern)
+            url = f"{self.base_url}/v4/virtual-accounts"
             logger.info(f"POST to {url} for {user.email}")
             headers = {
                 "Authorization": f"Bearer {token}",
@@ -94,11 +94,11 @@ class FlutterwaveService:
             phone = getattr(profile, "phone_number", "+2340000000000") or "+2340000000000"
 
             payload = {
-                "email": user.email,
+                "email": user.email,  # Auto-creates customer
                 "firstname": first_name,
                 "lastname": last_name,
                 "phonenumber": phone,
-                "tx_ref": reference,  # v3/v4 compatible
+                "tx_ref": reference,  # Compatible reference
                 "currency": "NGN",
                 "amount": amount,
                 "narration": f"{user.id}-wallet-funding",
@@ -109,13 +109,13 @@ class FlutterwaveService:
                 clean_id = re.sub(r"\D", "", str(bvn_or_nin))
                 if len(clean_id) == 11:
                     payload["bvn"] = clean_id
-                    payload["is_permanent"] = True  # For static
+                    payload["is_permanent"] = True  # For reusable/static
                 else:
                     payload["nin"] = clean_id
                     payload["is_permanent"] = True
 
             logger.info(f"Payload preview: {payload}")
-            resp = requests.post(url, json=payload, headers=headers, timeout=40)
+            resp = requests.post(url, json=payload, headers=headers, timeout=60)  # Increased timeout for live
 
             if resp.status_code not in (200, 201):
                 logger.error(f"VA creation failed: {resp.status_code} {resp.text}")
