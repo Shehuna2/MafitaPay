@@ -429,7 +429,7 @@ export default function Dashboard() {
             {[
               { to: "/buy-airtime", label: "Airtime", icon: <Phone className="w-6 h-6" /> },
               { to: "/buy-data", label: "Data", icon: <Globe className="w-6 h-6" /> },
-              { to: "/assets", label: "Gas", icon: <Fuel className="w-6 h-6" /> },
+              { to: "/assets", label: "Gas fee", icon: <Fuel className="w-6 h-6" /> },
               { to: "/sell-crypto", label: "Sell", icon: <Repeat className="w-6 h-6" /> },
               { to: "/p2p/marketplace", label: "P2P", icon: <Repeat2 className="w-6 h-6" /> },
               { to: "/buy-cable-tv", label: "Cable", icon: <Tv className="w-6 h-6" /> },
