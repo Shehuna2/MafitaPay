@@ -105,7 +105,7 @@ class FlutterwaveService:
             logger.error("Cannot create/get customer: missing access token")
             return None
 
-        endpoint = f"{self.base_url}/v4/customers"
+        endpoint = f"{self.base_url}/customers"
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         first_name = (profile.first_name.strip() if profile and getattr(profile, "first_name", None) else user.email.split("@")[0])[:50]
@@ -185,7 +185,7 @@ class FlutterwaveService:
             return None
 
         # v4 virtual accounts endpoint
-        endpoint = f"{self.base_url}/v4/virtual-accounts"
+        endpoint = f"{self.base_url}/virtual-accounts"
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         # choose account_type: static if bvn_or_nin provided, else dynamic
