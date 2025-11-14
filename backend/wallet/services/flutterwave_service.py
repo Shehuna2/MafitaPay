@@ -18,18 +18,26 @@ reference = re.sub(r'[^a-zA-Z0-9]', '', f"va{ref_hex}")
 class FlutterwaveService:
     def __init__(self, use_live=False):
         if use_live:
-            self.client_id = settings.FLW_CLIENT_ID
-            self.client_secret = settings.FLW_CLIENT_SECRET
-            self.encryption_key = settings.FLW_ENCRYPTION_KEY
-            self.hash_secret = settings.FLW_HASH_SECRET
-            self.base_url = getattr(settings, "FLW_BASE_URL", "https://api.flutterwave.com").rstrip("/")
+            # LIVE MODE
+            self.client_id = getattr(settings, "FLW_CLIENT_ID", None)
+            self.client_secret = getattr(settings, "FLW_CLIENT_SECRET", None)
+            self.hash_secret = getattr(settings, "FLW_HASH_SECRET", None)
+            self.encryption_key = getattr(settings, "FLW_ENCRYPTION_KEY", None)
+            base = getattr(settings, "FLW_BASE_URL", "https://api.flutterwave.com")
         else:
-            # Sandbox fallback
-            self.client_id = settings.FLW_TEST_CLIENT_ID
-            self.client_secret = settings.FLW_TEST_CLIENT_SECRET
-            self.encryption_key = settings.FLW_TEST_ENCRYPTION_KEY
-            self.hash_secret = settings.FLW_TEST_HASH_SECRET
-            self.base_url = getattr(settings, "FLW_TEST_BASE_URL", "https://api.flutterwave.com").rstrip("/")
+            # SANDBOX MODE
+            self.client_id = getattr(settings, "FLW_TEST_CLIENT_ID", None)
+            self.client_secret = getattr(settings, "FLW_TEST_CLIENT_SECRET", None)
+            self.hash_secret = getattr(settings, "FLW_TEST_HASH_SECRET", None)
+            self.encryption_key = getattr(settings, "FLW_TEST_ENCRYPTION_KEY", None)
+            base = getattr(settings, "FLW_TEST_BASE_URL", "https://api.flutterwave.com")
+
+        # Safe handling — never crash
+        if not self.client_id or not self.client_secret:
+            raise ValueError("Flutterwave credentials missing in environment")
+
+        self.base_url = str(base or "https://api.flutterwave.com").strip().rstrip("/")
+        logger.info(f"FlutterwaveService initialized: {'LIVE' if use_live else 'SANDBOX'} mode → {self.base_url}")
 
         self.access_token = None
         self.token_expiry = None
