@@ -8,7 +8,7 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from decimal import Decimal
 
-logger = logging.getLogger(___name__)
+logger = logging.getLogger(__name__)
 
 
 class FlutterwaveService:
