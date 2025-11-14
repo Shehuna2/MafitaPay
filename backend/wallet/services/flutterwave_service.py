@@ -8,13 +8,13 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from decimal import Decimal
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(___name__)
 
 
 class FlutterwaveService:
     def __init__(self, use_live=False):
         """
-        Initialize Flutterwave v4 service (v4 auth + v3 endpoints).
+        Initialize Flutterwave v4 service.
         use_live=True  → LIVE mode (FLW_LIVE_* keys)
         use_live=False → SANDBOX mode (default)
         """
@@ -23,13 +23,13 @@ class FlutterwaveService:
             self.client_secret = getattr(settings, "FLW_LIVE_CLIENT_SECRET", None)
             self.encryption_key = getattr(settings, "FLW_LIVE_ENCRYPTION_KEY", None)
             self.hash_secret = getattr(settings, "FLW_HASH_SECRET", None)
-            base_url = getattr(settings, "FLW_LIVE_BASE_URL", "https://api.flutterwave.com")
+            base_url = getattr(settings, "FLW_LIVE_BASE_URL", "https://api.flutterwave.cloud")  # Fixed v4 live base
         else:
             self.client_id = getattr(settings, "FLW_TEST_CLIENT_ID", None)
             self.client_secret = getattr(settings, "FLW_TEST_CLIENT_SECRET", None)
             self.encryption_key = getattr(settings, "FLW_TEST_ENCRYPTION_KEY", None)
             self.hash_secret = getattr(settings, "FLW_TEST_HASH_SECRET", None)
-            base_url = getattr(settings, "FLW_TEST_BASE_URL", "https://api.flutterwave.com")  # v3 uses same base for test
+            base_url = getattr(settings, "FLW_TEST_BASE_URL", "https://developersandbox-api.flutterwave.com")
 
         if not self.client_id or not self.client_secret:
             raise ImproperlyConfigured("Flutterwave credentials missing. Check FLW_* env vars.")
@@ -67,15 +67,15 @@ class FlutterwaveService:
             return None
 
     def create_virtual_account(self, user, bank="WEMA_BANK", bvn_or_nin=None):
-        """Create static/dynamic VA using v3 path with v4 auth"""
+        """Create static/dynamic VA (auto-customer via email)"""
         try:
             token = self.get_access_token()
             if not token:
                 return None
 
-            # v3 path for VA (works with v4 auth)
-            url = f"{self.base_url}/v3/virtual-account-numbers"
-            logger.info(f"POST to {url} for {user.email}")  # Debug
+            # v4 path: /virtual-accounts (no prefix)
+            url = f"{self.base_url}/virtual-accounts"
+            logger.info(f"POST to {url} for {user.email}")
             headers = {
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
@@ -85,7 +85,7 @@ class FlutterwaveService:
             clean_bank = bank.upper().replace("-", "_")
 
             is_static = bool(bvn_or_nin and len(str(bvn_or_nin).strip()) >= 11)
-            narration = f"{user.id}-wallet-funding"
+            amount = 0 if is_static else 1
 
             # Profile for names/phone
             profile = getattr(user, "profile", None)
@@ -98,10 +98,10 @@ class FlutterwaveService:
                 "firstname": first_name,
                 "lastname": last_name,
                 "phonenumber": phone,
-                "tx_ref": reference,  # v3 uses tx_ref, not reference
+                "tx_ref": reference,  # v3/v4 compatible
                 "currency": "NGN",
-                "amount": 0 if is_static else 1,
-                "narration": narration,
+                "amount": amount,
+                "narration": f"{user.id}-wallet-funding",
                 "preferred_bank": clean_bank,
             }
 
@@ -109,12 +109,12 @@ class FlutterwaveService:
                 clean_id = re.sub(r"\D", "", str(bvn_or_nin))
                 if len(clean_id) == 11:
                     payload["bvn"] = clean_id
-                    payload["is_permanent"] = True  # v3 for static
+                    payload["is_permanent"] = True  # For static
                 else:
                     payload["nin"] = clean_id
                     payload["is_permanent"] = True
 
-            logger.info(f"Payload preview: {payload}")  # Debug
+            logger.info(f"Payload preview: {payload}")
             resp = requests.post(url, json=payload, headers=headers, timeout=40)
 
             if resp.status_code not in (200, 201):
@@ -134,7 +134,7 @@ class FlutterwaveService:
                 "account_number": va_data.get("account_number"),
                 "bank_name": va_data.get("bank_name"),
                 "account_name": va_data.get("account_name"),
-                "reference": va_data.get("order_ref"),  # v3 uses order_ref
+                "reference": va_data.get("tx_ref") or va_data.get("order_ref"),
                 "type": "static" if is_static else "dynamic",
                 "raw_response": data,
                 "customer_id": va_data.get("customer_id"),
