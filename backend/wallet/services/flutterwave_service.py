@@ -176,26 +176,28 @@ class FlutterwaveService:
         reference = f"va{uuid.uuid4().hex[:12]}"
         clean_bank = str(bank or "").upper().replace("-", "_")
 
-        # REQUIRED root fields for v4
         payload = {
             "customer_id": customer_id,
             "account_type": account_type,
             "reference": reference,
-            "currency": "NGN",           # ← REQUIRED
-            "amount": 0 if account_type == "static" else 1,  # ← REQUIRED (0 = unlimited)
-            "is_permanent": True if account_type == "static" else False,  # ← v4 flag for static
+            "currency": "NGN",
+            "amount": 0 if account_type == "static" else 1,
+            "is_permanent": True if account_type == "static" else False,
         }
 
-        # Optional metadata (preferred_bank, narration, BVN)
-        metadata = {
+        # BVN must be at ROOT level for NGN static accounts
+        if account_type == "static":
+            clean_id = re.sub(r"\D", "", str(bvn_or_nin))
+            if len(clean_id) == 11:
+                payload["bvn"] = clean_id
+            else:
+                payload["nin"] = clean_id  # fallback for NIN
+
+        # Optional metadata (narration, preferred_bank)
+        payload["metadata"] = {
             "preferred_bank": clean_bank,
             "narration": f"{user.id}-wallet-funding",
         }
-        if account_type == "static":
-            clean_id = re.sub(r"\D", "", str(bvn_or_nin))
-            metadata["bvn"] = clean_id  # or "nin" if using NIN
-
-        payload["metadata"] = metadata
 
         try:
             logger.debug("Creating v4 VA payload: %s", payload)
@@ -233,7 +235,6 @@ class FlutterwaveService:
         except Exception as e:
             logger.error("Error creating virtual account: %s", e, exc_info=True)
             return None
-
     # ---------------------------
     # Webhook verification
     # ---------------------------
