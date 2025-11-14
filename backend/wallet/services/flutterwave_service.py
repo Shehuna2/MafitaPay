@@ -106,7 +106,7 @@ class FlutterwaveService:
             logger.error("Cannot create/get customer: missing access token")
             return None
 
-        endpoint = f"{self.base_url}/customers"  # Docs: /customers
+        endpoint = f"{self.base_url}/customers"  # Docs: /customers (no /v4)
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         first_name = (profile.first_name.strip() if profile and getattr(profile, "first_name", None) else user.email.split("@")[0])[:50]
@@ -127,22 +127,26 @@ class FlutterwaveService:
         try:
             logger.debug("Creating customer payload: %s", payload)
             resp = requests.post(endpoint, json=payload, headers=headers, timeout=30)
+            # Accept 200 or 201
             if resp.status_code not in (200, 201):
                 logger.error("Customer creation HTTP %s: %s", resp.status_code, resp.text)
                 return None
 
             data = resp.json()
+            # v4 typically returns data.id
             cust = data.get("data") or data
             customer_id = cust.get("id") or cust.get("customer_id") or cust.get("customer", {}).get("id")
             if not customer_id:
                 logger.error("Customer creation returned no id: %s", data)
                 return None
 
+            # persist to profile if possible
             try:
                 if profile:
                     setattr(profile, "flutterwave_customer_id", customer_id)
                     profile.save(update_fields=["flutterwave_customer_id"])
             except Exception:
+                # non-fatal if profile can't be saved
                 logger.exception("Failed to persist flutterwave_customer_id to profile")
 
             logger.info("Created Flutterwave customer %s for %s", customer_id, user.email)
@@ -154,15 +158,7 @@ class FlutterwaveService:
     # ---------------------------
     # Virtual account (v4)
     # ---------------------------
-    def create_virtual_account(self, user, bank="WEMA_BANK", bvn_or_nin=None):
-        """
-        v4 flow:
-          1) ensure customer exists -> customer_id
-          2) POST /virtual-accounts with customer_id, account_type, reference
-        Returns dict with keys:
-          provider, account_number, bank_name, account_name, reference, type, raw_response, customer_id
-        Or None on failure.
-        """
+        def create_virtual_account(self, user, bank="WEMA_BANK", bvn_or_nin=None):
         token = self.get_access_token()
         if not token:
             logger.error("Cannot create VA: missing access token")
@@ -173,59 +169,67 @@ class FlutterwaveService:
             logger.error("No Flutterwave customer_id available; aborting VA creation")
             return None
 
-        endpoint = f"{self.base_url}/virtual-accounts"  # Docs: /virtual-accounts
+        endpoint = f"{self.base_url}/virtual-accounts"
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         account_type = "static" if (bvn_or_nin and str(bvn_or_nin).strip()) else "dynamic"
         reference = f"va{uuid.uuid4().hex[:12]}"
         clean_bank = str(bank or "").upper().replace("-", "_")
 
+        # REQUIRED root fields for v4
         payload = {
             "customer_id": customer_id,
             "account_type": account_type,
             "reference": reference,
-            "metadata": {
-                "preferred_bank": clean_bank or None,
-                "narration": f"{user.id}-wallet-funding",
-            },
+            "currency": "NGN",           # ← REQUIRED
+            "amount": 0 if account_type == "static" else 1,  # ← REQUIRED (0 = unlimited)
+            "is_permanent": True if account_type == "static" else False,  # ← v4 flag for static
         }
 
+        # Optional metadata (preferred_bank, narration, BVN)
+        metadata = {
+            "preferred_bank": clean_bank,
+            "narration": f"{user.id}-wallet-funding",
+        }
         if account_type == "static":
-            clean_id = re.sub(r"\D", "", str(bvn_or_nin or ""))
-            payload["metadata"]["id_provided"] = clean_id
+            clean_id = re.sub(r"\D", "", str(bvn_or_nin))
+            metadata["bvn"] = clean_id  # or "nin" if using NIN
+
+        payload["metadata"] = metadata
 
         try:
             logger.debug("Creating v4 VA payload: %s", payload)
             resp = requests.post(endpoint, json=payload, headers=headers, timeout=60)
+
             if resp.status_code not in (200, 201):
                 logger.error("VA creation HTTP %s: %s", resp.status_code, resp.text)
                 return None
 
             data = resp.json()
-            va_data = data.get("data") or data
-
-            account_number = va_data.get("account_number") or va_data.get("acct_number") or va_data.get("account_no") or va_data.get("account")
-            bank_name = va_data.get("bank_name") or va_data.get("bank") or va_data.get("bank_name")
-            account_name = va_data.get("account_name") or va_data.get("recipient_name") or va_data.get("account_name")
-            provider_ref = va_data.get("reference") or va_data.get("tx_ref") or va_data.get("order_ref") or reference
-            returned_customer_id = va_data.get("customer_id") or va_data.get("customer", {}).get("id") or customer_id
-
-            if not account_number:
-                logger.error("VA created but missing account_number: %s", data)
+            if data.get("status") != "success":
+                logger.error("VA creation failed: %s", data)
                 return None
 
-            logger.info("%s VA created: %s (customer=%s)", account_type.capitalize(), account_number, returned_customer_id)
+            va_data = data.get("data", {})
+
+            account_number = va_data.get("account_number")
+            if not account_number:
+                logger.error("No account_number in response: %s", data)
+                return None
+
+            logger.info("STATIC VA created: %s | Name: %s", account_number, va_data.get("account_name", "Pending"))
 
             return {
                 "provider": "flutterwave",
                 "account_number": account_number,
-                "bank_name": bank_name,
-                "account_name": account_name,
-                "reference": provider_ref,
+                "bank_name": va_data.get("bank_name", "Wema Bank"),
+                "account_name": va_data.get("account_name"),
+                "reference": va_data.get("reference") or reference,
                 "type": account_type,
                 "raw_response": data,
-                "customer_id": returned_customer_id,
+                "customer_id": customer_id,
             }
+
         except Exception as e:
             logger.error("Error creating virtual account: %s", e, exc_info=True)
             return None
