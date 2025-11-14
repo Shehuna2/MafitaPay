@@ -12,7 +12,8 @@ urlpatterns = [
     
     path("9psb/webhook/", psb_webhook, name="9psb-webhook"),
     path("paystack/webhook/", paystack_webhook, name="paystack_webhook"),
-    path("flutterwave/webhook/", flutterwave_webhook, name="flutterwave_webhook"),
+    # path("flutterwave/webhook/", flutterwave_webhook, name="flutterwave_webhook"),
+    path('api/wallet/flutterwave-webhook/', flutterwave_webhook, name='flutterwave-webhook'),
     
 
     path("api/wallet/transactions/", WalletTransactionListView.as_view(), name="wallet-transactions"),
