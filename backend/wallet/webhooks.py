@@ -244,12 +244,23 @@ def flutterwave_webhook(request):
             wallet, _ = Wallet.objects.get_or_create(user=va.user)
 
             with transaction.atomic():
-                # Idempotency check
-                if Deposit.objects.filter(provider_reference=provider_ref).exists():
+                # Idempotency with DB lock
+                if Deposit.objects.select_for_update().filter(provider_reference=provider_ref).exists():
                     logger.info("Duplicate webhook ignored: %s", provider_ref)
                     return Response({"status": "already processed"}, status=200)
 
-                # Create Deposit record
+                # Credit wallet first
+                success = wallet.deposit(
+                    amount=amount,
+                    reference=f"flw_{provider_ref}",
+                    metadata={...}
+                )
+
+                if not success:
+                    logger.error("Wallet deposit failed for ref: %s, user: %s", provider_ref, va.user.email)
+                    return Response({"status": "deposit_failed"}, status=500)
+
+                # Only now create Deposit
                 Deposit.objects.create(
                     user=va.user,
                     virtual_account=va,
@@ -259,20 +270,7 @@ def flutterwave_webhook(request):
                     raw=payload,
                 )
 
-                # CRITICAL: Use wallet.deposit() → creates WalletTransaction + full history
-                success = wallet.deposit(
-                    amount=amount,
-                    reference=f"flw_{provider_ref}",
-                    metadata={
-                        "provider": "flutterwave",
-                        "event": event,
-                        "account_number": account_number,
-                        "sender_name": payment_method.get("bank_transfer", {}).get("originator_name"),
-                        "sender_bank": payment_method.get("bank_transfer", {}).get("originator_bank_name"),
-                        "flutterwave_ref": data.get("id"),
-                    }
-                )
-
+                logger.info("CREDITED ₦%s → %s | Ref: %s", amount, va.user.email, provider_ref)
                 if success:
                     logger.info(
                         "CREDITED ₦%s → %s | VA: %s | Ref: %s | Event: %s",
