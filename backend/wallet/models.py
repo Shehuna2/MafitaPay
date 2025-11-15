@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.mail import send_mail
+from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 import logging
@@ -124,8 +125,13 @@ class Wallet(models.Model):
                 )
                 logger.debug(f"Deposited ₦{amount} for user {self.user.id}: balance={wallet.balance}, reference={reference}")
                 return True
+
         except Exception as e:
-            logger.error(f"Error in deposit for user {self.user.id}: {str(e)}", exc_info=True)
+            logger.error(
+                "DEPOSIT FAILED → user=%s, amount=%s, ref=%s, error=%s",
+                self.user.id, amount, reference, str(e),
+                exc_info=True
+            )
             return False
 
     def withdraw(self, amount, reference="", metadata=None):
@@ -223,6 +229,7 @@ class WalletTransaction(models.Model):
         ("crypto", "Crypto"),
         ("other", "Other"),
     ]
+    
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     wallet = models.ForeignKey("Wallet", on_delete=models.CASCADE)
@@ -234,7 +241,7 @@ class WalletTransaction(models.Model):
     reference = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     request_id = models.CharField(max_length=100, blank=True, null=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
-    metadata = models.JSONField(blank=True, null=True)
+    metadata = models.JSONField(blank=True, null=True, encoder=DjangoJSONEncoder)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

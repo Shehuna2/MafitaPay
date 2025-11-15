@@ -22,10 +22,26 @@ from .services.flutterwave_service import FlutterwaveService
 
 logger = logging.getLogger(__name__)
 
+# --------------------------------------------------------------
+# Helper: Make any object JSON-serializable (convert set → list)
+# --------------------------------------------------------------
+def clean_for_json(obj):
+    """Recursively convert sets, non-serializable objects to JSON-safe types."""
+    if isinstance(obj, set):
+        return list(obj)
+    if isinstance(obj, dict):
+        return {k: clean_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [clean_for_json(i) for i in obj]
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+    # Fallback: convert anything else to string
+    return str(obj)
+
 
 @csrf_exempt
 def paystack_webhook(request):
-    # unchanged except defensive parsing (kept as-is)
+    # unchanged (kept as-is)
     try:
         payload = request.body
         received_sig = request.headers.get("x-paystack-signature", "")
@@ -98,7 +114,6 @@ def paystack_webhook(request):
                 return HttpResponse(status=404)
 
             wallet, _ = Wallet.objects.get_or_create(user=user)
-            # Ideally create a transaction record first; here we simply update
             wallet.balance = (wallet.balance or Decimal("0")) + amount
             wallet.save(update_fields=["balance"])
             logger.info("Credited %s to %s via Paystack", amount, user.email)
@@ -135,7 +150,6 @@ def psb_webhook(request):
 
         wallet, _ = Wallet.objects.get_or_create(user=va.user)
 
-        # Idempotency: if a Deposit with same provider_reference exists, ignore
         with transaction.atomic():
             if not Deposit.objects.filter(provider_reference=transaction_ref).exists():
                 Deposit.objects.create(
@@ -164,8 +178,7 @@ def psb_webhook(request):
 @csrf_exempt
 def flutterwave_webhook(request):
     """
-    Flutterwave v4 Webhook Handler — FULLY 2025-READY + AUDIT TRAIL
-    Credits wallet + creates Deposit + WalletTransaction (visible in history)
+    Flutterwave v4 Webhook Handler — FULLY FIXED + SAFE METADATA
     """
     try:
         raw = request.body or b""
@@ -214,7 +227,6 @@ def flutterwave_webhook(request):
             ref = data.get("reference") or data.get("tx_ref") or data.get("transaction_reference") or str(data.get("id", ""))
             provider_ref = ref
 
-            # Extract account_number (handles all Flutterwave formats)
             account_number = (
                 data.get("account_number")
                 or data.get("destination_account")
@@ -225,7 +237,6 @@ def flutterwave_webhook(request):
                 bt = payment_method.get("bank_transfer", {})
                 account_number = account_number or bt.get("account_display_name")
 
-            # Fallback via reference
             if not account_number and ref:
                 va_fb = VirtualAccount.objects.filter(provider_account_id=ref, provider="flutterwave").first()
                 if va_fb:
@@ -249,18 +260,29 @@ def flutterwave_webhook(request):
                     logger.info("Duplicate webhook ignored: %s", provider_ref)
                     return Response({"status": "already processed"}, status=200)
 
-                # Credit wallet first
+                # === BUILD & CLEAN METADATA ===
+                raw_metadata = {
+                    "provider": "flutterwave",
+                    "event": event,
+                    "account_number": account_number,
+                    "sender_name": payment_method.get("bank_transfer", {}).get("originator_name"),
+                    "sender_bank": payment_method.get("bank_transfer", {}).get("originator_bank_name"),
+                    "flutterwave_ref": data.get("id"),
+                }
+                metadata = clean_for_json(raw_metadata)
+
+                # === CREDIT WALLET FIRST ===
                 success = wallet.deposit(
                     amount=amount,
                     reference=f"flw_{provider_ref}",
-                    metadata={...}
+                    metadata=metadata
                 )
 
                 if not success:
                     logger.error("Wallet deposit failed for ref: %s, user: %s", provider_ref, va.user.email)
                     return Response({"status": "deposit_failed"}, status=500)
 
-                # Only now create Deposit
+                # === NOW CREATE DEPOSIT RECORD ===
                 Deposit.objects.create(
                     user=va.user,
                     virtual_account=va,
@@ -270,14 +292,10 @@ def flutterwave_webhook(request):
                     raw=payload,
                 )
 
-                logger.info("CREDITED ₦%s → %s | Ref: %s", amount, va.user.email, provider_ref)
-                if success:
-                    logger.info(
-                        "CREDITED ₦%s → %s | VA: %s | Ref: %s | Event: %s",
-                        amount, va.user.email, account_number, provider_ref, event
-                    )
-                else:
-                    logger.error("wallet.deposit() failed after Deposit created!")
+                logger.info(
+                    "CREDITED ₦%s → %s | VA: %s | Ref: %s | Event: %s",
+                    amount, va.user.email, account_number, provider_ref, event
+                )
 
             return Response({"status": "success"}, status=200)
 
@@ -287,5 +305,3 @@ def flutterwave_webhook(request):
     except Exception as e:
         logger.exception("FATAL ERROR in Flutterwave webhook")
         return Response({"error": "server error"}, status=500)
-
-
