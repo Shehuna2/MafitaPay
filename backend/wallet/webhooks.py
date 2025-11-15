@@ -188,7 +188,9 @@ def flutterwave_webhook(request):
 
         verified = False
         for sec in secrets:
-            fw = FlutterwaveService(use_live=False if "sandbox" in fw_base := getattr(settings, "FLW_TEST_BASE_URL", "") else True)
+            fw_base = getattr(settings, "FLW_TEST_BASE_URL", "")
+            use_live = False if "sandbox" in fw_base else True
+            fw = FlutterwaveService(use_live=use_live)
             if fw.verify_webhook_signature(raw, signature, secret=sec):
                 verified = True
                 break
