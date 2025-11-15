@@ -10,7 +10,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 # VTpass Config
-VTPASS_SANDBOX_URL = settings.VTPASS_SANDBOX_URL.rstrip("/") + "/"
+# VTPASS_SANDBOX_URL = settings.VTPASS_SANDBOX_URL.rstrip("/") + "/"
 VTPASS_LIVE_URL = settings.VTPASS_LIVE_URL.rstrip("/") + "/"  # Add to settings later
 API_KEY = settings.VTPASS_API_KEY
 SECRET_KEY = settings.VTPASS_SECRET_KEY
@@ -50,7 +50,7 @@ def get_bill_variations(service_id: str) -> list:
     Fetch billers/plans for a service.
     VTpass uses "SUCCESSFUL" for service-variations, "000" for pay.
     """
-    url = f"{VTPASS_SANDBOX_URL}service-variations?serviceID={service_id}"
+    url = f"{VTPASS_LIVE_URL}service-variations?serviceID={service_id}"
     logger.info(f"Fetching variations for serviceID={service_id}")
     
     try:
@@ -115,7 +115,7 @@ def purchase_cable_tv(
         raise ValueError(f"Unsupported TV network: {network}")
 
     request_id = request_id or generate_request_id(f"_tv_{decoder_number[-4:]}")
-    url = VTPASS_SANDBOX_URL + "pay"
+    url = VTPASS_LIVE_URL + "pay"
 
     payload = {
         "request_id": request_id,
@@ -157,7 +157,7 @@ def purchase_electricity(meter_number: str, disco: str, amount: float, phone: st
         raise ValueError(f"Unsupported DISCO: {disco}")
 
     request_id = request_id or generate_request_id(f"_elec_{meter_number[-4:]}")
-    url = VTPASS_SANDBOX_URL + "pay"
+    url = VTPASS_LIVE_URL + "pay"
 
     payload = {
         "request_id": request_id,
@@ -191,7 +191,7 @@ def purchase_education(pin: str, exam_type: str, amount: float, phone: str = Non
         raise ValueError(f"Unsupported exam: {exam_type}")
 
     request_id = request_id or generate_request_id(f"_edu_{pin[-4:]}")
-    url = VTPASS_SANDBOX_URL + "pay"
+    url = VTPASS_LIVE_URL + "pay"
 
     payload = {
         "request_id": request_id,
@@ -279,7 +279,7 @@ def purchase_airtime(phone: str, amount: float, network: str, request_id: str = 
 
     # Generate compliant request_id if not provided
     request_id = request_id or generate_request_id(f"_air_{phone[-4:]}")
-    url = VTPASS_SANDBOX_URL + "pay"
+    url = VTPASS_LIVE_URL + "pay"
 
     payload = {
         "request_id": request_id,
@@ -312,7 +312,7 @@ def purchase_data(phone: str, amount: float, network: str, variation_code: str, 
         raise ValueError(f"Unsupported network: {network}")
 
     request_id = request_id or generate_request_id(f"_data_{phone[-4:]}")
-    url = VTPASS_SANDBOX_URL + "pay"
+    url = VTPASS_LIVE_URL + "pay"
 
     payload = {
         "request_id": request_id,
@@ -346,7 +346,7 @@ def get_data_plans(network: str) -> list:
     if not service_id:
         raise ValueError(f"Unsupported network: {network}")
 
-    url = f"{VTPASS_SANDBOX_URL}service-variations?serviceID={service_id}"
+    url = f"{VTPASS_LIVE_URL}service-variations?serviceID={service_id}"
     data = _make_api_call(url, {}, method="GET")
 
     if data.get("response_description") != "000":
