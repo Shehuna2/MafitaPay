@@ -277,11 +277,11 @@ FLW_LIVE_ENCRYPTION_KEY = os.getenv("FLW_LIVE_ENCRYPTION_KEY")
 FLW_LIVE_HASH_SECRET = os.getenv("FLW_LIVE_HASH_SECRET")
 FLW_LIVE_BASE_URL = os.getenv("FLW_LIVE_BASE_URL", "https://f4bexperience.flutterwave.com")
 
-FLW_TEST_CLIENT_ID = os.getenv("FLW_TEST_CLIENT_ID")
-FLW_TEST_CLIENT_SECRET = os.getenv("FLW_TEST_CLIENT_SECRET")
-FLW_TEST_ENCRYPTION_KEY = os.getenv("FLW_TEST_ENCRYPTION_KEY")
-FLW_TEST_HASH_SECRET = os.getenv("FLW_TEST_HASH_SECRET")
-FLW_TEST_BASE_URL = os.getenv("FLW_TEST_BASE_URL", "https://developersandbox-api.flutterwave.com")
+# FLW_TEST_CLIENT_ID = os.getenv("FLW_TEST_CLIENT_ID")
+# FLW_TEST_CLIENT_SECRET = os.getenv("FLW_TEST_CLIENT_SECRET")
+# FLW_TEST_ENCRYPTION_KEY = os.getenv("FLW_TEST_ENCRYPTION_KEY")
+# FLW_TEST_HASH_SECRET = os.getenv("FLW_TEST_HASH_SECRET")
+# FLW_TEST_BASE_URL = os.getenv("FLW_TEST_BASE_URL", "https://developersandbox-api.flutterwave.com")
 
 
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")

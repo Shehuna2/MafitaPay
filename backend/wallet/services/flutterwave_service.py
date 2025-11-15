@@ -22,11 +22,11 @@ class FlutterwaveService:
     """
 
     def __init__(self):
-        self.client_id = settings.FLW_CLIENT_ID
-        self.client_secret = settings.FLW_CLIENT_SECRET
-        self.encryption_key = settings.FLW_ENCRYPTION_KEY
-        self.hash_secret = settings.FLW_HASH_SECRET
-        self.base_url = settings.FLW_BASE_URL.rstrip("/")
+        self.client_id = settings.FLW_LIVE_CLIENT_ID
+        self.client_secret = settings.FLW_LIVE_CLIENT_SECRET
+        self.encryption_key = settings.FLW_LIVE_ENCRYPTION_KEY
+        self.hash_secret = settings.FLW_LIVE_HASH_SECRET
+        self.base_url = settings.FLW_LIVE_BASE_URL.rstrip("/")
 
         if not self.client_id or not self.client_secret:
             raise Exception("Missing Flutterwave LIVE credentials")
