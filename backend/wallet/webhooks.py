@@ -191,11 +191,18 @@ def flutterwave_webhook(request):
         amount = Decimal(str(data.get("amount", "0")))
         reference = data.get("reference") or data.get("id")
 
-        # Resolve account_number (different FLW formats)
+        # ---- FIXED ACCOUNT NUMBER EXTRACTION ----
+        bt = data.get("payment_method", {}).get("bank_transfer", {})
+
         account_number = (
-            data.get("account_number") or
-            data.get("destination_account") or
-            data.get("receiver_account")
+            data.get("account_number")
+            or data.get("destination_account")
+            or data.get("destination_account_number")
+            or data.get("receiver_account")
+            or data.get("meta", {}).get("account_number")
+            or bt.get("account_number")
+            or bt.get("destination_account")
+            or bt.get("destination_account_number")
         )
 
         # bank_transfer structure
