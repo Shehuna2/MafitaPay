@@ -122,7 +122,7 @@ def purchase_cable_tv(
         "serviceID": service_id,
         "billersCode": decoder_number,
         "amount": amount,  # ← ALWAYS INCLUDED
-        "phone": phone or "",
+        "phone_number": phone or "",
         "subscription_type": subscription_type,
     }
 
@@ -140,7 +140,15 @@ def purchase_cable_tv(
         logger.info(f"Cable TV success | TxID: {vtpass_txid}")
         return {"success": True, "transaction_id": vtpass_txid, "request_id": request_id, "raw": data}
     else:
-        msg = data.get("response_description", "Unknown error")
+        msg = (
+            data.get("response_description") 
+            or data.get("content", {}).get("errors")
+            or data.get("content", {}).get("error")
+            or data.get("errors")
+            or data.get("error")
+            or "Unknown error"
+        )
+
         logger.error(f"Cable TV failed: {msg} | Payload: {payload}")
         raise ValueError(msg)
 
@@ -164,7 +172,7 @@ def purchase_electricity(meter_number: str, disco: str, amount: float, phone: st
         "serviceID": service_id,
         "billersCode": meter_number,  # Meter number
         "amount": amount,
-        "phone": phone or "",
+        "phone_number": phone or "",
     }
 
     logger.info(f"Electricity purchase: ₦{amount} → {meter_number} ({disco}) | req_id={request_id}")
@@ -175,7 +183,14 @@ def purchase_electricity(meter_number: str, disco: str, amount: float, phone: st
         logger.info(f"Electricity success | TxID: {vtpass_txid}")
         return {"success": True, "transaction_id": vtpass_txid, "request_id": request_id, "raw": data}
     else:
-        msg = data.get("response_description", "Unknown error")
+        msg = (
+            data.get("response_description") 
+            or data.get("content", {}).get("errors")
+            or data.get("content", {}).get("error")
+            or data.get("errors")
+            or data.get("error")
+            or "Unknown error"
+        )
         logger.error(f"Electricity failed: {msg}")
         raise ValueError(msg)
 
@@ -198,7 +213,7 @@ def purchase_education(pin: str, exam_type: str, amount: float, phone: str = Non
         "serviceID": service_id,
         "billersCode": pin,  # Exam serial/pin
         "amount": amount,
-        "phone": phone or "",
+        "phone_number": phone or "",
     }
 
     logger.info(f"Education purchase: ₦{amount} ({exam_type}) → {pin} | req_id={request_id}")
@@ -209,7 +224,14 @@ def purchase_education(pin: str, exam_type: str, amount: float, phone: str = Non
         logger.info(f"Education success | TxID: {vtpass_txid}")
         return {"success": True, "transaction_id": vtpass_txid, "request_id": request_id, "raw": data}
     else:
-        msg = data.get("response_description", "Unknown error")
+        msg = (
+            data.get("response_description") 
+            or data.get("content", {}).get("errors")
+            or data.get("content", {}).get("error")
+            or data.get("errors")
+            or data.get("error")
+            or "Unknown error"
+        )
         logger.error(f"Education failed: {msg}")
         raise ValueError(msg)
 
@@ -285,7 +307,7 @@ def purchase_airtime(phone: str, amount: float, network: str, request_id: str = 
         "request_id": request_id,
         "serviceID": service_id,
         "amount": amount,
-        "phone": phone,
+        "phone_number": phone,
     }
 
     logger.info(f"Airtime purchase: ₦{amount} → {phone} ({network}) | req_id={request_id}")
@@ -301,7 +323,15 @@ def purchase_airtime(phone: str, amount: float, network: str, request_id: str = 
             "raw": data
         }
     else:
-        msg = data.get("response_description", "Unknown error")
+        msg = (
+            data.get("response_description") 
+            or data.get("content", {}).get("errors")
+            or data.get("content", {}).get("error")
+            or data.get("errors")
+            or data.get("error")
+            or "Unknown error"
+        )
+
         logger.error(f"Airtime failed: {msg} | req_id={request_id}")
         raise ValueError(msg)
 
@@ -320,7 +350,7 @@ def purchase_data(phone: str, amount: float, network: str, variation_code: str, 
         "billersCode": phone,
         "variation_code": variation_code,
         "amount": amount,
-        "phone": phone,
+        "phone_number": phone,
     }
 
     logger.info(f"Data purchase: ₦{amount} ({variation_code}) → {phone} | req_id={request_id}")
@@ -336,7 +366,16 @@ def purchase_data(phone: str, amount: float, network: str, variation_code: str, 
             "raw": data
         }
     else:
-        msg = data.get("response_description", "Unknown error")
+        logger.error(f"RAW VTpass response: {data}")
+        msg = (
+            data.get("response_description") 
+            or data.get("content", {}).get("errors")
+            or data.get("content", {}).get("error")
+            or data.get("errors")
+            or data.get("error")
+            or "Unknown error"
+        )
+
         logger.error(f"Data failed: {msg} | req_id={request_id}")
         raise ValueError(msg)
 
