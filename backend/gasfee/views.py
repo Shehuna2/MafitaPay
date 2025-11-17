@@ -21,7 +21,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from wallet.models import Wallet, WalletTransaction
 
 from .services import lookup_rate, get_receiving_details
-from .utils import get_crypto_price, get_exchange_rate, send_bsc, send_evm
+from .price_service import get_crypto_prices_in_usd, get_usd_ngn_rate
+# from .utils import get_crypto_price, get_bulk_crypto_prices, get_exchange_rate, send_bsc, send_evm
+from .utils import send_bsc, send_evm
 from .near_utils import send_near
 from .sol_utils import send_solana
 from .ton_utils import send_ton
@@ -34,16 +36,38 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-# 🔹 Chain senders
+# Helper: convert crypto amount (in token native units) -> wei-like integer for EVM native ETH
+def amount_to_wei(amount) -> int:
+    try:
+        return int(Web3.to_wei(Decimal(amount), "ether"))
+    except Exception:
+        # fallback naive conversion (shouldn't happen)
+        return int(float(amount) * (10 ** 18))
+
+# Small wrappers for common chains
+def send_eth(recipient, amount, order_id=None):
+    # amount is token amount in ETH; convert to wei
+    return send_evm("ETH", recipient, amount_to_wei(amount), order_id)
+
+def send_arbitrum(recipient, amount, order_id=None):
+    return send_evm("ARB", recipient, amount_to_wei(amount), order_id)
+
+def send_base(recipient, amount, order_id=None):
+    return send_evm("BASE", recipient, amount_to_wei(amount), order_id)
+
+def send_optimism(recipient, amount, order_id=None):
+    return send_evm("OP", recipient, amount_to_wei(amount), order_id)
+
 SENDERS = {
-    "BNB": send_bsc,
+    "BNB": send_bsc,           # expects (to_address, Decimal amount, order_id)
     "SOL": send_solana,
     "TON": send_ton,
     "NEAR": send_near,
-    "ETH": send_evm,
-    "BASE-ETH": send_evm,
-    "BASE-ARB": send_evm,
-    "BASE-OPT": send_evm,
+    "ETH": send_eth,
+    "ARB": send_arbitrum,
+    "BASE-ETH": send_base,
+    "BASE-ARB": send_arbitrum,
+    "BASE-OPT": send_optimism,
 }
 
 class AssetListAPI(APIView):
@@ -51,112 +75,110 @@ class AssetListAPI(APIView):
 
     def get(self, request):
         cryptos = Crypto.objects.all()
-        coingecko_ids = [c.coingecko_id for c in cryptos]
+        ids = [c.coingecko_id for c in cryptos]
 
-        # ✅ Exchange rate
-        exchange_rate = cache.get("exchange_rate_usd_ngn")
-        if exchange_rate is None:
-            exchange_rate = get_exchange_rate()
-            cache.set("exchange_rate_usd_ngn", exchange_rate, 300)
+        # Unified bulk price fetch (rate-limited + cached)
+        prices = get_crypto_prices_in_usd(ids)
 
-        # ✅ Crypto prices
-        cache_key = f"crypto_prices_{'_'.join(sorted(coingecko_ids))}"
-        prices = cache.get(cache_key)
-        if prices is None:
-            try:
-                resp = requests.get(
-                    "https://api.coingecko.com/api/v3/simple/price",
-                    params={"ids": ",".join(coingecko_ids), "vs_currencies": "usd"},
-                    timeout=5,
-                )
-                resp.raise_for_status()
-                prices = resp.json()
-                cache.set(cache_key, prices, 300)
-            except Exception as e:
-                logger.error(f"Failed to fetch crypto prices: {e}")
-                prices = {}
+        # Unified FX rate fetch (with margin awareness)
+        usd_ngn_rate = get_usd_ngn_rate("buy")
 
-        crypto_list = []
+        output = []
         for c in cryptos:
-            price = prices.get(c.coingecko_id, {}).get("usd", 0.0)
-            crypto_list.append({
+            usd_price = prices.get(c.coingecko_id, Decimal("0"))
+
+            output.append({
                 "id": c.id,
                 "name": c.name,
                 "symbol": c.symbol,
-                "price": float(price),
+                "price": float(usd_price),
+                "price_ngn": float((usd_price * usd_ngn_rate).quantize(Decimal("0.01"))),
                 "logo_url": request.build_absolute_uri(c.logo.url) if c.logo else None,
             })
 
         return Response({
-            "exchange_rate": float(exchange_rate),
-            "cryptos": crypto_list
+            "exchange_rate": float(usd_ngn_rate),
+            "cryptos": output
         })
 
+
 class BuyCryptoAPI(APIView):
-    """
-    GET  → Fetch live buy rate (includes profit margin)
-    POST → Execute crypto purchase
-    """
     permission_classes = [permissions.IsAuthenticated]
 
-    # ✅ 1. GET: Rate preview
+    #
+    # ======================
+    #     GET RATE
+    # ======================
+    #
     def get(self, request, crypto_id):
         try:
             crypto = get_object_or_404(Crypto, id=crypto_id)
             coingecko_id = crypto.coingecko_id
 
-            # live crypto price (USD)
-            crypto_price_usd = get_crypto_price(coingecko_id, network=crypto.network)
+            prices = get_crypto_prices_in_usd([coingecko_id])
+            crypto_price_usd = prices.get(coingecko_id, Decimal("0"))
 
-            # USD→NGN rate + BUY margin
-            usd_ngn_rate = get_exchange_rate(margin_type="buy")
-
-            price_ngn = crypto_price_usd * usd_ngn_rate
+            usd_ngn_rate = get_usd_ngn_rate("buy")
+            price_ngn = (crypto_price_usd * usd_ngn_rate).quantize(Decimal("0.01"))
 
             return Response({
                 "crypto": crypto.symbol,
                 "network": crypto.network,
-                "price_usd": round(crypto_price_usd, 2),
-                "usd_ngn_rate": round(usd_ngn_rate, 2),
-                "price_ngn": round(price_ngn, 2),
-            }, status=status.HTTP_200_OK)
+                "price_usd": float(crypto_price_usd),
+                "usd_ngn_rate": float(usd_ngn_rate),
+                "price_ngn": float(price_ngn),
+            })
 
         except Exception as e:
             logger.error(f"Error fetching buy rate for {crypto_id}: {str(e)}")
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=500)
 
-    # ✅ 2. POST: Execute purchase
+    #
+    # ======================
+    #     PROCESS ORDER
+    # ======================
+    #
     def post(self, request, crypto_id):
         crypto = get_object_or_404(Crypto, id=crypto_id)
 
+        # Validate amount
         try:
             amount = Decimal(request.data.get("amount", "0"))
             if amount <= 0:
                 return Response({"success": False, "error": "Invalid amount"}, status=400)
-        except Exception:
+        except:
             return Response({"success": False, "error": "Invalid amount format"}, status=400)
 
         currency = request.data.get("currency", "NGN").upper()
         wallet_address = request.data.get("wallet_address", "").strip()
 
-        # ✅ Use unified margin-based rate
-        exchange_rate = cache.get("exchange_rate_usd_ngn") or get_exchange_rate(margin_type="buy")
-        crypto_price = get_crypto_price(crypto.coingecko_id, crypto.network)
+        # Compute rates
+        crypto_price = get_crypto_prices_in_usd([crypto.coingecko_id])[crypto.coingecko_id]
+        exchange_rate = get_usd_ngn_rate("buy")
 
+        # Convert
         if currency == "NGN":
             total_ngn = amount
-            crypto_received = amount / exchange_rate / crypto_price
+            crypto_amount = (amount / exchange_rate) / crypto_price
+
         elif currency == "USDT":
             total_ngn = amount * exchange_rate
-            crypto_received = amount / crypto_price
+            crypto_amount = amount / crypto_price
+
         elif currency == crypto.symbol.upper():
-            crypto_received = amount
+            crypto_amount = amount
             total_ngn = amount * crypto_price * exchange_rate
+
         else:
             return Response({"success": False, "error": "Unsupported currency"}, status=400)
 
         req_id = str(uuid.uuid4())
 
+        #
+        # =======================================
+        #  ATOMIC USER DEBIT + ORDER CREATION
+        # =======================================
+        #
         try:
             with transaction.atomic():
                 wallet = Wallet.objects.select_for_update().get(user=request.user)
@@ -164,19 +186,19 @@ class BuyCryptoAPI(APIView):
                 if wallet.balance < total_ngn:
                     return Response(
                         {"success": False, "error": "Insufficient balance"},
-                        status=status.HTTP_400_BAD_REQUEST,
+                        status=400,
                     )
 
                 balance_before = wallet.balance
                 wallet.balance -= total_ngn
-                wallet.save()
+                wallet.save(update_fields=["balance"])
 
                 order = CryptoPurchase.objects.create(
                     user=request.user,
                     crypto=crypto,
                     input_amount=amount,
                     input_currency=currency,
-                    crypto_amount=crypto_received,
+                    crypto_amount=crypto_amount,
                     total_price=total_ngn,
                     wallet_address=wallet_address,
                     request_id=req_id,
@@ -188,27 +210,35 @@ class BuyCryptoAPI(APIView):
                     wallet=wallet,
                     tx_type="debit",
                     category="crypto",
-                    amount=Decimal(total_ngn),
+                    amount=total_ngn,
                     balance_before=balance_before,
                     balance_after=wallet.balance,
                     request_id=req_id,
                     status="pending",
                 )
 
-            sender = SENDERS.get(crypto.symbol.upper())
-            if not sender:
-                order.status = "failed"
-                order.save()
-                return Response({"success": False, "error": "Unsupported token"}, status=400)
+        except Exception as e:
+            logger.error(f"Atomic block failed: {e}")
+            return Response({"error": "Could not process transaction"}, status=500)
 
-            result = (
-                sender(wallet_address, float(crypto_received))
-                if crypto.symbol.upper() == "NEAR"
-                else sender(wallet_address, float(crypto_received), order.id)
-            )
+        #
+        # =======================================
+        #       CHAIN SEND (OUTSIDE ATOMIC)
+        # =======================================
+        #
+        sender = SENDERS.get(crypto.symbol.upper())
+        if not sender:
+            refund_user(order)
+            return Response({"success": False, "error": "Unsupported token"}, status=400)
 
-            tx_hash = result if isinstance(result, str) else result[0]
+        try:
+            # NEAR special case
+            if crypto.symbol.upper() == "NEAR":
+                tx_hash = sender(wallet_address, float(crypto_amount))
+            else:
+                tx_hash = sender(wallet_address, float(crypto_amount), order.id)
 
+            # Mark success
             order.tx_hash = tx_hash
             order.status = "completed"
             order.save(update_fields=["tx_hash", "status"])
@@ -220,38 +250,45 @@ class BuyCryptoAPI(APIView):
             return Response({
                 "success": True,
                 "crypto": crypto.symbol,
-                "crypto_amount": str(crypto_received),
+                "crypto_amount": str(crypto_amount),
                 "total_ngn": str(total_ngn),
                 "wallet_address": wallet_address,
                 "tx_hash": tx_hash,
-            }, status=200)
+            })
 
         except Exception as e:
-            logger.error(f"Buy transaction error: {str(e)}")
-            msg = "Transaction failed. Please try again later."
+            logger.error(f"Blockchain send failed: {e}")
+
+            # refund ALWAYS on failures
+            refund_user(order)
+
+            msg = "Transaction failed. Please try again."
             if "InsufficientFunds" in str(e):
-                msg = "Insufficient funds. Please top up your wallet."
+                msg = "Insufficient funds in sender wallet."
             elif "InvalidAddress" in str(e):
-                msg = "The wallet address appears invalid."
+                msg = "Wallet address is invalid."
             elif "network" in str(e).lower():
-                msg = "Network issue — please retry in a few seconds."
-            return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
+                msg = "Network issue — try again soon."
+
+            return Response({"error": msg}, status=400)
+
 
 def refund_user(purchase):
-    """Refunds a user if an order fails, and updates WalletTransaction."""
-    if purchase.status == "failed":
-        return False
+    """Refund NGN balance when blockchain send failed."""
+    if purchase.status == "completed":
+        return False   # cannot refund successful orders
 
     try:
-        wallet = Wallet.objects.get(user=purchase.user)
+        wallet = Wallet.objects.select_for_update().get(user=purchase.user)
         balance_before = wallet.balance
+
         wallet.balance += purchase.total_price
         wallet.save(update_fields=["balance"])
 
         purchase.status = "failed"
         purchase.save(update_fields=["status"])
 
-        # 🔹 Update linked WalletTransaction
+        # Update linked wallet transaction
         tx = WalletTransaction.objects.filter(request_id=purchase.request_id).first()
         if tx:
             tx.status = "failed"
@@ -259,7 +296,7 @@ def refund_user(purchase):
             tx.save(update_fields=["status", "balance_after"])
 
         return True
-    except Wallet.DoesNotExist:
+    except:
         return False
 
 

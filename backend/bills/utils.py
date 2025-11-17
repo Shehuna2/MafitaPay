@@ -309,9 +309,9 @@ def purchase_airtime(phone: str, amount: float, network: str, request_id: str = 
     payload = {
         "request_id": request_id,
         "serviceID": service_id,
-        "billersCode": phone,      # CRITICAL FIX
+        "billersCode": phone,
         "amount": amount,
-        "phone": phone,            # optional
+        "phone": phone,
     }
 
     logger.info(f"Airtime purchase: ₦{amount} → {phone} ({network}) | req_id={request_id}")
@@ -351,7 +351,7 @@ def purchase_data(phone: str, amount: float, network: str, variation_code: str, 
         "serviceID": service_id,
         "billersCode": phone,
         "variation_code": variation_code,
-        "amount": amount,        # ← Now integer
+        "amount": amount,
         "phone": phone,
     }
 
@@ -380,7 +380,6 @@ def purchase_data(phone: str, amount: float, network: str, variation_code: str, 
 
         logger.error(f"Data failed: {msg} | req_id={request_id}")
         raise ValueError(msg)
-
 
 
 def get_data_plans(network: str) -> list:

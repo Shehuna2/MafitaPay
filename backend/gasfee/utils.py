@@ -1,27 +1,28 @@
-import os
-import json 
-import time
-import base58
-import base64
-import requests
+# File: backend/gasfee/utils.py
+from decimal import Decimal
 import logging
 import traceback
-from decimal import Decimal
+import time
+import uuid
+import os
+from typing import Dict, List, Optional
+from decimal import Decimal, InvalidOperation
+
+import requests
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
+from .price_service import get_crypto_prices_in_usd, get_usd_ngn_rate
 from django.core.cache import cache
 from django.conf import settings
 from web3 import Web3
-from dotenv import load_dotenv
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-import requests.exceptions
-from requests.exceptions import HTTPError
 
-
-
-# Load environment variables
-load_dotenv()
-
-# Set up logging
+# minimal essential logging
 logger = logging.getLogger(__name__)
+
 
 # Validate essential environment variables
 def get_env_var(var_name, required=True):
@@ -30,197 +31,128 @@ def get_env_var(var_name, required=True):
         raise ValueError(f"Missing required environment variable: {var_name}")
     return value
 
-# BSC setup (unchanged)
-BSC_RPC_URL = get_env_var("BSC_RPC_URL")
-w3 = Web3(Web3.HTTPProvider(BSC_RPC_URL))
+# constants
+COINGECKO_SIMPLE_PRICE = "https://api.coingecko.com/api/v3/simple/price"
+BINANCE_TICKER_PRICE = "https://api.binance.com/api/v3/ticker/price"
+DEFAULT_USD_NGN_FALLBACK = Decimal("1500")  # used if nothing else works
+COINGECKO_CACHE_SECONDS = 300  # 5 minutes
 
+# Web3 / BSC setup (unchanged logic; keep environment config as before)
+BSC_RPC_URL = os.getenv("BSC_RPC_URL")
+if not BSC_RPC_URL:
+    raise ValueError("Missing BSC_RPC_URL")
+w3 = Web3(Web3.HTTPProvider(BSC_RPC_URL))
 if not w3.is_connected():
     raise ConnectionError(f"Failed to connect to BSC RPC: {BSC_RPC_URL}")
 
-BSC_SENDER_PRIVATE_KEY = get_env_var("BSC_SENDER_PRIVATE_KEY")
+BSC_SENDER_PRIVATE_KEY = os.getenv("BSC_SENDER_PRIVATE_KEY")
 BSC_SENDER_ADDRESS = w3.eth.account.from_key(BSC_SENDER_PRIVATE_KEY).address
 
 
-# EVM setup (unchanged)
-ARBITRUM_RPC = os.getenv("ARBITRUM_RPC_URL", "https://arb1.arbitrum.io/rpc")
-BASE_RPC = os.getenv("BASE_RPC_URL", "https://mainnet.base.org")
-OPTIMISM_RPC = os.getenv("OPTIMISM_RPC_URL", "https://mainnet.optimism.io")
-L2_CHAINS = {
-    "ARB": {"rpc": ARBITRUM_RPC, "symbol": "ETH"},
-    "BASE": {"rpc": BASE_RPC, "symbol": "ETH"},
-    "OP": {"rpc": OPTIMISM_RPC, "symbol": "ETH"}
-}
+# HTTP helpers
 
-def send_evm(chain, recipient, amount_wei, order_id=None):
+class HTTP429(Exception):
+    """Raised when a 429 is encountered and we want to handle specially."""
+    pass
+
+
+def _normalize_ids(ids: List[str]) -> List[str]:
+    # lower-case & dedupe preserving order
+    seen = set()
+    out = []
+    for i in ids:
+        key = (i or "").strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            out.append(key)
+    return out
+
+# EVM/BSC senders kept largely as-is, only minor safe checks added.
+
+def send_evm(chain: str, recipient: str, amount_wei: int, order_id: Optional[int] = None) -> str:
+    L2_CHAINS = {
+        "ARB": {"rpc": os.getenv("ARBITRUM_RPC_URL", "https://arb1.arbitrum.io/rpc"), "symbol": "ETH"},
+        "BASE": {"rpc": os.getenv("BASE_RPC_URL", "https://mainnet.base.org"), "symbol": "ETH"},
+        "OP": {"rpc": os.getenv("OPTIMISM_RPC_URL", "https://mainnet.optimism.io"), "symbol": "ETH"}
+    }
     if chain not in L2_CHAINS:
         raise ValueError(f"Unsupported chain: {chain}")
-    w3 = Web3(Web3.HTTPProvider(L2_CHAINS[chain]["rpc"]))
+    w3_local = Web3(Web3.HTTPProvider(L2_CHAINS[chain]["rpc"]))
     sender_private_key = os.getenv(f"{chain}_PRIVATE_KEY")
     sender_address = os.getenv(f"{chain}_SENDER_ADDRESS")
-    sender_address = Web3.to_checksum_address(sender_address)
-    recipient = Web3.to_checksum_address(recipient)
     if not sender_private_key or not sender_address:
         raise ValueError("Sender wallet not configured for " + chain)
-    sender_balance = w3.eth.get_balance(sender_address)
-    nonce = w3.eth.get_transaction_count(sender_address)
-    gas_price = w3.eth.gas_price
+    sender_address = Web3.to_checksum_address(sender_address)
+    recipient = Web3.to_checksum_address(recipient)
+    sender_balance = w3_local.eth.get_balance(sender_address)
+    nonce = w3_local.eth.get_transaction_count(sender_address)
+    gas_price = w3_local.eth.gas_price
     tx_estimate = {
         "from": sender_address,
         "to": recipient,
         "value": amount_wei,
         "gasPrice": gas_price,
         "nonce": nonce,
-        "chainId": w3.eth.chain_id
+        "chainId": w3_local.eth.chain_id
     }
     try:
-        gas_limit = w3.eth.estimate_gas(tx_estimate)
+        gas_limit = w3_local.eth.estimate_gas(tx_estimate)
     except Exception as e:
         raise ValueError(f"Gas estimation failed: {str(e)}")
     total_cost = amount_wei + (gas_limit * gas_price)
     if sender_balance < total_cost:
-        raise ValueError(f"Insufficient balance on {chain}. Required: {w3.from_wei(total_cost, 'ether')} ETH, Available: {w3.from_wei(sender_balance, 'ether')} ETH")
+        raise ValueError(f"Insufficient balance on {chain}. Required: {w3_local.from_wei(total_cost, 'ether')} ETH, Available: {w3_local.from_wei(sender_balance, 'ether')} ETH")
     tx = {
         "to": recipient,
         "value": amount_wei,
         "gas": gas_limit,
         "gasPrice": gas_price,
         "nonce": nonce,
-        "chainId": w3.eth.chain_id
+        "chainId": w3_local.eth.chain_id
     }
-    signed_tx = w3.eth.account.sign_transaction(tx, sender_private_key)
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    return w3.to_hex(tx_hash)
+    signed_tx = w3_local.eth.account.sign_transaction(tx, sender_private_key)
+    tx_hash = w3_local.eth.send_raw_transaction(signed_tx.raw_transaction)
+    return w3_local.to_hex(tx_hash)
 
 
-def send_bsc(to_address, amount, order_id=None):
+def send_bsc(to_address: str, amount: Decimal, order_id: Optional[int] = None) -> str:
+    """
+    Send BNB (native on BSC) from configured BSC_SENDER_{...} to `to_address`.
+    amount: Decimal in BNB (e.g. Decimal("0.001"))
+    Returns tx hash hex string.
+    """
+    # validation
     if not Web3.is_address(to_address):
         raise ValueError(f"Invalid BSC wallet address: {to_address}")
+    to_address = Web3.to_checksum_address(to_address)
+
     try:
-        to_address = Web3.to_checksum_address(to_address)
-        value = w3.to_wei(amount, 'ether')
-        gas_price = w3.eth.gas_price
-        gas_limit = 21000
-        tx_cost = gas_limit * gas_price
-        sender_balance = w3.eth.get_balance(BSC_SENDER_ADDRESS)
-        if sender_balance < (value + tx_cost):
-            raise ValueError(f"Insufficient BNB balance.")
-        nonce = w3.eth.get_transaction_count(BSC_SENDER_ADDRESS)
-        tx = {
-            'nonce': nonce,
-            'to': to_address,
-            'value': value,
-            'gas': gas_limit,
-            'gasPrice': gas_price,
-            'chainId': 56
-        }
-        signed_tx = w3.eth.account.sign_transaction(tx, BSC_SENDER_PRIVATE_KEY)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-        return tx_hash.hex()
-    except Exception as e:
-        logger.error(f"Failed to send BSC transaction: {str(e)}\n{traceback.format_exc()}")
-        raise
+        value = w3.to_wei(Decimal(amount), "ether")
+    except (InvalidOperation, TypeError) as e:
+        raise ValueError(f"Invalid amount for BSC send: {amount}") from e
 
-def get_crypto_price(coingecko_id, network="Ethereum"):
-    # key for fresh price (expires in 5 minutes)
-    fresh_key = f"crypto_price_{coingecko_id}_{network.lower()}"
-    # key for last known price (never expires)
-    last_known_key = f"crypto_price_last_known_{coingecko_id}_{network.lower()}"
+    gas_price = w3.eth.gas_price
+    gas_limit = 21000
+    tx_cost = gas_limit * gas_price
 
-    # 1) Try the fresh cache
-    crypto_price = cache.get(fresh_key)
-    if crypto_price is not None:
-        logger.info(f"Using fresh cached price for {coingecko_id} on {network}: {crypto_price}")
-        return crypto_price
+    sender_balance = w3.eth.get_balance(BSC_SENDER_ADDRESS)
+    if sender_balance < (value + tx_cost):
+        raise ValueError("Insufficient BNB balance.")
 
-    # 2) Fresh cache miss → attempt API fetch
-    url = (
-        f"https://api.coingecko.com/api/v3/simple/price"
-        f"?ids={coingecko_id}&vs_currencies=usd"
-    )
-    logger.info(f"Fetching crypto price for {network} from: {url}")
-    try:
-        resp = requests.get(url, timeout=5)
-        resp.raise_for_status()
-        data = resp.json()
-        usd_price = data[coingecko_id]["usd"]
-        crypto_price = Decimal(str(usd_price))
+    nonce = w3.eth.get_transaction_count(BSC_SENDER_ADDRESS)
+    tx = {
+        "nonce": nonce,
+        "to": to_address,
+        "value": int(value),
+        "gas": gas_limit,
+        "gasPrice": gas_price,
+        "chainId": 56,
+    }
 
-        # update both caches
-        cache.set(fresh_key, crypto_price, timeout=300)       # 5 min
-        cache.set(last_known_key, crypto_price, timeout=None) # never expire
+    signed_tx = w3.eth.account.sign_transaction(tx, BSC_SENDER_PRIVATE_KEY)
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+    return tx_hash.hex()
 
-        logger.info(f"Cached fresh price for {coingecko_id}: {crypto_price}")
-        return crypto_price
 
-    except requests.RequestException as e:
-        logger.error(
-            f"API request failed for {coingecko_id} on {network}: {e}\n"
-            + traceback.format_exc()
-        )
-    except (KeyError, ValueError, TypeError) as e:
-        logger.error(
-            f"Data parsing error for {coingecko_id} on {network}: {e}\n"
-            + traceback.format_exc()
-        )
 
-    # 3) On *any* failure, try the fresh cache one more time (maybe race)…
-    crypto_price = cache.get(fresh_key)
-    if crypto_price is not None:
-        logger.info(f"Using just‐set fresh cache after error for {coingecko_id}: {crypto_price}")
-        return crypto_price
 
-    # 4) …then try the “last known” cache
-    crypto_price = cache.get(last_known_key)
-    if crypto_price is not None:
-        logger.info(f"Using last‐known cached price for {coingecko_id}: {crypto_price}")
-        return crypto_price
-
-    # 5) Finally, give up and use hard‑coded default
-    logger.warning(
-        f"No cached price available for {coingecko_id}; falling back to 500"
-    )
-    return Decimal("500")
-
-def get_exchange_rate(margin_type: str = "buy"):
-    """
-    Fetches the live USD→NGN rate from Coingecko (cached 5 min) and applies platform margin.
-    margin_type: "buy" or "sell" — to apply different profit margins.
-    """
-    fresh_key = "exchange_rate_usd_ngn"
-    last_known_key = "exchange_rate_last_known_usd_ngn"
-
-    # ✅ Step 1: Try cache first
-    rate = cache.get(fresh_key)
-    if rate is not None:
-        logger.info(f"Using fresh cached USD→NGN rate: {rate}")
-    else:
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=ngn"
-        logger.info(f"Fetching USD→NGN rate from: {url}")
-        try:
-            resp = requests.get(url, timeout=5)
-            resp.raise_for_status()
-            data = resp.json()
-            ngn_price = data["tether"]["ngn"]
-            rate = Decimal(str(ngn_price))
-
-            cache.set(fresh_key, rate, timeout=300)        # 5 min
-            cache.set(last_known_key, rate, timeout=None)  # backup
-
-        except (requests.RequestException, KeyError, ValueError) as e:
-            logger.error(f"Failed to fetch USD→NGN rate: {e}\n{traceback.format_exc()}")
-            rate = cache.get(fresh_key) or cache.get(last_known_key) or Decimal("1500")
-            logger.warning(f"Using fallback USD→NGN rate: {rate}")
-
-    # ✅ Step 2: Apply profit margin based on type
-    try:
-        from .models import ExchangeRateMargin
-        margin = ExchangeRateMargin.objects.get(
-            currency_pair="USDT/NGN",
-            margin_type=margin_type.lower(),  # e.g. 'buy' or 'sell'
-        ).profit_margin
-    except ExchangeRateMargin.DoesNotExist:
-        margin = Decimal("0")
-
-    final_rate = rate + margin
-    logger.info(f"USD→NGN rate ({margin_type.upper()}): Base ₦{rate} + Margin ₦{margin} = ₦{final_rate}")
-    return final_rate
