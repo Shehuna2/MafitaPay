@@ -299,22 +299,19 @@ def purchase_airtime(phone: str, amount: float, network: str, request_id: str = 
     if not service_id:
         raise ValueError(f"Unsupported network: {network}")
 
-    try:
-        amount = int(float(amount))   # Convert 50.0 → 50
-        if amount < 50:
-            raise ValueError("Minimum airtime is ₦50")
-    except (ValueError, TypeError):
-        raise ValueError("Invalid amount")
+    amount = int(float(amount))
+    if amount < 50:
+        raise ValueError("Minimum airtime is ₦50")
 
-    # Generate compliant request_id if not provided
     request_id = request_id or generate_request_id(f"_air_{phone[-4:]}")
     url = VTPASS_LIVE_URL + "pay"
 
     payload = {
         "request_id": request_id,
         "serviceID": service_id,
+        "billersCode": phone,      # CRITICAL FIX
         "amount": amount,
-        "phone_number": phone,
+        "phone": phone,            # optional
     }
 
     logger.info(f"Airtime purchase: ₦{amount} → {phone} ({network}) | req_id={request_id}")
@@ -322,23 +319,18 @@ def purchase_airtime(phone: str, amount: float, network: str, request_id: str = 
 
     if data.get("code") == "000":
         vtpass_txid = _extract_txid(data)
-        logger.info(f"Airtime success | VTpass TxID: {vtpass_txid} | Your req_id: {request_id}")
         return {
             "success": True,
-            "transaction_id": vtpass_txid,        # VTpass internal ID
-            "request_id": request_id,             # ← YOUR ID (for VTpass approval!)
+            "transaction_id": vtpass_txid,
+            "request_id": request_id,
             "raw": data
         }
     else:
         msg = (
-            data.get("response_description") 
+            data.get("response_description")
             or data.get("content", {}).get("errors")
-            or data.get("content", {}).get("error")
-            or data.get("errors")
-            or data.get("error")
             or "Unknown error"
         )
-
         logger.error(f"Airtime failed: {msg} | req_id={request_id}")
         raise ValueError(msg)
 
@@ -348,6 +340,9 @@ def purchase_data(phone: str, amount: float, network: str, variation_code: str, 
     if not service_id:
         raise ValueError(f"Unsupported network: {network}")
 
+    # ←←← ADD THIS LINE ←←←
+    amount = int(float(amount))
+
     request_id = request_id or generate_request_id(f"_data_{phone[-4:]}")
     url = VTPASS_LIVE_URL + "pay"
 
@@ -356,8 +351,8 @@ def purchase_data(phone: str, amount: float, network: str, variation_code: str, 
         "serviceID": service_id,
         "billersCode": phone,
         "variation_code": variation_code,
-        "amount": amount,
-        "phone_number": phone,
+        "amount": amount,        # ← Now integer
+        "phone": phone,
     }
 
     logger.info(f"Data purchase: ₦{amount} ({variation_code}) → {phone} | req_id={request_id}")
