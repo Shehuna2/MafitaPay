@@ -424,15 +424,17 @@ class DataPlansView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        network = request.query_params.get("network", "").lower()
-        if network not in ["mtn", "glo", "airtel", "9mobile"]:
-            return Response({"message": "Invalid network"}, status=400)
+        network = request.query_params.get("network")
+        if not network:
+            return Response({"message": "network is required"}, status=400)
 
         try:
             plans = get_data_plans(network)
-            return Response({"success": True, "plans": plans})
-        except ValueError as e:
-            return Response({"success": False, "message": str(e)}, status=503)
+
+            grouped = {}
+            for p in plans:
+                grouped.setdefault(p["category"], []).append(p)
+
+            return Response({"plans": grouped})
         except Exception as e:
-            logger.error(f"Error fetching plans: {e}", exc_info=True)
-            return Response({"success": False, "message": "Server error"}, status=500)
+            return Response({"message": str(e)}, status=400)

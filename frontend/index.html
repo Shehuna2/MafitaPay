@@ -5,6 +5,26 @@
     <link rel="icon" type="image/jpg+xml" href="/mafitapay.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MafitaPay</title>
+
+    <!-- 2. Disable text selection on forms -->
+    <style>
+      body, input, button { 
+        -webkit-touch-callout: none !important;
+        -webkit-user-select: none !important;
+        user-select: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+      }
+      /* Allow input fields to be typed */
+      input, textarea { -webkit-user-select: text !important; user-select: text !important; }
+    </style>
+
+    <!-- 3. Dark mode (optional but pro) -->
+    <style>
+      @media (prefers-color-scheme: dark) {
+        body { background: #121212; color: #fff; }
+        .card { background: #1e1e1e; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

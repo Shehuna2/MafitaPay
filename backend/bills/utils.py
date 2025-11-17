@@ -380,6 +380,7 @@ def purchase_data(phone: str, amount: float, network: str, variation_code: str, 
         raise ValueError(msg)
 
 
+
 def get_data_plans(network: str) -> list:
     service_id = DATA_SERVICE_ID_MAP.get(network.lower())
     if not service_id:
@@ -388,15 +389,130 @@ def get_data_plans(network: str) -> list:
     url = f"{VTPASS_LIVE_URL}service-variations?serviceID={service_id}"
     data = _make_api_call(url, {}, method="GET")
 
-    if data.get("response_description") != "000":
+    if str(data.get("response_description", "")).strip() not in ["000", "SUCCESSFUL", "TRANSACTION SUCCESSFUL"]:
         raise ValueError(data.get("response_description", "Failed to fetch plans"))
 
-    plans = data.get("content", {}).get("variations", [])
-    return [
-        {
+    variations = data.get("content", {}).get("variations", [])
+
+    categorized = []
+    for p in variations:
+        name = p.get("name", "").lower()
+        code = p.get("variation_code", "").lower()
+
+        if "sme" in code or "sme" in name:
+            category = "SME"
+        elif "gift" in code or "gifting" in name:
+            category = "GIFT"
+        elif "corp" in code or "corporate" in name:
+            category = "CORPORATE"
+        elif "coupon" in code or "coupon" in name:
+            category = "COUPON"
+        elif "promo" in name or "awoof" in name:
+            category = "PROMO"
+        else:
+            category = "REGULAR"
+
+        categorized.append({
             "variation_code": p["variation_code"],
             "variation_amount": float(p["variation_amount"]),
             "description": p["name"],
-        }
-        for p in plans
-    ]
+            "category": category,
+        })
+
+    return categorized
+
+
+# def categorize_plan(name: str, variation_code: str) -> str:
+#     text = f"{name} {variation_code}".lower()
+
+#     if any(x in text for x in ["sme", "small", "sme-data"]):
+#         return "SME"
+#     if any(x in text for x in ["gift", "gifting"]):
+#         return "GIFTING"
+#     if "corporate" in text or "corp" in text:
+#         return "CORPORATE"
+#     if "coupon" in text:
+#         return "COUPON"
+#     if "awoof" in text:
+#         return "AWOOF"
+#     if "daily" in text:
+#         return "DAILY"
+#     if "weekly" in text:
+#         return "WEEKLY"
+#     if "monthly" in text or "30 days" in text or "30days" in text:
+#         return "MONTHLY"
+
+#     return "GENERAL"
+
+
+# def get_data_plans(network: str) -> list:
+#     service_id = DATA_SERVICE_ID_MAP.get(network.lower())
+#     if not service_id:
+#         raise ValueError(f"Unsupported network: {network}")
+
+#     url = f"{VTPASS_LIVE_URL}service-variations?serviceID={service_id}"
+#     data = _make_api_call(url, {}, method="GET")
+
+#     if data.get("response_description") != "000":
+#         raise ValueError(data.get("response_description", "Failed to fetch plans"))
+
+#     plans = data.get("content", {}).get("variations", [])
+
+#     final = []
+#     for p in plans:
+#         name = p["name"]
+#         code = p["variation_code"]
+#         amount = float(p["variation_amount"])
+
+#         final.append({
+#             "variation_code": code,
+#             "variation_amount": amount,
+#             "description": name,
+#             "category": categorize_plan(name, code)
+#         })
+
+#     return final
+
+
+
+
+# def get_data_plans(network: str) -> list:
+#     service_id = DATA_SERVICE_ID_MAP.get(network.lower())
+#     if not service_id:
+#         raise ValueError(f"Unsupported network: {network}")
+
+#     url = f"{VTPASS_LIVE_URL}service-variations?serviceID={service_id}"
+#     data = _make_api_call(url, {}, method="GET")
+
+#     if str(data.get("response_description", "")).strip() not in ["000", "SUCCESSFUL", "TRANSACTION SUCCESSFUL"]:
+#         raise ValueError(data.get("response_description", "Failed to fetch plans"))
+
+#     variations = data.get("content", {}).get("variations", [])
+
+#     categorized = []
+#     for p in variations:
+#         name = p.get("name", "").lower()
+#         code = p.get("variation_code", "").lower()
+
+#         # CATEGORY DETECTION
+#         if "sme" in code or "sme" in name:
+#             category = "SME"
+#         elif "gift" in code or "gifting" in name:
+#             category = "GIFT"
+#         elif "corp" in code or "corporate" in name:
+#             category = "CORPORATE"
+#         elif "coupon" in code or "coupon" in name:
+#             category = "COUPON"
+#         elif "promo" in name or "awoof" in name:
+#             category = "PROMO"
+#         else:
+#             category = "REGULAR"
+
+#         categorized.append({
+#             "variation_code": p["variation_code"],
+#             "variation_amount": float(p["variation_amount"]),
+#             "description": p["name"],
+#             **{"category": category},
+#         })
+
+#     return categorized

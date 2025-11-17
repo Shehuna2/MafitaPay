@@ -7,14 +7,17 @@ import "react-toastify/dist/ReactToastify.css";
 import Receipt from "../../components/Receipt";
 import ShortFormLayout from "../../layouts/ShortFormLayout";
 
-
 export default function BuyData() {
   const [form, setForm] = useState({
     phone: "",
     network: "mtn",
     variation_code: "",
   });
-  const [plans, setPlans] = useState([]);
+
+  const [plans, setPlans] = useState([]); // flat array for quick picks
+  const [groupedPlans, setGroupedPlans] = useState({}); // grouped by category for dropdowns
+  const [selectedCategory, setSelectedCategory] = useState("all");
+
   const [loading, setLoading] = useState(false);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [message, setMessage] = useState(null);
@@ -23,11 +26,8 @@ export default function BuyData() {
   const modalRef = useRef(null);
 
   const resetForm = () => {
-    setForm({
-      phone: "",
-      network: "mtn",
-      variation_code: "",
-    });
+    setForm({ phone: "", network: "mtn", variation_code: "" });
+    setSelectedCategory("all");
   };
 
   useEffect(() => {
@@ -35,10 +35,14 @@ export default function BuyData() {
       setLoadingPlans(true);
       try {
         const res = await client.get(`/bills/data-plans/?network=${form.network}`);
-        setPlans(res.data.plans || []);
+        const grouped = res.data.plans || {};
+        setGroupedPlans(grouped);
+        setPlans(Object.values(grouped).flat());
       } catch (err) {
         console.error("Error fetching plans:", err.response?.data || err.message);
         toast.error("Failed to load data plans.");
+        setPlans([]);
+        setGroupedPlans({});
       } finally {
         setLoadingPlans(false);
       }
@@ -53,6 +57,13 @@ export default function BuyData() {
   const handleQuickPick = (variation_code) => {
     setForm({ ...form, variation_code });
   };
+
+  const getFilteredPlans = () => {
+    if (selectedCategory === "all") return plans;
+    return groupedPlans[selectedCategory] || [];
+  };
+
+  const filteredPlans = getFilteredPlans();
 
   const formatPlanTitle = (text = "") => {
     if (!text) return "Unknown Plan";
@@ -102,28 +113,12 @@ export default function BuyData() {
 
     try {
       const res = await client.post("/bills/data/", payload);
-      setMessage({
-        type: "success",
-        text: res.data.message || "Data purchase successful",
-      });
-      setReceiptData({
-        status: "success",
-        type: "data",
-        ...payload,
-        reference: res.data.reference || null,
-      });
+      setMessage({ type: "success", text: res.data.message || "Data purchase successful" });
+      setReceiptData({ status: "success", type: "data", ...payload, reference: res.data.reference || null });
       toast.success("Data purchase successful!");
     } catch (err) {
-      setMessage({
-        type: "error",
-        text: err.response?.data?.message || "Purchase failed",
-      });
-      setReceiptData({
-        status: "failed",
-        type: "data",
-        ...payload,
-        reference: err.response?.data?.reference || null,
-      });
+      setMessage({ type: "error", text: err.response?.data?.message || "Purchase failed" });
+      setReceiptData({ status: "failed", type: "data", ...payload, reference: err.response?.data?.reference || null });
       toast.error(err.response?.data?.message || "Purchase failed");
     } finally {
       setLoading(false);
@@ -136,9 +131,7 @@ export default function BuyData() {
         setShowConfirm(false);
       }
     };
-    if (showConfirm) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
+    if (showConfirm) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showConfirm]);
 
@@ -146,9 +139,7 @@ export default function BuyData() {
     const handleEsc = (e) => {
       if (e.key === "Escape") setShowConfirm(false);
     };
-    if (showConfirm) {
-      document.addEventListener("keydown", handleEsc);
-    }
+    if (showConfirm) document.addEventListener("keydown", handleEsc);
     return () => document.removeEventListener("keydown", handleEsc);
   }, [showConfirm]);
 
@@ -174,10 +165,7 @@ export default function BuyData() {
         </div>
       )}
 
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-4 bg-gray-800/80 backdrop-blur-xl p-4 sm:p-5 rounded-2xl border border-gray-700/50 shadow-2xl"
-      >
+      <form onSubmit={handleSubmit} className="space-y-4 bg-gray-800/80 backdrop-blur-xl p-4 sm:p-5 rounded-2xl border border-gray-700/50 shadow-2xl">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-400 mb-1.5">Phone Number</label>
@@ -196,7 +184,10 @@ export default function BuyData() {
             <select
               name="network"
               value={form.network}
-              onChange={handleChange}
+              onChange={(e) => {
+                handleChange(e);
+                setSelectedCategory("all");
+              }}
               className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 appearance-none cursor-pointer hover:border-indigo-500/50"
               style={{
                 backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
@@ -213,6 +204,22 @@ export default function BuyData() {
           </div>
         </div>
 
+        {/* CATEGORY DROPDOWN */}
+        <div>
+          <label className="block text-xs font-medium text-gray-400 mb-1.5">Filter by Category</label>
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm"
+          >
+            <option value="all">All</option>
+            {Object.keys(groupedPlans).map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* QUICK PICKS */}
         <div>
           <label className="block text-xs font-medium text-gray-400 mb-1.5">Quick Pick Plans</label>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -226,8 +233,8 @@ export default function BuyData() {
                   <div className="h-3 bg-gray-700/50 rounded w-3/4 shimmer"></div>
                 </div>
               ))
-            ) : plans.length > 0 ? (
-              plans.slice(0, 6).map((plan) => (
+            ) : filteredPlans.length > 0 ? (
+              filteredPlans.slice(0, 6).map((plan) => (
                 <button
                   type="button"
                   key={plan.variation_code}
@@ -238,22 +245,17 @@ export default function BuyData() {
                       : "bg-gray-800/60 border-gray-700 hover:bg-gray-700/80 hover:border-indigo-500/50"
                   }`}
                 >
-                  <span className="block font-bold">
-                    {formatPlanTitle(plan.name || plan.description)}
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    ₦{plan.variation_amount || "???"}
-                  </span>
+                  <span className="block font-bold">{formatPlanTitle(plan.description)}</span>
+                  <span className="text-xs text-gray-400">₦{plan.variation_amount}</span>
                 </button>
               ))
             ) : (
-              <p className="col-span-full text-center text-gray-500 text-xs py-4">
-                No plans available
-              </p>
+              <p className="col-span-full text-center text-gray-500 text-xs py-4">No plans found</p>
             )}
           </div>
         </div>
 
+        {/* MORE PLANS DROPDOWN */}
         <div>
           <label className="block text-xs font-medium text-gray-400 mb-1.5">More Plans</label>
           {loadingPlans ? (
@@ -266,7 +268,7 @@ export default function BuyData() {
               value={form.variation_code}
               onChange={handleChange}
               required
-              className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 appearance-none cursor-pointer hover:border-indigo-500/50"
+              className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm appearance-none"
               style={{
                 backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
                 backgroundPosition: "right 0.75rem center",
@@ -275,13 +277,17 @@ export default function BuyData() {
               }}
             >
               <option value="">Select Plan</option>
-              {plans.map((plan, index) => (
-                <option
-                  key={`${plan.variation_code}-${index}`}
-                  value={plan.variation_code}
-                >
-                  {formatPlanTitle(plan.name || plan.description)} – ₦{plan.variation_amount}
-                </option>
+              {(selectedCategory === "all"
+                ? Object.entries(groupedPlans)
+                : [[selectedCategory, groupedPlans[selectedCategory] || []]]
+              ).map(([category, items]) => (
+                <optgroup key={category} label={category}>
+                  {items.map((plan) => (
+                    <option key={plan.variation_code} value={plan.variation_code}>
+                      {formatPlanTitle(plan.description)} – ₦{plan.variation_amount}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           )}
@@ -315,27 +321,23 @@ export default function BuyData() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-400">Network:</span>
-                <span className="font-medium text-white">
-                  {form.network.toUpperCase()}
-                </span>
+                <span className="font-medium text-white">{form.network.toUpperCase()}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-400">Plan:</span>
                 <span className="font-medium text-white">
                   {(() => {
-                    const plan = plans.find(p => p.variation_code === form.variation_code);
-                    return plan ? formatPlanTitle(plan.name || plan.description) : "Unknown";
+                    const plan = plans.find((p) => p.variation_code === form.variation_code);
+                    return plan ? formatPlanTitle(plan.description) : "Unknown";
                   })()}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-400">Amount:</span>
-                <span className="font-bold text-indigo-400">
-                  ₦{(() => {
-                    const plan = plans.find(p => p.variation_code === form.variation_code);
-                    return plan?.variation_amount || "0";
-                  })()}
-                </span>
+                <span className="font-bold text-indigo-400">₦{(() => {
+                  const plan = plans.find((p) => p.variation_code === form.variation_code);
+                  return plan?.variation_amount || "0";
+                })()}</span>
               </div>
             </div>
 
