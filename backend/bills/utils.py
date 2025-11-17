@@ -299,6 +299,13 @@ def purchase_airtime(phone: str, amount: float, network: str, request_id: str = 
     if not service_id:
         raise ValueError(f"Unsupported network: {network}")
 
+    try:
+        amount = int(float(amount))   # Convert 50.0 → 50
+        if amount < 50:
+            raise ValueError("Minimum airtime is ₦50")
+    except (ValueError, TypeError):
+        raise ValueError("Invalid amount")
+
     # Generate compliant request_id if not provided
     request_id = request_id or generate_request_id(f"_air_{phone[-4:]}")
     url = VTPASS_LIVE_URL + "pay"
