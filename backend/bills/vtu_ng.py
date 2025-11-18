@@ -1,10 +1,12 @@
 import requests
 import uuid
+import os
+
 
 # --- Configuration ---
-BASE_URL = "https://vtu.ng/wp-json/api/v2"
-USERNAME = "shehuusman1414@gmail.com"
-PASSWORD = "4203$jikaN"
+BASE_URL = os.getenv("")
+USERNAME = ("")
+PASSWORD = ""
 SECRET_KEY = ""  # to be filled after KYC
 TOKEN = ""  # will be generated after login
 
