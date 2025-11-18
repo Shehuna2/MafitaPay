@@ -382,6 +382,65 @@ def purchase_data(phone: str, amount: float, network: str, variation_code: str, 
         raise ValueError(msg)
 
 
+# from vtu_ng import get_variations as get_vtung_variations
+# from vtpass_api import get_variations as get_vtpass_variations  # assume you have this module
+
+# # --- Merge VTU.ng and VTpass plans into frontend-ready catalog ---
+# def get_all_plans():
+#     """
+#     Returns a unified list of all data plans from VTU.ng and VTpass.
+#     Each plan has:
+#         - id
+#         - name
+#         - amount
+#         - network
+#         - provider (vtpass or vtu.ng)
+#         - category (REGULAR, SME, GIFT, DATASHARE, CORPORATE)
+#     """
+#     unified = []
+
+#     # --- Fetch VTU.ng plans ---
+#     try:
+#         vtung_plans = get_vtung_variations()
+#         for plan in vtung_plans:
+#             unified.append({
+#                 "id": plan["variation_id"],
+#                 "name": plan["name"],
+#                 "amount": plan["amount"],
+#                 "network": plan["network"],
+#                 "provider": "vtu.ng",
+#                 "category": plan["category"]
+#             })
+#     except Exception as e:
+#         print(f"Error fetching VTU.ng plans: {e}")
+
+#     # --- Fetch VTpass plans ---
+#     try:
+#         vtpass_plans = get_vtpass_variations()
+#         for plan in vtpass_plans:
+#             # Map VTpass category to unified category
+#             category_map = {
+#                 "REGULAR": "REGULAR",
+#                 "SME": "SME",
+#                 "GIFT": "GIFT",
+#                 "DATASHARE": "DATASHARE",
+#                 "CORPORATE": "CORPORATE"
+#             }
+#             unified.append({
+#                 "id": plan["variation_id"],
+#                 "name": plan["name"],
+#                 "amount": plan["amount"],
+#                 "network": plan["network"],
+#                 "provider": "vtpass",
+#                 "category": category_map.get(plan.get("category", "REGULAR"), "REGULAR")
+#             })
+#     except Exception as e:
+#         print(f"Error fetching VTpass plans: {e}")
+
+#     return unified
+
+
+
 def get_data_plans(network: str) -> list:
     service_id = DATA_SERVICE_ID_MAP.get(network.lower())
     if not service_id:
