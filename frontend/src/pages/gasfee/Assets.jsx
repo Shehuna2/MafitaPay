@@ -64,16 +64,6 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) =
   const [price, setPrice] = useState(asset.price);
   const [points, setPoints] = useState(asset.points || makeInitialPoints(price, 14));
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const noise = (Math.random() - 0.5) * 0.003;
-      const newPrice = Number(price) * (1 + noise);
-      setPrice(newPrice);
-      setPoints((prev) => [...prev.slice(1), newPrice].map(p => Number(p.toFixed(8))));
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [price]);
-
   const handleClick = (e) => {
     e.stopPropagation();
     onView(asset);
@@ -192,6 +182,7 @@ const RecentViewedList = ({ recentViewed }) => {
 
 export default function Assets() {
   const [assets, setAssets] = useState([]);
+  const [exchangeRate, setExchangeRate] = useState(null); // ← now exposed globally if you want context later
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
@@ -210,7 +201,9 @@ export default function Assets() {
       const token = localStorage.getItem("access");
       const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
       const res = await client.get("/assets/", config);
+      
       const cryptos = res.data.cryptos || res.data || [];
+      setExchangeRate(res.data.exchange_rate);
 
       const enriched = cryptos.map((c) => {
         const price = Number(c.price || 0);
@@ -244,11 +237,10 @@ export default function Assets() {
         const ticker = data.find(t => t.s === asset.symbol + "USDT");
         if (ticker) {
           const newPrice = parseFloat(ticker.c);
-          const changePct = ((newPrice - asset.price) / asset.price) * 100;
           return {
             ...asset,
             price: newPrice,
-            changePct,
+            changePct: asset.price ? ((newPrice - asset.price) / asset.price) * 100 : 0,
             points: [...asset.points.slice(1), newPrice]
           };
         }

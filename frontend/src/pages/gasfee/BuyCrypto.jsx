@@ -2,7 +2,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import client from "../../api/client";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -11,8 +11,12 @@ import Receipt from "../../components/Receipt";
 export default function BuyCrypto() {
   const { id } = useParams();
   const navigate = useNavigate();
+  
   const [crypto, setCrypto] = useState(null);
+  const [priceUsd, setPriceUsd] = useState(null);
+  const [priceNgn, setPriceNgn] = useState(null);
   const [exchangeRate, setExchangeRate] = useState(null);
+  
   const [form, setForm] = useState({
     amount: "",
     currency: "NGN",
@@ -20,6 +24,7 @@ export default function BuyCrypto() {
   });
 
   const [loading, setLoading] = useState(true);
+  const [rateLoading, setRateLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -27,37 +32,51 @@ export default function BuyCrypto() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [recentWallets, setRecentWallets] = useState([]);
 
+  // 🔥 THE FIX: Fetch fresh rate from your own endpoint
+  const fetchFreshRate = async () => {
+    setRateLoading(true);
+    try {
+      const res = await client.get(`/buy-crypto/${id}/`);
+      setCrypto(prev => ({ ...prev, ...res.data, price: res.data.price_usd }));
+      setPriceUsd(res.data.price_usd);
+      setPriceNgn(res.data.price_ngn);
+      setExchangeRate(res.data.usd_ngn_rate);
+      setMessage(null);
+    } catch (err) {
+      setMessage({ type: "error", text: "Failed to refresh rate. Using last known price." });
+    } finally {
+      setRateLoading(false);
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
-    async function fetchData() {
+    
+    async function load() {
       try {
         setLoading(true);
-        setMessage(null);
-        const res = await client.get("/assets/");
-        const cryptos = Array.isArray(res.data?.cryptos)
-          ? res.data.cryptos
-          : Array.isArray(res.data)
-          ? res.data
-          : [];
-        const found = cryptos.find((c) => String(c.id) === String(id));
+        // Step 1: Get basic asset info (logo, name, etc.) from list
+        const listRes = await client.get("/assets/");
+        const cryptos = listRes.data.cryptos || [];
+        const found = cryptos.find(c => String(c.id) === String(id));
+        
         if (!mounted) return;
         if (found) {
           setCrypto(found);
-          setExchangeRate(res.data?.exchange_rate ?? null);
-        } else {
-          setMessage({ type: "error", text: "Crypto not found." });
+          setExchangeRate(listRes.data.exchange_rate);
         }
+
+        // Step 2: Immediately get FRESH accurate rate
+        await fetchFreshRate();
       } catch (err) {
-        console.error("Failed to load crypto:", err);
-        setMessage({ type: "error", text: "Failed to load crypto. Please try again." });
+        if (mounted) setMessage({ type: "error", text: "Failed to load. Retrying..." });
       } finally {
         if (mounted) setLoading(false);
       }
     }
-    fetchData();
-    return () => {
-      mounted = false;
-    };
+
+    load();
+    return () => { mounted = false; };
   }, [id]);
 
   useEffect(() => {
@@ -96,20 +115,23 @@ export default function BuyCrypto() {
     return [0.1, 0.5, 1.0, 2.0, 5.0, 10.0];
   };
 
+  // 🔥 NEW ACCURATE CALCULATION USING FRESH RATES
   let cryptoReceived = 0;
   let totalNgn = 0;
-  if (crypto && exchangeRate && form.amount) {
+
+  if (priceUsd && priceNgn && exchangeRate && form.amount) {
     const amt = Number(form.amount);
-    if (!Number.isNaN(amt) && amt > 0) {
+
+    if (!isNaN(amt) && amt > 0) {
       if (form.currency === "NGN") {
         totalNgn = amt;
-        cryptoReceived = amt / exchangeRate / (crypto.price || 1);
+        cryptoReceived = amt / priceNgn;                    // uses fresh ₦ price
       } else if (form.currency === "USDT") {
         totalNgn = amt * exchangeRate;
-        cryptoReceived = amt / (crypto.price || 1);
-      } else if (form.currency === crypto.symbol) {
+        cryptoReceived = amt / priceUsd;                    // uses fresh $ price
+      } else if (form.currency === crypto?.symbol) {
         cryptoReceived = amt;
-        totalNgn = amt * (crypto.price || 1) * exchangeRate;
+        totalNgn = amt * priceNgn;                          // uses fresh ₦ price
       }
     }
   }
@@ -239,8 +261,6 @@ export default function BuyCrypto() {
     <>
       <ToastContainer />
       <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none" />
-
         <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10">
           {submitting && (
             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
@@ -249,38 +269,35 @@ export default function BuyCrypto() {
           )}
 
           <div className="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-4 sm:p-5 shadow-2xl border border-gray-700/50 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 to-gray-900/5 p-4 pointer-events-none" />
-
-            <div className="flex items-center gap-2 mb-5 z-10 relative">
+            {/* Refresh button */}
+            <div className="flex justify-end mb-2">
               <button
-                onClick={() => navigate(-1)}
-                className="group flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 transition-all duration-200"
+                onClick={fetchFreshRate}
+                disabled={rateLoading}
+                className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-50"
               >
-                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                Back
+                {rateLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                Refresh rate
               </button>
-              <span className="flex-1 text-right">
-                <h1 className="text-xl sm:text-2xl font-bold text-indigo-400">Buy {crypto.name}</h1>
-              </span>
             </div>
 
-            <div className="bg-gray-800/60 backdrop-blur-md p-3 rounded-xl mb-5 flex items-center justify-between border border-gray-700/50 z-10">
+            {/* Rate display now shows fresh values */}
+            <div className="bg-gray-800/60 backdrop-blur-md p-3 rounded-xl mb-5 flex items-center justify-between border border-gray-700/50">
               <div>
                 <p className="text-xs text-gray-300">
                   <span className="text-gray-400">1 USD =</span>{" "}
                   <span className="font-bold text-green-400">₦{exchangeRate?.toLocaleString()}</span>
                 </p>
                 <p className="text-xs text-gray-300 mt-1">
-                  <span className="text-gray-400">1 {crypto.symbol} =</span>{" "}
+                  <span className="text-gray-400">1 {crypto?.symbol} =</span>{" "}
                   <span className="font-bold text-indigo-400">
-                    ${crypto.price?.toLocaleString() ?? "—"} ≈ ₦{crypto.price && exchangeRate ? (crypto.price * exchangeRate).toLocaleString() : "—"}
+                    ${priceUsd?.toLocaleString() ?? "—"} ≈ ₦{priceNgn?.toLocaleString() ?? "—"}
                   </span>
                 </p>
               </div>
               <img
-                src={`/images/${crypto.symbol?.toLowerCase()}.png`}
-                alt={crypto.name}
-                onError={(e) => (e.target.src = crypto.logo_url || "/images/default.png")}
+                src={`/images/${crypto?.symbol?.toLowerCase()}.png`}
+                onError={(e) => (e.target.src = crypto?.logo_url || "/images/default.png")}
                 className="w-10 h-10 rounded-full border border-indigo-500/30 object-contain bg-gray-900"
               />
             </div>
@@ -361,6 +378,8 @@ export default function BuyCrypto() {
                 </div>
               </div>
 
+              
+
               {form.amount && (
                 <div className="bg-gray-800/60 backdrop-blur-md p-3 rounded-xl text-xs text-gray-300 border border-gray-700/50">
                   <p className="font-medium">
@@ -371,7 +390,10 @@ export default function BuyCrypto() {
                     Equivalent to ≈ <span className="font-bold text-green-400">₦{totalNgn.toLocaleString()}</span>
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Rate: <span className="font-bold text-yellow-400">${crypto.price?.toLocaleString() ?? "—"}</span>
+                    Rate:{' '}
+                    <span className="font-bold text-yellow-400">
+                      ${priceUsd?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 }) ?? '—'}
+                    </span>
                   </p>
                 </div>
               )}
