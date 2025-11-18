@@ -27,22 +27,28 @@ class Crypto(models.Model):
         ('MATIC', 'Polygon-MATIC'),
         ('FIL', 'Filecoin'),
     ]
+
     name = models.CharField(max_length=50)
     symbol = models.CharField(max_length=10, unique=True)
     logo = models.ImageField(upload_to='images/', default='/media/images/Solana_Coin.png')
     coingecko_id = models.CharField(max_length=50, null=True)
-    network = models.CharField(max_length=50, choices=NETWORK_CHOICES) 
+    network = models.CharField(max_length=50, choices=NETWORK_CHOICES)
+
+    # Required for price protection system
+    last_known_price = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    last_price_updated = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        unique_together = ('coingecko_id', 'network')  # Ensures ETH on Arbitrum/Base are separate
+        unique_together = ('coingecko_id', 'network')
 
     def save(self, *args, **kwargs):
-        if self.network in ['ARB', 'BASE', 'OP']:  # If it's an L2 ETH token
-            self.coingecko_id = 'ethereum'  # Ensure correct ID
+        if self.network in ['ARB', 'BASE', 'OP']:
+            self.coingecko_id = 'ethereum'
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.name} ({self.symbol}) on {self.network}"
+        return f"{self.name} ({self.symbol})[{self.network}]"
+
     
     
 class CryptoPurchase(models.Model):

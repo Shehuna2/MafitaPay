@@ -4,19 +4,21 @@ import { useEffect, useState } from "react";
 import client from "../../api/client";
 import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
-import { ToastContainer, toast } from "react-toastify";
+import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Receipt from "../../components/Receipt";
 
 export default function BuyCrypto() {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+
   const [crypto, setCrypto] = useState(null);
+
+  // Always authoritative values from backend
   const [priceUsd, setPriceUsd] = useState(null);
-  const [priceNgn, setPriceNgn] = useState(null);
   const [exchangeRate, setExchangeRate] = useState(null);
-  
+  const [priceNgn, setPriceNgn] = useState(null);
+
   const [form, setForm] = useState({
     amount: "",
     currency: "NGN",
@@ -32,15 +34,17 @@ export default function BuyCrypto() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [recentWallets, setRecentWallets] = useState([]);
 
-  // 🔥 THE FIX: Fetch fresh rate from your own endpoint
+  // ----------------------------------
+  //        FETCH CORRECT RATE
+  // ----------------------------------
   const fetchFreshRate = async () => {
     setRateLoading(true);
     try {
       const res = await client.get(`/buy-crypto/${id}/`);
-      setCrypto(prev => ({ ...prev, ...res.data, price: res.data.price_usd }));
+
       setPriceUsd(res.data.price_usd);
-      setPriceNgn(res.data.price_ngn);
-      setExchangeRate(res.data.usd_ngn_rate);
+      setExchangeRate(res.data.usd_ngn_rate);  // ← includes margin
+      setPriceNgn(res.data.price_ngn);         // ← includes margin
       setMessage(null);
     } catch (err) {
       setMessage({ type: "error", text: "Failed to refresh rate. Using last known price." });
@@ -49,27 +53,31 @@ export default function BuyCrypto() {
     }
   };
 
+  // ----------------------------------
+  //  INITIAL LOAD (crypto info + rate)
+  // ----------------------------------
   useEffect(() => {
     let mounted = true;
-    
+
     async function load() {
       try {
         setLoading(true);
-        // Step 1: Get basic asset info (logo, name, etc.) from list
+
+        // Step 1: fetch list (logo, symbol, name) — NOT rate
         const listRes = await client.get("/assets/");
         const cryptos = listRes.data.cryptos || [];
         const found = cryptos.find(c => String(c.id) === String(id));
-        
-        if (!mounted) return;
-        if (found) {
+
+        if (mounted && found) {
           setCrypto(found);
-          setExchangeRate(listRes.data.exchange_rate);
         }
 
-        // Step 2: Immediately get FRESH accurate rate
+        // Step 2: fetch CORRECT margin-adjusted rate
         await fetchFreshRate();
       } catch (err) {
-        if (mounted) setMessage({ type: "error", text: "Failed to load. Retrying..." });
+        if (mounted) {
+          setMessage({ type: "error", text: "Failed to load. Retrying..." });
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -79,6 +87,9 @@ export default function BuyCrypto() {
     return () => { mounted = false; };
   }, [id]);
 
+  // ----------------------------------
+  //       RECENT WALLETS STORE
+  // ----------------------------------
   useEffect(() => {
     if (!crypto) return;
     const key = `recent_wallets_${crypto.symbol}`;
@@ -99,6 +110,9 @@ export default function BuyCrypto() {
     setRecentWallets(updated);
   };
 
+  // ----------------------------------
+  //       FORM / CALCULATIONS
+  // ----------------------------------
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((p) => ({ ...p, [name]: value }));
@@ -115,36 +129,32 @@ export default function BuyCrypto() {
     return [0.1, 0.5, 1.0, 2.0, 5.0, 10.0];
   };
 
-  // 🔥 NEW ACCURATE CALCULATION USING FRESH RATES
+  // ------- CLEAN & CONSISTENT MATH -------
   let cryptoReceived = 0;
   let totalNgn = 0;
 
-  if (priceUsd && priceNgn && exchangeRate && form.amount) {
+  if (priceUsd && exchangeRate && form.amount) {
     const amt = Number(form.amount);
 
-    if (!isNaN(amt) && amt > 0) {
-      if (form.currency === "NGN") {
-        totalNgn = amt;
-        cryptoReceived = amt / priceNgn;                    // uses fresh ₦ price
-      } else if (form.currency === "USDT") {
-        totalNgn = amt * exchangeRate;
-        cryptoReceived = amt / priceUsd;                    // uses fresh $ price
-      } else if (form.currency === crypto?.symbol) {
-        cryptoReceived = amt;
-        totalNgn = amt * priceNgn;                          // uses fresh ₦ price
-      }
+    if (form.currency === "NGN") {
+      totalNgn = amt;
+      cryptoReceived = amt / (priceUsd * exchangeRate);
+    }
+
+    if (form.currency === "USDT") {
+      totalNgn = amt * exchangeRate;
+      cryptoReceived = amt / priceUsd;
+    }
+
+    if (form.currency === crypto?.symbol) {
+      cryptoReceived = amt;
+      totalNgn = amt * priceUsd * exchangeRate;
     }
   }
 
-  const sanitizeError = (err) => {
-    const raw = err?.response?.data?.error || err?.message || String(err);
-    const low = raw.toLowerCase();
-    if (low.includes("insufficient") && low.includes("fund")) return "Insufficient funds. Please top up and try again.";
-    if (low.includes("invalid") && low.includes("address")) return "Invalid wallet address. Please check and try again.";
-    if (low.includes("network") || low.includes("timeout")) return "Network error. Please try again in a moment.";
-    return "Transaction failed. Please try again later.";
-  };
-
+  // ----------------------------------
+  //           SUBMIT ORDER
+  // ----------------------------------
   const confirmAndSubmit = async () => {
     setSubmitting(true);
     setMessage(null);
@@ -153,6 +163,7 @@ export default function BuyCrypto() {
     try {
       const res = await client.post(`/buy-crypto/${id}/`, form);
       saveWalletToRecent(form.wallet_address);
+
       setReceiptData({
         status: "success",
         type: "crypto",
@@ -162,19 +173,17 @@ export default function BuyCrypto() {
         tx_hash: res.data?.tx_hash ?? null,
         reference: res.data?.reference ?? null,
       });
+
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 1200);
     } catch (err) {
-      const safeMsg = sanitizeError(err);
-      setMessage({ type: "error", text: safeMsg });
+      setMessage({ type: "error", text: "Transaction failed. Try again." });
       setReceiptData({
         status: "failed",
         type: "crypto",
         crypto: crypto?.symbol ?? "CRYPTO",
         amount: totalNgn,
         wallet_address: form.wallet_address,
-        tx_hash: null,
-        reference: null,
       });
     } finally {
       setSubmitting(false);
@@ -183,12 +192,15 @@ export default function BuyCrypto() {
   };
 
   const trimAddress = (addr) => {
-    if (!addr || typeof addr !== "string") return addr;
-    if (addr.length <= 10) return addr;
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+    if (!addr) return addr;
+    return addr.length > 10
+      ? `${addr.slice(0, 6)}...${addr.slice(-4)}`
+      : addr;
   };
 
-  // ------------------ Loading skeleton ------------------
+  // ----------------------------------
+  //           LOADING UI
+  // ----------------------------------
   const LoadingSkeleton = () => (
     <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
       <style>{`
@@ -257,19 +269,26 @@ export default function BuyCrypto() {
       </div>
     );
 
+  // ----------------------------------
+  //           MAIN RENDER
+  // ----------------------------------
   return (
     <>
       <ToastContainer />
-      <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
-        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10">
+
+      <div className="min-h-screen bg-gray-900 text-white">
+        <div className="max-w-4xl mx-auto px-4 py-6">
+
+          {/* Overlay when submitting */}
           {submitting && (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
               <AnimatedTransactionLoader />
             </div>
           )}
 
-          <div className="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-4 sm:p-5 shadow-2xl border border-gray-700/50 relative overflow-hidden">
-            {/* Refresh button */}
+          <div className="bg-gray-800/80 p-5 rounded-2xl border border-gray-700/50">
+
+            {/* Refresh Rate Button */}
             <div className="flex justify-end mb-2">
               <button
                 onClick={fetchFreshRate}
@@ -281,75 +300,68 @@ export default function BuyCrypto() {
               </button>
             </div>
 
-            {/* Rate display now shows fresh values */}
-            <div className="bg-gray-800/60 backdrop-blur-md p-3 rounded-xl mb-5 flex items-center justify-between border border-gray-700/50">
-              <div>
-                <p className="text-xs text-gray-300">
-                  <span className="text-gray-400">1 USD =</span>{" "}
-                  <span className="font-bold text-green-400">₦{exchangeRate?.toLocaleString()}</span>
-                </p>
-                <p className="text-xs text-gray-300 mt-1">
-                  <span className="text-gray-400">1 {crypto?.symbol} =</span>{" "}
-                  <span className="font-bold text-indigo-400">
-                    ${priceUsd?.toLocaleString() ?? "—"} ≈ ₦{priceNgn?.toLocaleString() ?? "—"}
-                  </span>
-                </p>
-              </div>
-              <img
-                src={`/images/${crypto?.symbol?.toLowerCase()}.png`}
-                onError={(e) => (e.target.src = crypto?.logo_url || "/images/default.png")}
-                className="w-10 h-10 rounded-full border border-indigo-500/30 object-contain bg-gray-900"
-              />
+            {/* RATE DISPLAY (clean and consistent) */}
+            <div className="bg-gray-800/60 p-3 rounded-xl mb-5 border border-gray-700/50">
+              <p className="text-xs text-gray-300">
+                <span className="text-gray-400">1 USD =</span>{" "}
+                <span className="font-bold text-green-400">
+                  ₦{exchangeRate?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>{" "}
+                <span className="text-[10px] text-green-300">(incl. fees)</span>
+              </p>
+
+              <p className="text-xs text-gray-300 mt-1">
+                <span className="text-gray-400">1 {crypto.symbol} =</span>{" "}
+                <span className="font-bold text-indigo-400">
+                  ${priceUsd?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  {" → "}
+                  ₦{(priceUsd * exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </span>
+              </p>
             </div>
 
+            {/* Message */}
             {message && (
               <div
-                className={`p-3 rounded-xl mb-5 text-xs backdrop-blur-md border ${
+                className={`p-3 rounded-xl mb-5 text-xs border ${
                   message.type === "success"
                     ? "bg-green-600/20 text-green-400 border-green-500/50"
                     : "bg-red-600/20 text-red-400 border-red-500/50"
-                } z-10`}
-                role="alert"
+                }`}
               >
                 {message.text}
               </div>
             )}
 
+            {/* FORM */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 setShowConfirm(true);
               }}
-              className="space-y-4 z-10"
+              className="space-y-4"
             >
               {/* Amount + Currency */}
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Amount</label>
+                  <label className="block text-xs mb-1.5">Amount</label>
                   <input
                     name="amount"
                     type="number"
-                    inputMode="decimal"
-                    placeholder={`Enter amount in ${form.currency}`}
                     value={form.amount}
                     onChange={handleChange}
                     required
-                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                    className="w-full bg-gray-800/60 border border-gray-700 p-2.5 rounded-xl"
                   />
                 </div>
+
                 <div className="w-28">
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Currency</label>
+                  <label className="block text-xs mb-1.5">Currency</label>
                   <select
                     name="currency"
                     value={form.currency}
                     onChange={handleChange}
-                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 appearance-none cursor-pointer hover:border-indigo-500/50"
-                    style={{
-                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
-                      backgroundPosition: "right 0.75rem center",
-                      backgroundRepeat: "no-repeat",
-                      backgroundSize: "12px",
-                    }}
+                    className="w-full bg-gray-800/60 border border-gray-700 p-2.5 rounded-xl"
                   >
                     <option value="NGN">NGN</option>
                     <option value="USDT">USDT</option>
@@ -358,56 +370,51 @@ export default function BuyCrypto() {
                 </div>
               </div>
 
+              {/* Quick Picks */}
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Quick Pick</label>
+                <label className="block text-xs mb-1.5">Quick Pick</label>
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                   {quickPickOptions().map((val) => (
                     <button
                       key={val}
                       type="button"
                       onClick={() => handleQuickPick(val)}
-                      className={`p-2 rounded-xl text-center text-xs font-bold transition-all duration-200 backdrop-blur-md border ${
+                      className={`p-2 rounded-xl text-xs font-bold ${
                         Number(form.amount) === val
-                          ? "bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-500/30 transform -translate-y-0.5"
-                          : "bg-gray-800/60 border-gray-700 hover:bg-gray-700/80 hover:border-indigo-500/50"
+                          ? "bg-indigo-600 text-white"
+                          : "bg-gray-800/60 border border-gray-700"
                       }`}
                     >
-                      {form.currency === "NGN" ? `₦${val}` : `${val}`}
+                      {form.currency === "NGN" ? `₦${val}` : val}
                     </button>
                   ))}
                 </div>
               </div>
 
-              
-
+              {/* Calculation Display */}
               {form.amount && (
-                <div className="bg-gray-800/60 backdrop-blur-md p-3 rounded-xl text-xs text-gray-300 border border-gray-700/50">
-                  <p className="font-medium">
-                    You will receive:{" "}
-                    <span className="font-bold text-indigo-400">{cryptoReceived.toFixed(6)} {crypto.symbol}</span>
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Equivalent to ≈ <span className="font-bold text-green-400">₦{totalNgn.toLocaleString()}</span>
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Rate:{' '}
-                    <span className="font-bold text-yellow-400">
-                      ${priceUsd?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 }) ?? '—'}
+                <div className="bg-gray-800/60 p-3 rounded-xl text-xs border border-gray-700/50">
+                  <p>You pay: <span className="text-orange-400 font-bold">₦{totalNgn.toLocaleString()}</span></p>
+                  <p className="mt-1">
+                    You receive:{" "}
+                    <span className="text-indigo-400 font-bold">
+                      {cryptoReceived.toFixed(8)} {crypto.symbol}
                     </span>
                   </p>
+                  <p className="mt-2 text-[11px] text-gray-500">Rate locked • Includes all fees</p>
                 </div>
               )}
 
+              {/* Wallet Address */}
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">{crypto.symbol} Wallet Address</label>
+                <label className="block text-xs mb-1.5">{crypto.symbol} Wallet Address</label>
                 <input
                   name="wallet_address"
                   type="text"
-                  placeholder={`Your ${crypto.symbol} wallet address`}
                   value={form.wallet_address}
                   onChange={handleChange}
                   required
-                  className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                  className="w-full bg-gray-800/60 border border-gray-700 p-2.5 rounded-xl"
                 />
 
                 {recentWallets.length > 0 && (
@@ -419,8 +426,7 @@ export default function BuyCrypto() {
                           key={addr}
                           type="button"
                           onClick={() => setForm((p) => ({ ...p, wallet_address: addr }))}
-                          className="flex-shrink-0 px-3 py-1.5 bg-gray-800/60 backdrop-blur-md border border-gray-700/50 rounded-lg text-xs text-gray-300 hover:bg-gray-700/80 hover:border-indigo-500/50 transition-all duration-200 whitespace-nowrap"
-                          title={addr}
+                          className="px-3 py-1.5 bg-gray-800/60 border border-gray-700 rounded-lg text-xs"
                         >
                           {trimAddress(addr)}
                         </button>
@@ -433,7 +439,7 @@ export default function BuyCrypto() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-xl font-bold text-sm transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-indigo-500/30 transform hover:-translate-y-0.5 disabled:opacity-75 disabled:cursor-not-allowed"
+                className="w-full bg-indigo-600 py-2.5 rounded-xl font-bold"
               >
                 {submitting ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : `Buy ${crypto.symbol}`}
               </button>
@@ -443,59 +449,27 @@ export default function BuyCrypto() {
 
         {/* Confirm Modal */}
         {showConfirm && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-gray-800/90 backdrop-blur-xl p-5 rounded-2xl max-w-md w-full border border-gray-700/50 shadow-2xl"
-            >
-              <h3 className="text-lg font-bold text-white mb-3">Confirm Purchase</h3>
-              <p className="text-sm text-gray-300 mb-2">
-                You are buying <span className="font-bold text-indigo-400">{crypto.symbol}</span> worth{" "}
-                <span className="font-bold">{form.amount} {form.currency}</span>
-              </p>
-              <p className="text-sm text-gray-300 mb-4">
-                You will receive{" "}
-                <span className="font-bold text-indigo-400">{cryptoReceived.toFixed(6)} {crypto.symbol}</span>
-              </p>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setShowConfirm(false)}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-xl text-white text-sm font-bold transition-all duration-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmAndSubmit}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white text-sm font-bold transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-indigo-500/30 transform hover:-translate-y-0.5"
-                >
-                  Confirm
-                </button>
-              </div>
-            </motion.div>
-          </div>
+          <ConfirmModal
+            crypto={crypto}
+            cryptoReceived={cryptoReceived}
+            form={form}
+            onCancel={() => setShowConfirm(false)}
+            onConfirm={confirmAndSubmit}
+          />
         )}
 
-        {/* Success Overlay */}
-        {showSuccess && (
-          <div className="fixed inset-0 bg-black/70 flex flex-col items-center justify-center z-[9999]">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 200 }}
-              className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center border-2 border-green-400"
-            >
-              <span className="text-3xl">Checkmark</span>
-            </motion.div>
-            <p className="text-green-300 mt-4 text-lg font-semibold">Transaction Successful</p>
-          </div>
-        )}
+        {/* Success Animation */}
+        {showSuccess && <SuccessOverlay />}
 
         <Receipt type="crypto" data={receiptData} onClose={() => setReceiptData(null)} />
       </div>
     </>
   );
 }
+
+/* ---------------------------------------------------------
+   UI COMPONENTS (unchanged from your original version)
+--------------------------------------------------------- */
 
 function AnimatedTransactionLoader() {
   const messages = [
@@ -544,6 +518,47 @@ function AnimatedTransactionLoader() {
       </motion.p>
 
       <p className="text-gray-400 text-sm">Please don’t close this window…</p>
+    </div>
+  );
+}
+
+
+function ConfirmModal({ crypto, cryptoReceived, form, onCancel, onConfirm }) {
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-3">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-gray-800/90 p-5 rounded-2xl max-w-md w-full border border-gray-700/50"
+      >
+        <h3 className="text-lg font-bold">Confirm Purchase</h3>
+        <p className="text-sm text-gray-300 mt-2">
+          You are buying <b>{crypto.symbol}</b> worth {form.amount} {form.currency}
+        </p>
+        <p className="text-sm text-gray-300 mt-1">
+          You will receive <b>{cryptoReceived.toFixed(6)} {crypto.symbol}</b>
+        </p>
+
+        <div className="flex justify-end gap-3 mt-4">
+          <button onClick={onCancel} className="px-4 py-2 bg-gray-700 rounded-xl">Cancel</button>
+          <button onClick={onConfirm} className="px-4 py-2 bg-indigo-600 rounded-xl">Confirm</button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function SuccessOverlay() {
+  return (
+    <div className="fixed inset-0 bg-black/70 flex flex-col items-center justify-center z-[9999]">
+      <motion.div
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center border-2 border-green-400"
+      >
+        <span className="text-3xl">✓</span>
+      </motion.div>
+      <p className="text-green-300 mt-4 text-lg font-semibold">Transaction Successful</p>
     </div>
   );
 }
