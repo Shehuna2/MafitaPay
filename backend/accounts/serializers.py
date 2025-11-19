@@ -8,6 +8,7 @@ from django.utils.crypto import get_random_string
 from django.contrib.auth import get_user_model, authenticate
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
 from .models import UserProfile
 from .tasks import send_verification_email_sync, send_reset_email_sync
 
@@ -125,49 +126,54 @@ class LoginSerializer(serializers.Serializer):
         password = data["password"]
         two_factor_code = data.get("two_factor_code")
         request = self.context.get("request")
-        logger.debug(f"Attempting login with email: {email}")
 
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            logger.error(f"User with email {email} does not exist")
             raise serializers.ValidationError({"detail": "No account found with this email."})
 
         user = authenticate(request=request, email=email, password=password)
         if not user:
-            logger.error(f"Authentication failed for email: {email}")
             raise serializers.ValidationError({"detail": "Invalid email or password."})
 
         if not user.is_email_verified:
-            logger.warning(f"Unverified email attempted login: {email}")
             raise serializers.ValidationError({
                 "detail": "Please verify your email before logging in.",
                 "action": "resend_verification"
             })
 
-        if user.two_factor_enabled and not two_factor_code:
-            two_factor_code = get_random_string(6, allowed_chars="0123456789")
-            user.two_factor_code = two_factor_code
+        # ---- 2FA Handling ----
+        if user.two_factor_enabled:
+            if not two_factor_code:
+                code = get_random_string(6, allowed_chars="0123456789")
+                user.two_factor_code = code
+                user.save()
+                send_mail(
+                    subject="MafitaPay 2FA Code",
+                    message=f"Your 2FA code is: {code}",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[user.email],
+                )
+                raise serializers.ValidationError({"two_factor_code": "2FA code required."})
+
+            if two_factor_code != user.two_factor_code:
+                raise serializers.ValidationError({"two_factor_code": "Invalid 2FA code."})
+
+            # Clear used code
+            user.two_factor_code = None
             user.save()
-            send_mail(
-                subject="MafitaPay 2FA Code",
-                message=f"Your 2FA code is: {two_factor_code}",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-            )
-            raise serializers.ValidationError({"two_factor_code": "2FA code required."})
 
-        if user.two_factor_enabled and two_factor_code != user.two_factor_code:
-            raise serializers.ValidationError({"two_factor_code": "Invalid 2FA code."})
-
+        # ---- TOKEN GENERATION ----
         refresh = RefreshToken.for_user(user)
+
+        if data.get("remember_me"):
+            refresh.set_exp(
+                lifetime=settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"] * 2
+            )
+
         refresh_token = str(refresh)
         access_token = str(refresh.access_token)
-        if data.get("remember_me"):
-            refresh.set_exp(lifetime=settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"] * 2)
-            access_token = str(refresh.access_token)
 
-        logger.debug(f"Login successful for {email}")
         return {
             "user": {
                 "id": user.id,
@@ -178,6 +184,7 @@ class LoginSerializer(serializers.Serializer):
             "refresh": refresh_token,
             "access": access_token,
         }
+
 
 class UserProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", read_only=True)

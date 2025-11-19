@@ -14,6 +14,7 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from django.core.mail import send_mail
 from rest_framework.parsers import JSONParser
+from rest_framework_simplejwt.views import TokenRefreshView
 from decimal import Decimal
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -68,14 +69,14 @@ class LoginView(generics.GenericAPIView):
     serializer_class = LoginSerializer
     permission_classes = [AllowAny]
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
         serializer = self.get_serializer(data=request.data, context={"request": request})
         try:
             serializer.is_valid(raise_exception=True)
-            return Response(serializer.validated_data, status=status.HTTP_200_OK)
+            return Response(serializer.validated_data, status=200)
         except serializers.ValidationError as e:
-            logger.error(f"Login validation error: {e.detail}")
-            return Response({"errors": e.detail}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"errors": e.detail}, status=400)
+
 
 class ProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
