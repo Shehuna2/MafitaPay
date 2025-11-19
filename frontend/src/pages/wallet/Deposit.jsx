@@ -184,8 +184,8 @@ export default function Deposit() {
                 disabled={loading}
                 className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200 cursor-pointer disabled:opacity-60"
               >
-                <option value="paystack">Paystack</option>
                 <option value="flutterwave">Flutterwave</option>
+                <option value="paystack" disabled>Paystack (Not available)</option>
                 <option value="9psb" disabled>9PSB Bank (Coming Soon)</option>
                 <option value="monnify" disabled>Monnify (Coming Soon)</option>
               </select>
