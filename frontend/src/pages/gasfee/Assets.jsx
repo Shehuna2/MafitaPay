@@ -19,50 +19,15 @@ class AssetCardErrorBoundary extends React.Component {
   }
 }
 
-const Sparkline = React.memo(({ points = [], color = "#10B981" }) => {
-  if (!points?.length) return null;
-
-  const width = 90;
-  const height = 36;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
-  const stride = width / (points.length - 1);
-  const coords = points.map((p, i) => `${i * stride},${height - ((p - min) / range) * (height - 8) - 4}`);
-  const path = `M ${coords.join(" L ")}`;
-  const [lastX, lastY] = coords[coords.length - 1].split(",");
-
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="drop-shadow-sm">
-      <path d={path} fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
-      <circle cx={lastX} cy={lastY} r="2.2" fill={color} />
-    </svg>
-  );
-});
-
-const makeInitialPoints = (price, count = 14) => {
-  const p = Number(price) || 0;
-  const points = [];
-  let base = p;
-  for (let i = 0; i < count; i++) {
-    const noise = (Math.random() - 0.5) * 0.008 * base;
-    base = Math.max(0.000001, base + noise);
-    points.push(Number(base.toFixed(8)));
-  }
-  return points;
-};
-
-const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) => {
+const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite, isOffline }) => {
   const navigate = useNavigate();
   const logo = `/images/${asset.symbol?.toLowerCase()}.png`;
   const fallbackLogo = asset.logo_url || "/images/default.png";
 
   const change = Number(asset.changePct || 0).toFixed(2);
   const isPositive = change >= 0;
-  const color = isPositive ? "#10B981" : "#EF4444";
 
   const [price, setPrice] = useState(asset.price);
-  const [points, setPoints] = useState(asset.points || makeInitialPoints(price, 14));
 
   const handleClick = (e) => {
     e.stopPropagation();
@@ -76,6 +41,13 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) =
     onToggleFavorite(asset.id);
     triggerHaptic();
   };
+
+  // Update price dynamically if online
+  useEffect(() => {
+    if (!isOffline) {
+      setPrice(asset.price);
+    }
+  }, [asset.price, isOffline]);
 
   return (
     <AssetCardErrorBoundary>
@@ -102,11 +74,6 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) =
               </h3>
               <p className="text-xs text-gray-400 uppercase">{asset.symbol}</p>
             </div>
-          </div>
-
-          {/* Sparkline */}
-          <div className="hidden xs:block flex-shrink-0">
-            <Sparkline points={points} color={color} />
           </div>
 
           {/* Price + Star */}
@@ -139,14 +106,10 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite }) =
 
 // 🔹 Recent Viewed List Component
 const RecentViewedList = ({ recentViewed }) => {
-  const [maxItems, setMaxItems] = useState(
-    window.innerWidth < 640 ? 4 : recentViewed.length
-  );
+  const [maxItems, setMaxItems] = useState(window.innerWidth < 640 ? 4 : recentViewed.length);
 
   useEffect(() => {
-    const handleResize = () => {
-      setMaxItems(window.innerWidth < 640 ? 4 : recentViewed.length);
-    };
+    const handleResize = () => setMaxItems(window.innerWidth < 640 ? 4 : recentViewed.length);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [recentViewed.length]);
@@ -181,42 +144,68 @@ const RecentViewedList = ({ recentViewed }) => {
 };
 
 export default function Assets() {
+  const ASSET_CACHE_KEY = "asset_cache_v1";
+
   const [assets, setAssets] = useState([]);
-  const [exchangeRate, setExchangeRate] = useState(null); // ← now exposed globally if you want context later
+  const [exchangeRate, setExchangeRate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
-  const [recentViewed, setRecentViewed] = useState(
-    JSON.parse(localStorage.getItem("recentAssets") || "[]")
-  );
-  const [favorites, setFavorites] = useState(
-    JSON.parse(localStorage.getItem("favoriteAssets") || "[]")
-  );
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [recentViewed, setRecentViewed] = useState(JSON.parse(localStorage.getItem("recentAssets") || "[]"));
+  const [favorites, setFavorites] = useState(JSON.parse(localStorage.getItem("favoriteAssets") || "[]"));
   const retryRef = useRef(0);
 
+  // --- ONLINE / OFFLINE DETECTION ---
+  useEffect(() => {
+    const goOnline = () => { setIsOffline(false); fetchAssets(); };
+    const goOffline = () => setIsOffline(true);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => { window.removeEventListener("online", goOnline); window.removeEventListener("offline", goOffline); };
+  }, []);
+
+  // --- INSTANT CACHE LOAD ---
+  useEffect(() => {
+    const cached = localStorage.getItem(ASSET_CACHE_KEY);
+    if (cached) {
+      const { assets: cachedAssets, exchangeRate: cachedRate } = JSON.parse(cached);
+      setAssets(cachedAssets);
+      setExchangeRate(cachedRate);
+      setLoading(false);
+    }
+  }, []);
+
+  // --- FETCH ASSETS ---
   const fetchAssets = useCallback(async () => {
+    if (isOffline) return;
     try {
-      setLoading(true);
       setError(null);
+      setLoading(prev => prev && !assets.length);
+
       const token = localStorage.getItem("access");
       const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
       const res = await client.get("/assets/", config);
-      
       const cryptos = res.data.cryptos || res.data || [];
       setExchangeRate(res.data.exchange_rate);
 
+      const cached = JSON.parse(localStorage.getItem(ASSET_CACHE_KEY) || "{}");
+      const cachedAssets = cached.assets || [];
+
       const enriched = cryptos.map((c) => {
-        const price = Number(c.price || 0);
-        const points = makeInitialPoints(price, 14);
-        const first = points[0];
-        const last = points[points.length - 1];
-        const changePct = first === 0 ? 0 : ((last - first) / first) * 100;
-        return { ...c, price, points, changePct };
+        const rawPrice = Number(c.price || 0);
+        const oldAsset = cachedAssets.find(a => a.id === c.id);
+        const price = rawPrice < 1 && oldAsset ? oldAsset.price : rawPrice;
+        const changePct = oldAsset && oldAsset.price ? ((price - oldAsset.price) / oldAsset.price) * 100 : 0;
+        return { ...c, price, changePct };
       });
+
+      localStorage.setItem(ASSET_CACHE_KEY, JSON.stringify({ assets: enriched, exchangeRate: res.data.exchange_rate }));
       setAssets(enriched);
+
     } catch (err) {
       console.error("Failed to fetch assets:", err);
-      if (retryRef.current < 3) {
+      if (retryRef.current < 3 && !isOffline) {
         retryRef.current++;
         setTimeout(fetchAssets, 1500 * retryRef.current);
       } else {
@@ -225,54 +214,49 @@ export default function Assets() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isOffline, assets.length]);
 
+  // --- WEBSOCKET LIVE UPDATES ---
   useEffect(() => {
+    if (isOffline) return;
     fetchAssets();
-
     const ws = new WebSocket("wss://stream.binance.com:9443/ws/!ticker@arr");
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      setAssets(prev => prev.map(asset => {
-        const ticker = data.find(t => t.s === asset.symbol + "USDT");
-        if (ticker) {
-          const newPrice = parseFloat(ticker.c);
-          return {
-            ...asset,
-            price: newPrice,
-            changePct: asset.price ? ((newPrice - asset.price) / asset.price) * 100 : 0,
-            points: [...asset.points.slice(1), newPrice]
-          };
-        }
-        return asset;
-      }));
+      setAssets(prev =>
+        prev.map(asset => {
+          const ticker = data.find(t => t.s === asset.symbol + "USDT");
+          if (ticker) {
+            const newPrice = parseFloat(ticker.c);
+            return { ...asset, price: newPrice, changePct: ((newPrice - asset.price) / asset.price) * 100 };
+          }
+          return asset;
+        })
+      );
     };
-
     return () => ws.close();
-  }, [fetchAssets]);
+  }, [fetchAssets, isOffline]);
 
-  const filteredAssets = useMemo(() => {
-    return assets.filter(
-      (a) =>
-        a.name.toLowerCase().includes(search.toLowerCase()) ||
-        a.symbol.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [assets, search]);
+  // --- SEARCH FILTER ---
+  const filteredAssets = useMemo(() =>
+    assets.filter(a => a.name.toLowerCase().includes(search.toLowerCase()) || a.symbol.toLowerCase().includes(search.toLowerCase())),
+    [assets, search]
+  );
 
-  const handleView = useCallback((asset) => {
-    setRecentViewed((prev) => {
-      const exists = prev.find((a) => a.id === asset.id);
+  // --- RECENT VIEWED ---
+  const handleView = useCallback(asset => {
+    setRecentViewed(prev => {
+      const exists = prev.find(a => a.id === asset.id);
       const updated = exists ? prev : [asset, ...prev].slice(0, 6);
       localStorage.setItem("recentAssets", JSON.stringify(updated));
       return updated;
     });
   }, []);
 
-  const toggleFavorite = useCallback((assetId) => {
+  // --- FAVORITES ---
+  const toggleFavorite = useCallback(assetId => {
     setFavorites(prev => {
-      const updated = prev.includes(assetId)
-        ? prev.filter(id => id !== assetId)
-        : [...prev, assetId];
+      const updated = prev.includes(assetId) ? prev.filter(id => id !== assetId) : [...prev, assetId];
       localStorage.setItem("favoriteAssets", JSON.stringify(updated));
       return updated;
     });
@@ -310,88 +294,66 @@ export default function Assets() {
   }
 
   return (
-    <>
-      <style>{`
-        @keyframes fade-in-up {
-          from { opacity: 0; transform: translateY(8px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in-up { animation: fade-in-up 0.4s ease-out; }
+    <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10">
 
-        .input-glow:focus {
-          outline: none;
-          box-shadow: 0 0 0 3px rgba(99,102,241,0.3);
-        }
-
-        .haptic-feedback {
-          transition: transform 0.1s;
-        }
-        .haptic-feedback:active {
-          transform: scale(0.96);
-        }
-
-        .hide-scroll-bar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        .hide-scroll-bar::-webkit-scrollbar { display: none; }
-
-        @media (max-width: 340px) {
-          .xs\\:block { display: none !important; }
-        }
-      `}</style>
-
-      <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
-        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10">
-          {/* Header */}
-          <div className="flex items-center gap-2 mb-5">
-            <ArrowLeft className="w-5 h-5 text-indigo-400 flex-shrink-0" />
-            <h1 className="text-lg sm:text-xl font-bold text-indigo-400 truncate">Crypto Assets</h1>
+        {/* Offline Banner */}
+        {isOffline && (
+          <div className="bg-yellow-600/20 border border-yellow-500/40 text-yellow-300 
+                          text-xs p-2 rounded-lg mb-3 text-center">
+            Offline mode — prices may be outdated
           </div>
+        )}
 
-          {/* Search */}
-          <div className="relative w-full mb-5">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search assets..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-gray-800/60 backdrop-blur-md pl-10 pr-3 py-2.5 rounded-xl border border-gray-700/80 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200 input-glow"
-            />
-          </div>
+        {/* Header */}
+        <div className="flex items-center gap-2 mb-5">
+          <ArrowLeft className="w-5 h-5 text-indigo-400 flex-shrink-0" />
+          <h1 className="text-lg sm:text-xl font-bold text-indigo-400 truncate">Crypto Assets</h1>
+        </div>
 
-          {/* Recently Viewed */}
-          {recentViewed.length > 0 && <RecentViewedList recentViewed={recentViewed} />}
+        {/* Search */}
+        <div className="relative w-full mb-5">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search assets..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-gray-800/60 backdrop-blur-md pl-10 pr-3 py-2.5 rounded-xl border border-gray-700/80 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+          />
+        </div>
 
+        {/* Recently Viewed */}
+        {recentViewed.length > 0 && <RecentViewedList recentViewed={recentViewed} />}
 
-          {/* Assets List */}
-          <div>
-            <h2 className="text-base sm:text-lg font-bold mb-3 text-white">Supported Assets</h2>
-            {loading ? (
-              <div className="space-y-3">{skeletonCards()}</div>
-            ) : filteredAssets.length === 0 ? (
-              <div className="text-center py-10 text-gray-400">
-                <Search className="w-10 h-10 mx-auto mb-2 text-gray-500" />
-                <p className="text-sm">No assets found.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredAssets.map((asset, i) => (
-                  <div key={asset.id} style={{ animationDelay: `${i * 50}ms` }} className="animate-fade-in-up">
-                    <AssetCard
-                      asset={asset}
-                      onView={handleView}
-                      onToggleFavorite={toggleFavorite}
-                      isFavorite={favorites.includes(asset.id)}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+        {/* Assets List */}
+        <div>
+          <h2 className="text-base sm:text-lg font-bold mb-3 text-white">Supported Assets</h2>
+
+          {loading ? (
+            <div className="space-y-3">{skeletonCards()}</div>
+          ) : filteredAssets.length === 0 ? (
+            <div className="text-center py-10 text-gray-400">
+              <Search className="w-10 h-10 mx-auto mb-2 text-gray-500" />
+              <p className="text-sm">No assets found.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredAssets.map((asset, i) => (
+                <div key={asset.id} style={{ animationDelay: `${i * 50}ms` }} className="animate-fade-in-up">
+                  <AssetCard
+                    asset={asset}
+                    onView={handleView}
+                    onToggleFavorite={toggleFavorite}
+                    isFavorite={favorites.includes(asset.id)}
+                    isOffline={isOffline}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-    </>
+    </div>
   );
 }

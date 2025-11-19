@@ -2,7 +2,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import client from "../../api/client";
-import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -14,7 +14,6 @@ export default function BuyCrypto() {
 
   const [crypto, setCrypto] = useState(null);
 
-  // Always authoritative values from backend
   const [priceUsd, setPriceUsd] = useState(null);
   const [exchangeRate, setExchangeRate] = useState(null);
   const [priceNgn, setPriceNgn] = useState(null);
@@ -43,8 +42,8 @@ export default function BuyCrypto() {
       const res = await client.get(`/buy-crypto/${id}/`);
 
       setPriceUsd(res.data.price_usd);
-      setExchangeRate(res.data.usd_ngn_rate);  // ← includes margin
-      setPriceNgn(res.data.price_ngn);         // ← includes margin
+      setExchangeRate(res.data.usd_ngn_rate);
+      setPriceNgn(res.data.price_ngn);
       setMessage(null);
     } catch (err) {
       setMessage({ type: "error", text: "Failed to refresh rate. Using last known price." });
@@ -63,21 +62,15 @@ export default function BuyCrypto() {
       try {
         setLoading(true);
 
-        // Step 1: fetch list (logo, symbol, name) — NOT rate
         const listRes = await client.get("/assets/");
         const cryptos = listRes.data.cryptos || [];
         const found = cryptos.find(c => String(c.id) === String(id));
 
-        if (mounted && found) {
-          setCrypto(found);
-        }
+        if (mounted && found) setCrypto(found);
 
-        // Step 2: fetch CORRECT margin-adjusted rate
         await fetchFreshRate();
       } catch (err) {
-        if (mounted) {
-          setMessage({ type: "error", text: "Failed to load. Retrying..." });
-        }
+        if (mounted) setMessage({ type: "error", text: "Failed to load. Retrying..." });
       } finally {
         if (mounted) setLoading(false);
       }
@@ -193,65 +186,12 @@ export default function BuyCrypto() {
 
   const trimAddress = (addr) => {
     if (!addr) return addr;
-    return addr.length > 10
-      ? `${addr.slice(0, 6)}...${addr.slice(-4)}`
-      : addr;
+    return addr.length > 10 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr;
   };
 
   // ----------------------------------
   //           LOADING UI
   // ----------------------------------
-  const LoadingSkeleton = () => (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
-      <style>{`
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-        .shimmer {
-          background: linear-gradient(
-            110deg,
-            rgba(55,65,81,0.28) 8%,
-            rgba(99,102,241,0.14) 18%,
-            rgba(55,65,81,0.28) 33%
-          );
-          background-size: 200% 100%;
-          animation: shimmer 1.8s linear infinite;
-        }
-      `}</style>
-
-      <div className="w-full max-w-4xl bg-gray-900 rounded-2xl p-4 sm:p-5 shadow-xl border border-gray-700">
-        <div className="flex items-center gap-4 mb-5">
-          <div className="w-12 h-12 rounded-full shimmer" />
-          <div className="flex-1 space-y-3">
-            <div className="h-5 w-2/4 rounded shimmer" />
-            <div className="h-4 w-1/3 rounded shimmer" />
-          </div>
-        </div>
-
-        <div className="bg-gray-800 rounded-xl p-4 mb-5 flex justify-between items-center border border-gray-700">
-          <div className="space-y-2 w-3/4">
-            <div className="h-4 w-32 rounded shimmer" />
-            <div className="h-4 w-48 rounded shimmer" />
-          </div>
-          <div className="w-12 h-12 rounded-full shimmer" />
-        </div>
-
-        <div className="space-y-4">
-          <div className="h-12 rounded-xl shimmer" />
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-10 rounded-xl shimmer" />
-            ))}
-          </div>
-          <div className="h-24 rounded-xl shimmer" />
-          <div className="h-12 rounded-xl shimmer" />
-        </div>
-        <p className="text-sm text-gray-400 mt-5 text-center">Fetching secure rate & crypto data…</p>
-      </div>
-    </div>
-  );
-
   if (loading) return <LoadingSkeleton />;
 
   if (!crypto)
@@ -300,24 +240,35 @@ export default function BuyCrypto() {
               </button>
             </div>
 
-            {/* RATE DISPLAY (clean and consistent) */}
-            <div className="bg-gray-800/60 p-3 rounded-xl mb-5 border border-gray-700/50">
-              <p className="text-xs text-gray-300">
-                <span className="text-gray-400">1 USD =</span>{" "}
-                <span className="font-bold text-green-400">
-                  ₦{exchangeRate?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </span>{" "}
-                <span className="text-[10px] text-green-300">(incl. fees)</span>
-              </p>
+            {/* RATE DISPLAY */}
+            <div className="bg-gray-800/60 p-3 rounded-xl mb-5 border border-gray-700/50 flex items-center justify-between">
+              {/* Left side: rate info */}
+              <div className="flex flex-col">
+                <p className="text-xs text-gray-300">
+                  <span className="text-gray-400">1 USD =</span>{" "}
+                  <span className="font-bold text-green-400">
+                    ₦{exchangeRate?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>{" "}
+                  <span className="text-[10px] text-green-300">(incl. fees)</span>
+                </p>
 
-              <p className="text-xs text-gray-300 mt-1">
-                <span className="text-gray-400">1 {crypto.symbol} =</span>{" "}
-                <span className="font-bold text-indigo-400">
-                  ${priceUsd?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  {" → "}
-                  ₦{(priceUsd * exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                </span>
-              </p>
+                <p className="text-xs text-gray-300 mt-1">
+                  <span className="text-gray-400">1 {crypto.symbol} =</span>{" "}
+                  <span className="font-bold text-indigo-400">
+                    ${priceUsd?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {" → "}
+                    ₦{(priceUsd * exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </span>
+                </p>
+              </div>
+
+              {/* Right side: crypto logo */}
+              <img
+                src={`/images/${crypto.symbol?.toLowerCase()}.png`}
+                alt={crypto.name}
+                onError={(e) => (e.target.src = crypto.logo_url || "/images/default.png")}
+                className="w-10 h-10 rounded-full border border-indigo-500/30 object-contain bg-gray-900"
+              />
             </div>
 
             {/* Message */}
@@ -468,22 +419,68 @@ export default function BuyCrypto() {
 }
 
 /* ---------------------------------------------------------
-   UI COMPONENTS (unchanged from your original version)
+   HELPER COMPONENTS
 --------------------------------------------------------- */
 
+function LoadingSkeleton() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .shimmer {
+          background: linear-gradient(
+            110deg,
+            rgba(55,65,81,0.28) 8%,
+            rgba(99,102,241,0.14) 18%,
+            rgba(55,65,81,0.28) 33%
+          );
+          background-size: 200% 100%;
+          animation: shimmer 1.8s linear infinite;
+        }
+      `}</style>
+
+      <div className="w-full max-w-4xl bg-gray-900 rounded-2xl p-4 sm:p-5 shadow-xl border border-gray-700">
+        <div className="flex items-center gap-4 mb-5">
+          <div className="w-12 h-12 rounded-full shimmer" />
+          <div className="flex-1 space-y-3">
+            <div className="h-5 w-2/4 rounded shimmer" />
+            <div className="h-4 w-1/3 rounded shimmer" />
+          </div>
+        </div>
+
+        <div className="bg-gray-800 rounded-xl p-4 mb-5 flex justify-between items-center border border-gray-700">
+          <div className="space-y-2 w-3/4">
+            <div className="h-4 w-32 rounded shimmer" />
+            <div className="h-4 w-48 rounded shimmer" />
+          </div>
+          <div className="w-12 h-12 rounded-full shimmer" />
+        </div>
+
+        <div className="space-y-4">
+          <div className="h-12 rounded-xl shimmer" />
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-10 rounded-xl shimmer" />
+            ))}
+          </div>
+          <div className="h-24 rounded-xl shimmer" />
+          <div className="h-12 rounded-xl shimmer" />
+        </div>
+        <p className="text-sm text-gray-400 mt-5 text-center">Fetching secure rate & crypto data…</p>
+      </div>
+    </div>
+  );
+}
+
 function AnimatedTransactionLoader() {
-  const messages = [
-    "Confirming transaction…",
-    "Finalizing purchase…",
-    "Almost done…",
-    "Securing your receipt…",
-  ];
+  const messages = ["Confirming transaction…","Finalizing purchase…","Almost done…","Securing your receipt…"];
   const [step, setStep] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setStep((s) => (s < messages.length - 1 ? s + 1 : s));
-    }, 2400);
+    const id = setInterval(() => setStep((s) => (s < messages.length - 1 ? s + 1 : s)), 2400);
     return () => clearInterval(id);
   }, []);
 
@@ -502,63 +499,46 @@ function AnimatedTransactionLoader() {
         <motion.div
           className="h-full bg-indigo-500"
           initial={{ width: 0 }}
-          animate={{ width: `${((step + 1) / messages.length) * 100}%` }}
-          transition={{ duration: 0.8, ease: "easeInOut" }}
+          animate={{ width: "100%" }}
+          transition={{ repeat: Infinity, duration: 2 }}
         />
       </div>
 
-      <motion.p
-        key={step}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
-        className="text-indigo-200 text-lg font-medium"
-      >
-        {messages[step]}
-      </motion.p>
-
-      <p className="text-gray-400 text-sm">Please don’t close this window…</p>
-    </div>
-  );
-}
-
-
-function ConfirmModal({ crypto, cryptoReceived, form, onCancel, onConfirm }) {
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-3">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-gray-800/90 p-5 rounded-2xl max-w-md w-full border border-gray-700/50"
-      >
-        <h3 className="text-lg font-bold">Confirm Purchase</h3>
-        <p className="text-sm text-gray-300 mt-2">
-          You are buying <b>{crypto.symbol}</b> worth {form.amount} {form.currency}
-        </p>
-        <p className="text-sm text-gray-300 mt-1">
-          You will receive <b>{cryptoReceived.toFixed(6)} {crypto.symbol}</b>
-        </p>
-
-        <div className="flex justify-end gap-3 mt-4">
-          <button onClick={onCancel} className="px-4 py-2 bg-gray-700 rounded-xl">Cancel</button>
-          <button onClick={onConfirm} className="px-4 py-2 bg-indigo-600 rounded-xl">Confirm</button>
-        </div>
-      </motion.div>
+      <p className="text-sm text-gray-300">{messages[step]}</p>
     </div>
   );
 }
 
 function SuccessOverlay() {
   return (
-    <div className="fixed inset-0 bg-black/70 flex flex-col items-center justify-center z-[9999]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
       <motion.div
+        className="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center text-white text-xl font-bold"
         initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center border-2 border-green-400"
+        animate={{ scale: 1.2 }}
+        transition={{ type: "spring", stiffness: 200, damping: 15 }}
       >
-        <span className="text-3xl">✓</span>
+        ✓
       </motion.div>
-      <p className="text-green-300 mt-4 text-lg font-semibold">Transaction Successful</p>
+    </div>
+  );
+}
+
+function ConfirmModal({ crypto, cryptoReceived, form, onCancel, onConfirm }) {
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div className="bg-gray-800 rounded-xl p-6 w-80 text-white border border-gray-700">
+        <p className="text-sm mb-4">Confirm your purchase</p>
+        <p className="text-xs text-gray-400 mb-2">
+          You are about to buy <span className="text-indigo-400 font-bold">{cryptoReceived.toFixed(8)} {crypto.symbol}</span> 
+          using <span className="font-bold">{form.amount} {form.currency}</span>
+        </p>
+
+        <div className="flex gap-3 mt-4">
+          <button onClick={onCancel} className="flex-1 py-2 bg-gray-700 rounded-xl text-sm">Cancel</button>
+          <button onClick={onConfirm} className="flex-1 py-2 bg-indigo-600 rounded-xl text-sm">Confirm</button>
+        </div>
+      </div>
     </div>
   );
 }
