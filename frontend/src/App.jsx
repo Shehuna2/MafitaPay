@@ -1,5 +1,5 @@
-// src/App.jsx
 import { Routes, Route, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import Layout from "./layouts/Layout";
 import Navbar from "./components/Navbar";
 import PrivateRoute from "./components/PrivateRoute";
@@ -17,7 +17,7 @@ import WalletTransactions from "./pages/WalletTransactions";
 import Login from "./pages/accounts/Login";
 import Register from "./pages/accounts/Register";
 import Profile from "./pages/accounts/Profile";
-import VerifyEmail from "./pages/accounts/VerifyEmail"; // ← Already imported
+import VerifyEmail from "./pages/accounts/VerifyEmail";
 import ResetPassword from "./pages/accounts/ResetPassword";
 import ResetPasswordRequest from "./pages/accounts/ResetPasswordRequest";
 
@@ -42,18 +42,34 @@ import WithdrawOrderDetails from "./pages/p2p/WithdrawOrderDetails";
 import MerchantWithdrawOrderDetails from "./pages/p2p/MerchantWithdrawOrderDetails";
 
 function App() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const location = useLocation();
+
+  // 🔐 Auto-logout when Axios triggers session expiration
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      console.warn("Session expired — logging out...");
+      logout();
+    };
+
+    window.addEventListener("sessionExpired", handleSessionExpired);
+
+    return () => {
+      window.removeEventListener("sessionExpired", handleSessionExpired);
+    };
+  }, [logout]);
 
   // Hide Navbar on auth & reset pages
   const hideNavbar =
     ["/login", "/register", "/reset-password-request"].includes(location.pathname) ||
     location.pathname.startsWith("/reset-password") ||
-    location.pathname.startsWith("/verify-email"); // ← Add verify-email
+    location.pathname.startsWith("/verify-email");
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-gray-900 to-gray-900 text-white">
-      {!hideNavbar && isAuthenticated && <Navbar />}
+
+      {/* Navbar only when authenticated AND current page is not an auth page */}
+      {isAuthenticated && !hideNavbar && <Navbar />}
 
       <main className="flex-1 container mx-auto px-4 pt-20 pb-6">
         <ErrorBoundary>
@@ -64,7 +80,7 @@ function App() {
             {/* Auth */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/verify-email" element={<VerifyEmail />} /> {/* ← Fixed: Added */}
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/reset-password-request" element={<ResetPasswordRequest />} />
 
@@ -79,6 +95,7 @@ function App() {
                 </PrivateRoute>
               }
             />
+
             <Route
               path="/dashboard"
               element={
@@ -89,6 +106,7 @@ function App() {
                 </PrivateRoute>
               }
             />
+
             <Route
               path="/buy-airtime"
               element={
@@ -99,6 +117,7 @@ function App() {
                 </PrivateRoute>
               }
             />
+
             <Route
               path="/buy-data"
               element={
@@ -109,6 +128,7 @@ function App() {
                 </PrivateRoute>
               }
             />
+
             <Route
               path="/buy-cable-tv"
               element={
@@ -119,6 +139,7 @@ function App() {
                 </PrivateRoute>
               }
             />
+
             <Route
               path="/buy-electricity"
               element={
@@ -129,6 +150,7 @@ function App() {
                 </PrivateRoute>
               }
             />
+
             <Route
               path="/buy-education"
               element={
@@ -151,6 +173,7 @@ function App() {
                 </PrivateRoute>
               }
             />
+
             <Route
               path="/wallet-transactions"
               element={
@@ -193,6 +216,7 @@ function App() {
                 </Layout>
               }
             />
+
             <Route
               path="/sell-crypto"
               element={
@@ -201,6 +225,7 @@ function App() {
                 </Layout>
               }
             />
+
             <Route
               path="/referral"
               element={
@@ -209,6 +234,7 @@ function App() {
                 </Layout>
               }
             />
+
             <Route
               path="/admin/sell-orders"
               element={
@@ -217,6 +243,7 @@ function App() {
                 </Layout>
               }
             />
+
             <Route
               path="/buy-crypto/:id"
               element={

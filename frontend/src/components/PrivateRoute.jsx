@@ -7,17 +7,19 @@ export default function PrivateRoute({ children }) {
   const { access, isAuthenticated, logout } = useAuth();
   const location = useLocation();
 
-  if (!isAuthenticated || !access) {
+  // 1. Main authentication gate
+  if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // 2. Validate token safely
   try {
     const { exp } = jwtDecode(access);
 
-    // Check expiration and auto-logout if token truly invalid (not refreshable)
+    // If token is expired, logout and redirect
     if (Date.now() >= exp * 1000) {
       console.warn("Access token expired — logging out...");
-      logout(); // clear tokens safely
+      logout();
       return <Navigate to="/login" replace />;
     }
   } catch (e) {

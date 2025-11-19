@@ -382,8 +382,8 @@ def purchase_data(phone: str, amount: float, network: str, variation_code: str, 
         raise ValueError(msg)
 
 
-# from vtu_ng import get_variations as get_vtung_variations
-# from vtpass_api import get_variations as get_vtpass_variations  # assume you have this module
+# from .vtu_ng import get_variations as get_vtung_variations
+# from .data_purchase import get_variations as get_vtpass_variations  # assume you have this module
 
 # # --- Merge VTU.ng and VTpass plans into frontend-ready catalog ---
 # def get_all_plans():

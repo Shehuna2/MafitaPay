@@ -127,7 +127,11 @@ class GenerateDVAAPIView(APIView):
                 from .services.flutterwave_service import FlutterwaveService
                 fw = FlutterwaveService(use_live=True)
 
-                existing_va = VirtualAccount.objects.filter(user=user, provider="flutterwave", assigned=True).first()
+                # CHECK IF USER ALREADY HAS FLUTTERWAVE VA
+                existing_va = VirtualAccount.objects.filter(
+                    user=user, provider="flutterwave", assigned=True
+                ).first()
+
                 if existing_va:
                     return Response({
                         "success": True,
@@ -135,65 +139,69 @@ class GenerateDVAAPIView(APIView):
                         "account_number": existing_va.account_number,
                         "bank_name": existing_va.bank_name,
                         "account_name": existing_va.account_name,
+                        "type": existing_va.metadata.get("type", "dynamic"),
                     }, status=status.HTTP_200_OK)
 
-                preferred_bank = request.data.get("preferred_bank", "wema-bank").replace("-", "_").upper()
-                bvn_or_nin = request.data.get("bvn_or_nin")  # optional
+                # ALWAYS USE STERLING — safest and most reliable
+                preferred_bank = "sterling-bank"
 
-                response = fw.create_virtual_account(user, bank=preferred_bank, bvn_or_nin=bvn_or_nin)
+                # BVN / NIN optional → if provided → STATIC account
+                bvn_or_nin = request.data.get("bvn_or_nin")
+
+                response = fw.create_virtual_account(
+                    user,
+                    bank=preferred_bank,
+                    bvn_or_nin=bvn_or_nin
+                )
+
                 if not response:
-                    logger.error("Flutterwave VA generation failed for %s", user.email)
-                    return Response({"error": "Failed to generate Flutterwave virtual account."}, status=status.HTTP_400_BAD_REQUEST)
+                    logger.error(f"Failed FW VA creation for {user.email}")
+                    return Response({"error": "Failed to generate Flutterwave virtual account."},
+                                    status=status.HTTP_400_BAD_REQUEST)
 
                 account_num = response.get("account_number")
-                ref = response.get("reference") or response.get("provider_reference") or None
-                if not account_num:
-                    logger.error("Flutterwave response missing account number: %s", response.get("raw_response"))
-                    return Response({"error": "Invalid response from Flutterwave"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                ref = response.get("reference") or response.get("provider_reference")
 
-                # Duplicate check should be against VirtualAccount.account_number
+                if not account_num:
+                    logger.error(f"Invalid FW response: {response}")
+                    return Response({"error": "Invalid response from Flutterwave"},
+                                    status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+                # Prevent duplicates
                 if VirtualAccount.objects.filter(account_number=account_num).exists():
-                    logger.error("Duplicate DVA attempted: %s for %s", account_num, user.email)
-                    return Response({"error": "Duplicate account number"}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"error": "Duplicate account number"},
+                                    status=status.HTTP_400_BAD_REQUEST)
 
                 with transaction.atomic():
                     va = VirtualAccount.objects.create(
                         user=user,
-                        provider=response["provider"],
+                        provider="flutterwave",
                         provider_account_id=ref,
                         account_number=account_num,
-                        bank_name=response.get("bank_name"),
+                        bank_name="Sterling Bank",
                         account_name=response.get("account_name"),
                         metadata={
                             "type": response.get("type", "dynamic"),
-                            "customer_id": response.get("customer_id"),
-                            # avoid dumping entire raw response into top-level metadata to limit size
-                            "raw_summary": {"status": response.get("raw_response", {}).get("status"), "ref": ref}
+                            "provider_ref": ref,
                         },
                         assigned=True,
                     )
 
-                    profile = getattr(user, "profile", None)
-                    if profile:
-                        profile.account_no = va.account_number
-                        profile.bank_name = va.bank_name
-                        profile.save(update_fields=["account_no", "bank_name"])
-
                     wallet, _ = Wallet.objects.get_or_create(user=user)
                     wallet.van_account_number = account_num
-                    wallet.van_bank_name = response.get("bank_name")
+                    wallet.van_bank_name = "Sterling Bank"
                     wallet.van_provider = "flutterwave"
                     wallet.save(update_fields=["van_account_number", "van_bank_name", "van_provider"])
 
-                logger.info("Created %s VA (%s) for %s", ("Static" if bvn_or_nin else "Dynamic"), account_num, user.email)
                 return Response({
                     "success": True,
-                    "message": f"Flutterwave virtual account ({'static' if bvn_or_nin else 'dynamic'}) generated successfully.",
+                    "message": "Flutterwave virtual account generated successfully.",
                     "account_number": va.account_number,
-                    "bank_name": va.bank_name,
-                    "type": response.get("type"),
-                    "account_name": response.get("account_name") or f"{user.profile.first_name or ''} {user.profile.last_name or ''}".strip() or user.email.split("@")[0],
+                    "bank_name": "Sterling Bank",
+                    "account_name": va.account_name,
+                    "type": va.metadata.get("type", "dynamic"),
                 }, status=status.HTTP_201_CREATED)
+
 
             # =============== PAYSTACK DVA FLOW ===============
             else:

@@ -33,10 +33,10 @@ export default function Login() {
       return null;
     }
   }, [reauthUserRaw]);
-  
 
   // Biometric hook
-  const { isSupported: biometricSupported, authenticateWithRefresh, checking: biometricChecking } = useBiometricAuth();
+  const { isSupported: biometricSupported, authenticateWithRefresh, checking: biometricChecking } =
+    useBiometricAuth();
 
   // Email verification messages
   useEffect(() => {
@@ -61,13 +61,12 @@ export default function Login() {
     }
   }, [navigate]);
 
-  // Handle input changes
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setErrorMessage("");
   };
 
-  // Login submission
+  // ✅ FIXED: Login submission (ALL token/user storing handled by AuthContext)
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -77,24 +76,24 @@ export default function Login() {
     const submitEmail = shouldReauth && reauthUser ? reauthUser.email : formData.email;
 
     try {
+      // 1. Login request
       const res = await client.post("/login/", {
         email: submitEmail,
         password: formData.password,
       });
 
       const { access, refresh } = res.data;
-      localStorage.setItem("access", access);
-      localStorage.setItem("refresh", refresh);
-      localStorage.setItem("last_active", Date.now().toString());
 
+      // 2. Remember email if checkbox checked
       rememberMe
         ? localStorage.setItem("rememberedEmail", submitEmail)
         : localStorage.removeItem("rememberedEmail");
 
-      // Fetch profile
+      // 3. Fetch profile
+      let userData = null;
       try {
         const profileRes = await client.get(`/profile-api/?t=${Date.now()}`);
-        const userData = {
+        userData = {
           email: profileRes.data.email,
           id: profileRes.data.id,
           is_merchant: profileRes.data.is_merchant,
@@ -103,27 +102,28 @@ export default function Login() {
           phone_number: profileRes.data.phone_number || null,
           date_of_birth: profileRes.data.date_of_birth || null,
         };
-        localStorage.setItem("user", JSON.stringify(userData));
-        localStorage.setItem("last_user_fetch", Date.now().toString());
-        localStorage.removeItem("reauth_user");
       } catch {
-        // ignore profile fetch failure
+        // Fallback if profile fails
+        userData = { email: submitEmail };
       }
 
-      // Context login
-      login({ access, refresh }, JSON.parse(localStorage.getItem("user") || "null"));
-      window.dispatchEvent(new Event("login"));
+      // 4. Use AuthContext login (this stores tokens+user properly)
+      login({ access, refresh }, userData);
 
-      // Redirect
+      // 5. Cleanup
+      localStorage.removeItem("reauth_user");
+
+      // 6. Redirect immediately
       const redirectPath = localStorage.getItem("post_reauth_redirect");
       localStorage.removeItem("post_reauth_redirect");
       navigate(redirectPath || "/dashboard", { replace: true });
     } catch (err) {
       const errors = err.response?.data || {};
       const msg = errors.detail || "Login failed. Please check your credentials.";
+
       if (errors.action === "resend_verification") {
         setShowResend(true);
-        setErrorMessage("Your account is not verified. Check your email or resend verification.");
+        setErrorMessage("Your account is not verified. Check email or resend verification.");
       } else if (errors?.non_field_errors?.[0]) {
         setErrorMessage(errors.non_field_errors[0]);
       } else {
@@ -133,7 +133,6 @@ export default function Login() {
       setLoading(false);
     }
   };
-
 
   // Resend verification
   const handleResendVerification = async () => {
@@ -154,9 +153,10 @@ export default function Login() {
 
     const { success, access } = await authenticateWithRefresh();
     if (success) {
+      let userData;
       try {
         const profileRes = await client.get(`/profile-api/?t=${Date.now()}`);
-        const userData = {
+        userData = {
           email: profileRes.data.email,
           id: profileRes.data.id,
           is_merchant: profileRes.data.is_merchant,
@@ -164,16 +164,12 @@ export default function Login() {
           full_name: profileRes.data.full_name || null,
           phone_number: profileRes.data.phone_number || null,
         };
-        localStorage.setItem("user", JSON.stringify(userData));
-        localStorage.setItem("last_active", Date.now().toString());
-        login({ access, refresh: localStorage.getItem("refresh") }, userData);
       } catch {
-        localStorage.setItem("last_active", Date.now().toString());
-        const userData = JSON.parse(localStorage.getItem("user") || "null");
-        login({ access, refresh: localStorage.getItem("refresh") }, userData);
+        userData = JSON.parse(localStorage.getItem("user") || "null");
       }
-      window.dispatchEvent(new Event("login"));
-      localStorage.removeItem("reauth_user");
+
+      // Login through context
+      login({ access, refresh: localStorage.getItem("refresh") }, userData);
 
       const redirectPath = localStorage.getItem("post_reauth_redirect");
       localStorage.removeItem("post_reauth_redirect");
@@ -186,9 +182,7 @@ export default function Login() {
   const renderGreeting = () => {
     const displayName = reauthUser?.full_name || reauthUser?.email || formData.email;
     return shouldReauth && reauthUser ? (
-      <h2 className="text-2xl font-bold text-indigo-400">
-        Welcome back, {displayName}
-      </h2>
+      <h2 className="text-2xl font-bold text-indigo-400">Welcome back, {displayName}</h2>
     ) : (
       <h2 className="text-2xl font-bold text-indigo-400">Welcome Back</h2>
     );
@@ -196,6 +190,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-3 relative">
+      {/* Loading Overlay */}
       {loading && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-gray-800/90 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-gray-700/50 max-w-md w-full mx-4">
@@ -217,14 +212,7 @@ export default function Login() {
               alt="Mafita Logo"
               className="w-24 h-24 object-contain mx-auto md:mx-0"
             />
-            <div className="mt-2 md:mt-0 md:block hidden">
-              {renderGreeting()}
-            </div>
-          </div>
-
-          {/* Show greeting only on mobile if desired, otherwise keep hidden */}
-          <div className="block md:hidden mb-4 text-center">
-            {/* optional mobile greeting can go here */}
+            <div className="mt-2 md:mt-0 md:block hidden">{renderGreeting()}</div>
           </div>
 
           {errorMessage && (
@@ -236,7 +224,9 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {!shouldReauth && (
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Email Address</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                  Email Address
+                </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
@@ -285,7 +275,10 @@ export default function Login() {
                 />
                 Remember me
               </label>
-              <Link to="/reset-password-request" className="text-indigo-400 hover:text-indigo-300 font-medium transition">
+              <Link
+                to="/reset-password-request"
+                className="text-indigo-400 hover:text-indigo-300 font-medium transition"
+              >
                 Forgot password?
               </Link>
             </div>
@@ -330,8 +323,16 @@ export default function Login() {
                     stroke="currentColor"
                     strokeWidth={1.6}
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 11.5c0-.833.667-1.5 1.5-1.5S15 10.667 15 11.5v1a4 4 0 01-8 0v-1a1.5 1.5 0 013 0v1a1 1 0 002 0v-1z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4C7.582 4 4 7.582 4 12a8 8 0 0016 0c0-4.418-3.582-8-8-8z" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 11.5c0-.833.667-1.5 1.5-1.5S15 10.667 15 11.5v1a4 4 0 01-8 0v-1a1.5 1.5 0 013 0v1a1 1 0 002 0v-1z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 4C7.582 4 4 7.582 4 12a8 8 0 0016 0c0-4.418-3.582-8-8-8z"
+                    />
                   </svg>
                   {biometricSupported && localStorage.getItem("refresh")
                     ? "Sign in with fingerprint"
@@ -354,7 +355,6 @@ export default function Login() {
             </div>
           )}
 
-          {/* Register Link */}
           <div className="mt-5 text-center text-xs text-gray-400">
             Don’t have an account?{" "}
             <Link to="/register" className="text-indigo-400 hover:text-indigo-300 font-medium underline transition">

@@ -1,77 +1,67 @@
 import axios from "axios";
 
-// Normalize base URL: use environment variable or fallback to localhost
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
-// Create Axios instance
 const client = axios.create({
   baseURL: BASE_URL,
   headers: { "Content-Type": "application/json" },
 });
 
-// Idle timeout in milliseconds (2 hours)
+// Idle timeout (2 hours)
 const IDLE_TIMEOUT = 2 * 60 * 60 * 1000;
 
-// Helper: mark last activity
+// Helper: update activity timestamp
 function markActivity() {
   try {
     localStorage.setItem("last_active", Date.now().toString());
   } catch {}
 }
 
-// Helper: safely save user for reauth
+// Helper: save redirect path
+function saveRedirect() {
+  try {
+    const path = window.location.pathname + window.location.search;
+    localStorage.setItem("post_reauth_redirect", path);
+  } catch {}
+}
+
+// Helper: keep user for biometric relogin
 function saveReauthUser() {
   try {
-    const user = localStorage.getItem("user") || localStorage.getItem("reauth_user") || "{}";
+    const user = localStorage.getItem("user") || "{}";
     localStorage.setItem("reauth_user", user);
   } catch {}
 }
 
-// Helper: safely save post-login redirect path
-function saveRedirect() {
-  try {
-    const currentPath = window.location.pathname + window.location.search;
-    localStorage.setItem("post_reauth_redirect", currentPath);
-  } catch {}
-}
-
-// Request interceptor: attach token + manage idle timeout
+// REQUEST INTERCEPTOR
 client.interceptors.request.use(
   (config) => {
     try {
       const lastActive = Number(localStorage.getItem("last_active") || 0);
       const now = Date.now();
 
-      // If idle timeout exceeded, expire session
+      // Idle timeout enforcement
       if (lastActive && now - lastActive > IDLE_TIMEOUT) {
-        const justLoggedIn = now - lastActive < 5000; // 5 seconds grace period
-        if (!justLoggedIn) {
-          saveRedirect();
-          saveReauthUser();
+        console.warn("Idle timeout exceeded — expiring session");
 
-          // Clear only access token (keep refresh)
-          localStorage.removeItem("access");
+        saveRedirect();
+        saveReauthUser();
 
-          // Trigger global event for UI listening
-          window.dispatchEvent(new Event("sessionExpired"));
-        } else {
-          markActivity();
-        }
+        // Don't remove access token here — let server validate on next call
+        window.dispatchEvent(new Event("sessionExpired"));
       } else {
         markActivity();
       }
-    } catch {
-      // Ignore localStorage errors
-    }
+    } catch {}
 
-    // Attach access token if present
+    // Attach token
     const access = localStorage.getItem("access");
     if (access) {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${access}`;
     }
 
-    // Prevent caching GET requests
+    // Prevent GET caching
     if (config.method?.toLowerCase() === "get") {
       config.params = { ...config.params, t: Date.now() };
     }
@@ -81,49 +71,51 @@ client.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor: handle refresh and logout flows
+// RESPONSE INTERCEPTOR
 client.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config || {};
 
+    // Token expired: try refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
         const refresh = localStorage.getItem("refresh");
-        if (!refresh) throw new Error("No refresh token found");
+        if (!refresh) throw new Error("Refresh missing");
 
         const refreshURL = `${BASE_URL.replace(/\/api\/?$/, "/")}auth/token/refresh/`;
 
-        // Use plain axios to avoid infinite loops
+        // Use raw axios to avoid infinite loops
         const res = await axios.post(refreshURL, { refresh });
 
-        // Update stored access token
-        localStorage.setItem("access", res.data.access);
+        const newAccess = res.data.access;
+
+        localStorage.setItem("access", newAccess);
         markActivity();
 
-        // Notify other parts of the app
+        // Notify AuthContext
         window.dispatchEvent(new Event("tokenRefreshed"));
 
-        // Retry original request with new token
+        // Retry original request
         originalRequest.headers = originalRequest.headers || {};
-        originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
+        originalRequest.headers.Authorization = `Bearer ${newAccess}`;
         return client(originalRequest);
-      } catch {
-        // Refresh failed -> prepare reauth flow
+      } catch (refreshError) {
+        console.warn("Refresh token invalid — forcing reauth");
+
+        // Prepare reauth flow
         saveReauthUser();
         saveRedirect();
 
+        // Remove access so PrivateRoute pushes to login
         localStorage.removeItem("access");
 
-        window.dispatchEvent(new Event("logout"));
+        // Fire sessionExpired (NOT "logout")
+        window.dispatchEvent(new Event("sessionExpired"));
 
-        // Redirect to login with safe redirect
-        try {
-          const redirect = localStorage.getItem("post_reauth_redirect") || "/dashboard";
-          window.location.href = `/login?reauth=true&next=${encodeURIComponent(redirect)}`;
-        } catch {}
+        return Promise.reject(refreshError);
       }
     }
 

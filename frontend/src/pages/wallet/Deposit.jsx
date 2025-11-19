@@ -19,8 +19,8 @@ export default function Deposit() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [lastRequeryDate, setLastRequeryDate] = useState(new Date().toISOString().split("T")[0]);
   const [provider, setProvider] = useState("paystack");
-  const [preferredBank, setPreferredBank] = useState("wema-bank");
-  const [showBankSelector, setShowBankSelector] = useState(false);
+
+
   const [bvnOrNin, setBvnOrNin] = useState("");
   const [showBvnField, setShowBvnField] = useState(false);
 
@@ -56,21 +56,10 @@ export default function Deposit() {
   }, [provider]);
 
   const fetchDVA = async () => {
-    if (provider === "flutterwave" && !showBankSelector) {
-      setShowBankSelector(true);
-      return;
-    }
-
-    if (provider === "flutterwave" && !showBvnField && preferredBank) {
-      setShowBvnField(true);
-      return;
-    }
-
     setLoading(true);
     try {
       const payload = {
         provider,
-        preferred_bank: provider === "paystack" ? "titan-paystack" : preferredBank,
       };
 
       if (provider === "flutterwave" && bvnOrNin) {
@@ -87,11 +76,9 @@ export default function Deposit() {
           provider,
           type: response.data.type || "dynamic"
         });
-        toast.success(`Virtual account generated! (${response.data.type || "dynamic"})`);
-        setShowBankSelector(false);
-        setShowBvnField(false);
+
+        toast.success(`Virtual account generated!`);
         setBvnOrNin("");
-        setPreferredBank("wema-bank");
       } else {
         toast.error(response.data.message || "Failed to generate account");
       }
@@ -102,6 +89,7 @@ export default function Deposit() {
       setLoading(false);
     }
   };
+
 
   const handleRequery = async () => {
     if (!dvaDetails?.account_number) return;
@@ -190,7 +178,6 @@ export default function Deposit() {
                 value={provider}
                 onChange={(e) => {
                   setProvider(e.target.value);
-                  setShowBankSelector(false);
                   setShowBvnField(false);
                   setBvnOrNin("");
                 }}
@@ -203,22 +190,6 @@ export default function Deposit() {
                 <option value="monnify" disabled>Monnify (Coming Soon)</option>
               </select>
             </div>
-
-            {provider === "flutterwave" && showBankSelector && (
-              <div className="mb-5 animate-fade-in-up">
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  Choose Bank
-                </label>
-                <select
-                  value={preferredBank}
-                  onChange={(e) => setPreferredBank(e.target.value)}
-                  className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition"
-                >
-                  <option value="wema-bank">Wema Bank</option>
-                  <option value="sterling-bank">Sterling Bank</option>
-                </select>
-              </div>
-            )}
 
             {provider === "flutterwave" && showBvnField && (
               <div className="mb-5 animate-fade-in-up">
@@ -253,8 +224,6 @@ export default function Deposit() {
                     ? bvnOrNin
                       ? "Confirm & Generate Static Account"
                       : "Skip for Temporary Account"
-                    : showBankSelector
-                    ? "Confirm Bank & Continue"
                     : "Generate Virtual Account"}
                 </button>
               </div>

@@ -6,7 +6,7 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
 
-  // Initialize auth state from localStorage
+  // Initial state from localStorage (loaded once)
   const [access, setAccess] = useState(() => localStorage.getItem("access"));
   const [refresh, setRefresh] = useState(() => localStorage.getItem("refresh"));
   const [user, setUser] = useState(() => {
@@ -14,57 +14,74 @@ export const AuthProvider = ({ children }) => {
     return raw ? JSON.parse(raw) : null;
   });
 
-  // ✅ Login: save tokens and user info
+  // -------------------------------------------------------
+  // 🔐 LOGIN — single source of truth for token + user state
+  // -------------------------------------------------------
   const login = (tokens, userData) => {
-    localStorage.setItem("access", tokens.access);
-    localStorage.setItem("refresh", tokens.refresh);
-    localStorage.setItem("user", JSON.stringify(userData));
+    if (tokens.access) localStorage.setItem("access", tokens.access);
+    if (tokens.refresh) localStorage.setItem("refresh", tokens.refresh);
+    if (userData) localStorage.setItem("user", JSON.stringify(userData));
+
     setAccess(tokens.access);
     setRefresh(tokens.refresh);
     setUser(userData);
   };
 
-  // ✅ Logout: clear everything and navigate to login
+  // -------------------------------------------------------
+  // 🚪 LOGOUT — fully resets state + storage
+  // -------------------------------------------------------
   const logout = () => {
-    // Clear all local storage items that may hold user data
+    // Clear all localStorage items related to auth
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
     localStorage.removeItem("user");
     localStorage.removeItem("profile_image");
     localStorage.removeItem("notifications");
 
-    // Reset in-memory auth state
     setAccess(null);
     setRefresh(null);
     setUser(null);
 
-    // Small timeout prevents React state tear errors on immediate route change
-    setTimeout(() => navigate("/login", { replace: true }), 0);
+    // Slight delay to avoid React state tear warnings
+    setTimeout(() => {
+      navigate("/login", { replace: true });
+    }, 0);
   };
 
-  // ✅ Listen for token refresh events triggered by Axios (in client.js)
+  // -------------------------------------------------------
+  // 🔄 Update access token when refreshed by Axios (client.js)
+  // -------------------------------------------------------
   useEffect(() => {
     const handleTokenRefreshed = () => {
       const newAccess = localStorage.getItem("access");
       if (newAccess) setAccess(newAccess);
     };
+
     window.addEventListener("tokenRefreshed", handleTokenRefreshed);
     return () => window.removeEventListener("tokenRefreshed", handleTokenRefreshed);
   }, []);
 
-  // ✅ Keep auth state synchronized with localStorage changes across tabs
+  // -------------------------------------------------------
+  // 🌐 Sync auth state across multiple browser tabs
+  // -------------------------------------------------------
   useEffect(() => {
     const handleStorageChange = () => {
-      setAccess(localStorage.getItem("access"));
-      setRefresh(localStorage.getItem("refresh"));
+      const newAccess = localStorage.getItem("access");
+      const newRefresh = localStorage.getItem("refresh");
       const rawUser = localStorage.getItem("user");
+
+      setAccess(newAccess);
+      setRefresh(newRefresh);
       setUser(rawUser ? JSON.parse(rawUser) : null);
     };
+
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-    // ✅ Handle logout events triggered externally (client.js)
+  // -------------------------------------------------------
+  // 🔐 External logout event support (optional)
+  // -------------------------------------------------------
   useEffect(() => {
     const handleExternalLogout = () => {
       setAccess(null);
@@ -76,15 +93,26 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener("logout", handleExternalLogout);
   }, []);
 
-
+  // -------------------------------------------------------
+  // Boolean authenticated flag
+  // -------------------------------------------------------
   const isAuthenticated = Boolean(access);
 
   return (
-    <AuthContext.Provider value={{ access, refresh, user, isAuthenticated, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        access,
+        refresh,
+        user,
+        isAuthenticated,
+        login,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
 
-// ✅ Custom hook for easy use
+// 🔥 Hook for easy access
 export const useAuth = () => useContext(AuthContext);
