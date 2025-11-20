@@ -18,42 +18,54 @@ const NETWORK_LOGOS = {
 };
 
 // ----------------------------------------
-// Nigerian Phone Validation + Network Detection
+// Nigerian Network Prefixes
 // ----------------------------------------
 const NETWORK_PREFIXES = {
-  mtn: ["0803", "0806", "0703", "0706", "0813","0816","0810","0814","0903","0906","0913","0916"],
+  mtn: ["0803","0806","0703","0706","0813","0816","0810","0814","0903","0906","0913","0916"],
   airtel: ["0802","0808","0708","0812","0701","0902","0907","0901","0912"],
   glo: ["0805","0807","0705","0815","0811","0905"],
   "9mobile": ["0809","0817","0818","0908","0909"]
 };
 
+// ----------------------------------------
+// Phone Normalization
+// ----------------------------------------
 const normalizePhone = (phone) => {
-  let p = phone.trim();
-  if (p.startsWith("+234")) p = "0" + p.slice(4);
-  if (p.startsWith("234")) p = "0" + p.slice(3);
+  let p = phone.replace(/\D/g, ""); // remove non-digits
+
+  // remove country code 234
+  if (p.startsWith("234")) p = p.slice(3);
+
+  // remove double zero (e.g., 00234)
+  if (p.startsWith("00")) p = p.replace(/^0+/, "");
+
+  // ensure leading zero
+  if (!p.startsWith("0")) p = "0" + p;
+
   return p;
 };
 
 const detectNetwork = (phone) => {
   const p = normalizePhone(phone);
   if (p.length < 4) return null;
-  const prefix4 = p.slice(0, 4);
 
-  for (const network in NETWORK_PREFIXES) {
-    if (NETWORK_PREFIXES[network].includes(prefix4)) {
-      return network;
-    }
-  }
-  return null;
+  const prefix = p.slice(0, 4);
+  return (
+    Object.keys(NETWORK_PREFIXES).find((net) =>
+      NETWORK_PREFIXES[net].includes(prefix)
+    ) || null
+  );
 };
 
 const validateNigerianPhone = (phone) => {
   const p = normalizePhone(phone);
-  if (!/^0\d{10}$/.test(p)) return { valid: false, normalized: p };
 
-  const prefix4 = p.slice(0, 4);
-  const valid = Object.values(NETWORK_PREFIXES).flat().includes(prefix4);
-  return { valid, normalized: p };
+  if (!/^0\d{10}$/.test(p)) {
+    return { valid: false, normalized: p, detected: null };
+  }
+
+  const detected = detectNetwork(p);
+  return { valid: !!detected, normalized: p, detected };
 };
 
 // ----------------------------------------
@@ -62,52 +74,69 @@ export default function BuyAirtime() {
   const [form, setForm] = useState({
     phone: "",
     network: "mtn",
-    amount: ""
+    amount: "",
   });
+
+  // Tracks if the user manually changed the network
+  const [networkLocked, setNetworkLocked] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [receiptData, setReceiptData] = useState(null);
 
-  // -------------------------------
-  // PHONE CHANGE WITH REAL-TIME NETWORK DETECTION
-  // -------------------------------
+  // ----------------------------------------
+  // Handle Phone Input with Auto-Detection
+  // ----------------------------------------
   const handlePhoneChange = (e) => {
-    const val = e.target.value;
-    setForm((prev) => ({ ...prev, phone: val }));
+    const phoneVal = e.target.value;
+    const detected = detectNetwork(phoneVal);
 
-    const detected = detectNetwork(val);
-    if (detected) {
-      setForm((prev) => ({ ...prev, network: detected }));
-    }
+    setForm((prev) => ({
+      ...prev,
+      phone: phoneVal,
+      network: !networkLocked && detected ? detected : prev.network,
+    }));
   };
 
+  // ----------------------------------------
+  // Handle Manual Network Change
+  // ----------------------------------------
   const handleChange = (e) => {
+    if (e.target.name === "network") {
+      setNetworkLocked(true);
+    }
+
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+  // ----------------------------------------
+  // Quick Pick
+  // ----------------------------------------
   const handleQuickPick = (amount) => {
-    setForm({ ...form, amount });
+    setForm((prev) => ({ ...prev, amount }));
   };
 
   const resetForm = () => {
-    setForm({
-      phone: "",
-      network: "mtn",
-      amount: ""
-    });
+    setForm({ phone: "", network: "mtn", amount: "" });
+    setNetworkLocked(false);
   };
 
+  // ----------------------------------------
+  // Validation State
+  // ----------------------------------------
   const phoneValid = form.phone
     ? validateNigerianPhone(form.phone).valid
     : true;
 
+  // ----------------------------------------
+  // Submit
+  // ----------------------------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
 
-    const { valid, normalized } = validateNigerianPhone(form.phone);
+    const { valid, normalized, detected } = validateNigerianPhone(form.phone);
 
     if (!valid) {
       toast.error("Invalid Nigerian phone number");
@@ -115,10 +144,10 @@ export default function BuyAirtime() {
       return;
     }
 
-    const detectedNetwork = detectNetwork(normalized);
-    if (detectedNetwork && detectedNetwork !== form.network) {
+    // Cross-check network selection
+    if (detected && detected !== form.network) {
       toast.error(
-        `Number belongs to ${detectedNetwork.toUpperCase()}, but you selected ${form.network.toUpperCase()}`
+        `Number belongs to ${detected.toUpperCase()}, but you selected ${form.network.toUpperCase()}`
       );
       setLoading(false);
       return;
@@ -127,7 +156,7 @@ export default function BuyAirtime() {
     const payload = {
       phone: normalized,
       network: form.network,
-      amount: Number(form.amount)
+      amount: Number(form.amount),
     };
 
     try {
@@ -135,28 +164,28 @@ export default function BuyAirtime() {
 
       setMessage({
         type: "success",
-        text: res.data.message || "Airtime purchase successful"
+        text: res.data.message || "Airtime purchase successful",
       });
 
       setReceiptData({
         status: "success",
         type: "airtime",
         ...payload,
-        reference: res.data.reference || null
+        reference: res.data.reference || null,
       });
 
       toast.success("Airtime purchase successful!");
     } catch (err) {
       setMessage({
         type: "error",
-        text: err.response?.data?.message || "Purchase failed"
+        text: err.response?.data?.message || "Purchase failed",
       });
 
       setReceiptData({
         status: "failed",
         type: "airtime",
         ...payload,
-        reference: err.response?.data?.reference || null
+        reference: err.response?.data?.reference || null,
       });
 
       toast.error(err.response?.data?.message || "Purchase failed");
@@ -165,6 +194,9 @@ export default function BuyAirtime() {
     }
   };
 
+  // ----------------------------------------
+  // Component Render
+  // ----------------------------------------
   return (
     <ShortFormLayout title="Buy Airtime">
       <ToastContainer position="top-right" />
@@ -192,6 +224,7 @@ export default function BuyAirtime() {
           onSubmit={handleSubmit}
           className="space-y-4 bg-gray-800/80 backdrop-blur-xl p-4 sm:p-5 rounded-2xl border border-gray-700/50 shadow-2xl"
         >
+          {/* PHONE + NETWORK */}
           <div className="flex flex-row gap-3">
             {/* PHONE */}
             <div className="flex-1">
@@ -245,7 +278,7 @@ export default function BuyAirtime() {
             </div>
           </div>
 
-          {/* Quick pick */}
+          {/* Quick Pick */}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5">
               Quick Pick Amount
@@ -268,7 +301,7 @@ export default function BuyAirtime() {
             </div>
           </div>
 
-          {/* Custom amount */}
+          {/* Custom Amount */}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5">
               Custom Amount
@@ -286,7 +319,7 @@ export default function BuyAirtime() {
             />
           </div>
 
-          {/* Submit button */}
+          {/* Submit */}
           <button
             type="submit"
             disabled={loading}

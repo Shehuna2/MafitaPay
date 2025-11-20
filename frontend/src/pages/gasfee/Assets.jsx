@@ -295,62 +295,64 @@ export default function Assets() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
-      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10 flex flex-col" style={{ height: '100vh' }}>
 
         {/* Offline Banner */}
         {isOffline && (
           <div className="bg-yellow-600/20 border border-yellow-500/40 text-yellow-300 
-                          text-xs p-2 rounded-lg mb-3 text-center">
+                          text-xs p-2 rounded-lg mb-3 text-center flex-shrink-0">
             Offline mode — prices may be outdated
           </div>
         )}
 
-        {/* Header */}
-        <div className="flex items-center gap-2 mb-5">
-          <ArrowLeft className="w-5 h-5 text-indigo-400 flex-shrink-0" />
-          <h1 className="text-lg sm:text-xl font-bold text-indigo-400 truncate">Crypto Assets</h1>
-        </div>
+        {/* Static Top Area */}
+        <div className="flex-shrink-0">
+          {/* Header */}
+          <div className="flex items-center gap-2 mb-5">
+            <ArrowLeft className="w-5 h-5 text-indigo-400 flex-shrink-0" />
+            <h1 className="text-lg sm:text-xl font-bold text-indigo-400 truncate">Crypto Assets</h1>
+          </div>
 
-        {/* Search */}
-        <div className="relative w-full mb-5">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search assets..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-gray-800/60 backdrop-blur-md pl-10 pr-3 py-2.5 rounded-xl border border-gray-700/80 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
-          />
-        </div>
+          {/* Search */}
+          <div className="relative w-full mb-5">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search assets..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-gray-800/60 backdrop-blur-md pl-10 pr-3 py-2.5 rounded-xl border border-gray-700/80 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+            />
+          </div>
 
-        {/* Recently Viewed */}
-        {recentViewed.length > 0 && <RecentViewedList recentViewed={recentViewed} />}
+          {/* Recently Viewed */}
+          {recentViewed.length > 0 && <RecentViewedList recentViewed={recentViewed} />}
 
-        {/* Assets List */}
-        <div>
+          {/* Supported Assets Title */}
           <h2 className="text-base sm:text-lg font-bold mb-3 text-white">Supported Assets</h2>
+        </div>
 
+        {/* Scrollable Assets List */}
+        <div className="overflow-y-auto flex-1 pr-1 space-y-3">
           {loading ? (
-            <div className="space-y-3">{skeletonCards()}</div>
+            skeletonCards()
           ) : filteredAssets.length === 0 ? (
             <div className="text-center py-10 text-gray-400">
               <Search className="w-10 h-10 mx-auto mb-2 text-gray-500" />
               <p className="text-sm">No assets found.</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {filteredAssets.map((asset, i) => (
-                <div key={asset.id} style={{ animationDelay: `${i * 50}ms` }} className="animate-fade-in-up">
-                  <AssetCard
-                    asset={asset}
-                    onView={handleView}
-                    onToggleFavorite={toggleFavorite}
-                    isFavorite={favorites.includes(asset.id)}
-                    isOffline={isOffline}
-                  />
-                </div>
-              ))}
-            </div>
+            filteredAssets.map((asset, i) => (
+              <div key={asset.id} style={{ animationDelay: `${i * 50}ms` }} className="animate-fade-in-up">
+                <AssetCard
+                  asset={asset}
+                  onView={handleView}
+                  onToggleFavorite={toggleFavorite}
+                  isFavorite={favorites.includes(asset.id)}
+                  isOffline={isOffline}
+                />
+              </div>
+            ))
           )}
         </div>
       </div>
