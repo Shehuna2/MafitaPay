@@ -302,7 +302,7 @@ export default function BuyCrypto() {
                     value={form.amount}
                     onChange={handleChange}
                     required
-                    className="w-full bg-gray-800/60 border border-gray-700 p-2.5 rounded-xl"
+                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
                   />
                 </div>
 
@@ -312,7 +312,7 @@ export default function BuyCrypto() {
                     name="currency"
                     value={form.currency}
                     onChange={handleChange}
-                    className="w-full bg-gray-800/60 border border-gray-700 p-2.5 rounded-xl"
+                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
                   >
                     <option value="NGN">NGN</option>
                     <option value="USDT">USDT</option>
@@ -365,7 +365,7 @@ export default function BuyCrypto() {
                   value={form.wallet_address}
                   onChange={handleChange}
                   required
-                  className="w-full bg-gray-800/60 border border-gray-700 p-2.5 rounded-xl"
+                  className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
                 />
 
                 {recentWallets.length > 0 && (
