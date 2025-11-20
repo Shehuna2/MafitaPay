@@ -45,19 +45,20 @@ function App() {
   const { isAuthenticated, logout } = useAuth();
   const location = useLocation();
 
-  // 🔐 Auto-logout when Axios triggers session expiration
   useEffect(() => {
-    const handleSessionExpired = () => {
-      console.warn("Session expired — logging out...");
-      logout();
-    };
+  const update = () => localStorage.setItem("last_active", Date.now().toString());
 
-    window.addEventListener("sessionExpired", handleSessionExpired);
+  ["click", "mousemove", "keydown", "scroll", "touchstart"].forEach((evt) =>
+    window.addEventListener(evt, update)
+  );
 
-    return () => {
-      window.removeEventListener("sessionExpired", handleSessionExpired);
-    };
-  }, [logout]);
+  return () => {
+    ["click", "mousemove", "keydown", "scroll", "touchstart"].forEach((evt) =>
+      window.removeEventListener(evt, update)
+    );
+  };
+}, []);
+
 
   // Hide Navbar on auth & reset pages
   const hideNavbar =

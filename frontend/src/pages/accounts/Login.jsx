@@ -138,7 +138,7 @@ export default function Login() {
   const handleResendVerification = async () => {
     setLoading(true);
     try {
-      await client.post("/api/resend-verification/", { email: formData.email });
+      await client.post("/resend-verification/", { email: formData.email });
     } catch (err) {
       setErrorMessage(err.response?.data?.error || "Failed to resend verification email.");
     } finally {
@@ -180,7 +180,7 @@ export default function Login() {
   };
 
   const renderGreeting = () => {
-    const displayName = reauthUser?.full_name || reauthUser?.email || formData.email;
+    const displayName = reauthUser?.first_name || reauthUser?.email || formData.email;
     return shouldReauth && reauthUser ? (
       <h2 className="text-2xl font-bold text-indigo-400">Welcome back, {displayName}</h2>
     ) : (

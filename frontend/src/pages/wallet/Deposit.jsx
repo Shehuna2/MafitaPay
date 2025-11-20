@@ -18,7 +18,7 @@ export default function Deposit() {
   const [requeryLoading, setRequeryLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [lastRequeryDate, setLastRequeryDate] = useState(new Date().toISOString().split("T")[0]);
-  const [provider, setProvider] = useState("paystack");
+  const [provider, setProvider] = useState("flutterwave");
 
 
   const [bvnOrNin, setBvnOrNin] = useState("");
@@ -35,7 +35,7 @@ export default function Deposit() {
             bank_name: response.data.van_bank_name,
             account_name: response.data.van_account_name,
             provider: response.data.van_provider || provider,
-            type: response.data.type || "dynamic"
+            type: response.data.type || "static"
           });
         } else {
           setDvaDetails({
@@ -204,9 +204,6 @@ export default function Deposit() {
                   maxLength={11}
                   className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Skip for temporary account (expires in 1 hour).
-                </p>
               </div>
             )}
 
