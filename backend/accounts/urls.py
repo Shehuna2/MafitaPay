@@ -2,6 +2,8 @@ from django.urls import path
 from django.views.decorators.csrf import csrf_exempt
 from . import views
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from .views_webauthn import WebAuthnChallengeView, WebAuthnVerifyView
+
 
 urlpatterns = [
     path('profile-api/', views.ProfileAPIView.as_view(), name='profile_api'),
@@ -15,4 +17,7 @@ urlpatterns = [
     path("resend-verification/", views.ResendVerificationEmailView.as_view(), name="resend_verification"),
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),  
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),  
+
+    path("webauthn/challenge/", WebAuthnChallengeView.as_view(), name="webauthn_challenge"),
+    path("webauthn/verify/", WebAuthnVerifyView.as_view(), name="webauthn_verify"),
 ]

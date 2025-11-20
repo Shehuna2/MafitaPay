@@ -1,8 +1,4 @@
-// A small hook that detects biometric support and attempts a "biometric" login
-// by trying a token refresh. This is pragmatic: true device biometric needs
-// native support or WebAuthn registration (backend) — this hook provides a
-// simple UX-friendly bridge that attempts a refresh when user taps biometric.
-
+// hooks/useBiometricAuth.js
 import { useState, useCallback, useEffect } from "react";
 import axios from "axios";
 
@@ -16,59 +12,44 @@ export default function useBiometricAuth() {
     const ua = navigator.userAgent || "";
     const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
     const hasWebAuthn = typeof window.PublicKeyCredential !== "undefined";
-
-    // Also allow a native Android bridge (median wrapper) if present
-    const hasAndroidBridge = typeof window.Android !== "undefined" && typeof window.Android.authenticate === "function";
-
-    setIsSupported(Boolean(isMobile && (hasWebAuthn || hasAndroidBridge)));
+    setIsSupported(Boolean(isMobile && hasWebAuthn));
   }, []);
 
-  // Try to authenticate using the refresh token (used as a gating mechanism).
-  // Returns { success: boolean, data?: { access, refresh, user } }
-  const authenticateWithRefresh = useCallback(async () => {
+  const loginWithBiometric = useCallback(async (email) => {
+    if (!isSupported) throw new Error("Biometric login not supported");
+
     setChecking(true);
     try {
-      // Optional: If your Android wrapper provides a secure retrieval of the refresh token
-      // you could call it here: e.g. const refresh = await window.Android.getRefreshToken();
-      const refresh = localStorage.getItem("refresh");
-      if (!refresh) throw new Error("No refresh token");
+      // 1️⃣ Get challenge
+      const challengeRes = await axios.post(`${API_BASE}/webauthn/challenge/`, { email });
+      const challenge = challengeRes.data;
 
-      const refreshURL = `${API_BASE.replace(/\/api\/?$/, "/") }auth/token/refresh/`;
-      const res = await axios.post(refreshURL, { refresh });
-      const { access } = res.data;
-      // Save the new access
+      // 2️⃣ navigator.credentials.get()
+      const credential = await navigator.credentials.get({
+        publicKey: challenge
+      });
+
+      // 3️⃣ Send assertion to server
+      const authRes = await axios.post(`${API_BASE}/webauthn/verify/`, {
+        user_id: email, // optionally store user id in challenge response
+        assertion: btoa(String.fromCharCode(...new Uint8Array(credential.response.authenticatorData)))
+      });
+
+      // 4️⃣ Store JWT tokens
+      const { access, refresh, user } = authRes.data;
       localStorage.setItem("access", access);
-      // mark activity
+      localStorage.setItem("refresh", refresh);
+      localStorage.setItem("user", JSON.stringify(user));
       localStorage.setItem("last_active", Date.now().toString());
-
-      // optionally fetch profile if missing
-      if (!localStorage.getItem("user")) {
-        try {
-          const profileRes = await axios.get(`${API_BASE}/profile-api/?t=${Date.now()}`, {
-            headers: { Authorization: `Bearer ${access}` }
-          });
-          const profile = {
-            email: profileRes.data.email,
-            id: profileRes.data.id,
-            full_name: profileRes.data.full_name,
-            is_merchant: profileRes.data.is_merchant,
-            is_staff: profileRes.data.is_staff,
-            phone_number: profileRes.data.phone_number,
-          };
-          localStorage.setItem("user", JSON.stringify(profile));
-        } catch (e) {
-          // continue even if profile fetch fails
-        }
-      }
 
       window.dispatchEvent(new Event("tokenRefreshed"));
       setChecking(false);
-      return { success: true, access };
+      return { success: true, user };
     } catch (err) {
       setChecking(false);
       return { success: false, error: err };
     }
-  }, []);
+  }, [isSupported]);
 
-  return { isSupported, authenticateWithRefresh, checking };
+  return { isSupported, loginWithBiometric, checking };
 }

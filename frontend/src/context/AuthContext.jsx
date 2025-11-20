@@ -1,5 +1,6 @@
 import { createContext, useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
+import useBiometricAuth from "../hooks/useBiometricAuth";
 
 const AuthContext = createContext();
 
@@ -55,8 +56,10 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener("sessionExpired", handler);
   }, []);
 
+  const { loginWithBiometric } = useBiometricAuth();
+
   return (
-    <AuthContext.Provider value={{ access, refresh, user, login, logout, isAuthenticated: !!access }}>
+    <AuthContext.Provider value={{ access, refresh, user, login, logout, isAuthenticated: !!access, loginWithBiometric }}>
       {children}
     </AuthContext.Provider>
   );
