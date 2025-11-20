@@ -1,6 +1,6 @@
 // src/components/Navbar.jsx
 import { Link, useLocation } from "react-router-dom";
-import { Bell, Headphones, User, X } from "lucide-react";
+import { Bell, Headphones, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import client from "../api/client";
 import { useAuth } from "../context/AuthContext";
@@ -96,21 +96,33 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 w-full bg-gray-950/40 backdrop-blur-md border-b border-gray-800 z-50">
-      <div className="container mx-auto px-4 py-2.5 flex justify-between items-center">
+      <div className="container mx-auto px-4 py-3.5 flex justify-between items-center">
         {/* Logo */}
         <Link
           to="/dashboard"
-          className="text-base font-bold text-green-100 flex-shrink-0"
+          className="flex items-center gap-2 text-lg font-bold text-green-100 flex-shrink-0"
         >
-          Mafita<span className="text-indigo-400">Pay</span>
+          <img
+            src="/mafitapay.png"
+            alt="MafitaPay Logo"
+            className="w-7 h-7 rounded-full object-contain"
+          />
+
+          <span>
+            Mafita<span className="text-indigo-400">Pay</span>
+          </span>
         </Link>
 
-        {/* Icons – Compact & Responsive */}
-        <div className="flex items-center gap-3">
+
+        {/* Icons */}
+        <div className="flex items-center gap-4">
           {/* Notifications */}
           <div className="relative" ref={notificationRef}>
-            <button onClick={handleToggleNotifications} className="relative p-0.5">
-              <Bell size={20} className="text-gray-300 hover:text-green-400 transition" />
+            <button onClick={handleToggleNotifications} className="relative p-1.5">
+              <Bell
+                size={22}
+                className="text-gray-300 hover:text-green-400 transition"
+              />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[9px] px-1.5 rounded-full">
                   {unreadCount}
@@ -153,8 +165,11 @@ export default function Navbar() {
           </div>
 
           {/* WhatsApp */}
-          <button onClick={openWhatsApp} className="p-0.5">
-            <Headphones size={20} className="text-gray-300 hover:text-green-400 transition" />
+          <button onClick={openWhatsApp} className="p-1.5">
+            <Headphones
+              size={22}
+              className="text-gray-300 hover:text-green-400 transition"
+            />
           </button>
         </div>
       </div>

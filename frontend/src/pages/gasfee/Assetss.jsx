@@ -1,5 +1,4 @@
-// ** FULL UPDATED FILE WITH STICKY-AFTER-SCROLL BEHAVIOR **
-
+// src/pages/Assets.jsx
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, ArrowDown, Search, Clock, Star, ArrowLeft } from "lucide-react";
@@ -43,6 +42,7 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite, isO
     triggerHaptic();
   };
 
+  // Update price dynamically if online
   useEffect(() => {
     if (!isOffline) {
       setPrice(asset.price);
@@ -58,6 +58,7 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite, isO
         <div className="absolute inset-0 rounded-xl bg-indigo-600/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
         <div className="relative flex items-center gap-2 sm:gap-3">
+          {/* Logo + Name */}
           <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden border border-gray-600/50 bg-gray-700/50 flex-shrink-0">
               <img
@@ -75,6 +76,7 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite, isO
             </div>
           </div>
 
+          {/* Price + Star */}
           <div className="text-right flex-shrink-0 flex items-center gap-1.5 sm:gap-2">
             <div className="text-right">
               <p className="text-sm font-mono font-bold text-white leading-tight">
@@ -102,6 +104,7 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite, isO
   );
 });
 
+// 🔹 Recent Viewed List Component
 const RecentViewedList = ({ recentViewed }) => {
   const [maxItems, setMaxItems] = useState(window.innerWidth < 640 ? 4 : recentViewed.length);
 
@@ -124,7 +127,7 @@ const RecentViewedList = ({ recentViewed }) => {
               triggerHaptic();
               window.location.href = `/buy-crypto/${asset.id}`;
             }}
-            className="flex-shrink-0 flex items-center gap-2 bg-gray-800/60 backdrop-blur-md border border-gray-700/50 rounded-full px-2.5 py-1.5 text-xs font-bold text-gray-300 hover:bg-indigo-600/20 hover:border-indigo-500/50 hover:scale-105 transition-all duration-300"
+            className="flex-shrink-0 flex items-center gap-2 bg-gray-800/60 backdrop-blur-md border border-gray-700/50 rounded-full px-2.5 py-1.5 text-xs font-bold text-gray-300 hover:bg-indigo-600/20 hover:border-indigo-500/50 hover:scale-105 transition-all duration-300 haptic-feedback"
           >
             <img
               src={`/images/${asset.symbol?.toLowerCase()}.png`}
@@ -153,21 +156,7 @@ export default function Assets() {
   const [favorites, setFavorites] = useState(JSON.parse(localStorage.getItem("favoriteAssets") || "[]"));
   const retryRef = useRef(0);
 
-  const scrollContainerRef = useRef(null);
-  const [isSticky, setIsSticky] = useState(false);
-
-  // Detect scroll for sticky header
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-
-    const handleScroll = () => {
-      setIsSticky(el.scrollTop > 120); // stick after 120px
-    };
-    el.addEventListener("scroll", handleScroll);
-    return () => el.removeEventListener("scroll", handleScroll);
-  }, []);
-
+  // --- ONLINE / OFFLINE DETECTION ---
   useEffect(() => {
     const goOnline = () => { setIsOffline(false); fetchAssets(); };
     const goOffline = () => setIsOffline(true);
@@ -176,6 +165,7 @@ export default function Assets() {
     return () => { window.removeEventListener("online", goOnline); window.removeEventListener("offline", goOffline); };
   }, []);
 
+  // --- INSTANT CACHE LOAD ---
   useEffect(() => {
     const cached = localStorage.getItem(ASSET_CACHE_KEY);
     if (cached) {
@@ -186,6 +176,7 @@ export default function Assets() {
     }
   }, []);
 
+  // --- FETCH ASSETS ---
   const fetchAssets = useCallback(async () => {
     if (isOffline) return;
     try {
@@ -225,6 +216,7 @@ export default function Assets() {
     }
   }, [isOffline, assets.length]);
 
+  // --- WEBSOCKET LIVE UPDATES ---
   useEffect(() => {
     if (isOffline) return;
     fetchAssets();
@@ -245,11 +237,13 @@ export default function Assets() {
     return () => ws.close();
   }, [fetchAssets, isOffline]);
 
+  // --- SEARCH FILTER ---
   const filteredAssets = useMemo(() =>
     assets.filter(a => a.name.toLowerCase().includes(search.toLowerCase()) || a.symbol.toLowerCase().includes(search.toLowerCase())),
     [assets, search]
   );
 
+  // --- RECENT VIEWED ---
   const handleView = useCallback(asset => {
     setRecentViewed(prev => {
       const exists = prev.find(a => a.id === asset.id);
@@ -259,6 +253,7 @@ export default function Assets() {
     });
   }, []);
 
+  // --- FAVORITES ---
   const toggleFavorite = useCallback(assetId => {
     setFavorites(prev => {
       const updated = prev.includes(assetId) ? prev.filter(id => id !== assetId) : [...prev, assetId];
@@ -299,64 +294,52 @@ export default function Assets() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10">
 
-      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 h-screen flex flex-col overflow-hidden">
-
-        {/* Offline banner */}
+        {/* Offline Banner */}
         {isOffline && (
           <div className="bg-yellow-600/20 border border-yellow-500/40 text-yellow-300 
-                          text-xs p-2 rounded-lg mb-3 text-center flex-shrink-0">
+                          text-xs p-2 rounded-lg mb-3 text-center">
             Offline mode — prices may be outdated
           </div>
         )}
 
-        {/* Scrollable container */}
-        <div
-          ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto pr-1 space-y-3 relative"
-        >
+        {/* Header */}
+        <div className="flex items-center gap-2 mb-5">
+          <ArrowLeft className="w-5 h-5 text-indigo-400 flex-shrink-0" />
+          <h1 className="text-lg sm:text-xl font-bold text-indigo-400 truncate">Crypto Assets</h1>
+        </div>
 
-          {/* Top section — becomes sticky dynamically */}
-          <div
-            className={`
-              transition-all duration-300 bg-gray-900
-              ${isSticky ? "sticky top-0 z-30 shadow-lg pb-3" : "relative"}
-            `}
-          >
+        {/* Search */}
+        <div className="relative w-full mb-5">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search assets..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-gray-800/60 backdrop-blur-md pl-10 pr-3 py-2.5 rounded-xl border border-gray-700/80 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+          />
+        </div>
 
-            <div className="flex items-center gap-2 mb-5 pt-1">
-              <ArrowLeft className="w-5 h-5 text-indigo-400" />
-              <h1 className="text-lg sm:text-xl font-bold text-indigo-400 truncate">Crypto Assets</h1>
+        {/* Recently Viewed */}
+        {recentViewed.length > 0 && <RecentViewedList recentViewed={recentViewed} />}
+
+        {/* Assets List */}
+        <div>
+          <h2 className="text-base sm:text-lg font-bold mb-3 text-white">Supported Assets</h2>
+
+          {loading ? (
+            <div className="space-y-3">{skeletonCards()}</div>
+          ) : filteredAssets.length === 0 ? (
+            <div className="text-center py-10 text-gray-400">
+              <Search className="w-10 h-10 mx-auto mb-2 text-gray-500" />
+              <p className="text-sm">No assets found.</p>
             </div>
-
-            <div className="relative w-full mb-5">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search assets..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-gray-800/60 backdrop-blur-md pl-10 pr-3 py-2.5 rounded-xl border border-gray-700/80 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
-              />
-            </div>
-
-            {recentViewed.length > 0 && <RecentViewedList recentViewed={recentViewed} />}
-
-            <h2 className="text-base sm:text-lg font-bold mb-3 text-white">Supported Assets</h2>
-          </div>
-
-          {/* Asset list */}
-          <div className="space-y-3">
-            {loading ? (
-              skeletonCards()
-            ) : filteredAssets.length === 0 ? (
-              <div className="text-center py-10 text-gray-400">
-                <Search className="w-10 h-10 mx-auto mb-2 text-gray-500" />
-                <p className="text-sm">No assets found.</p>
-              </div>
-            ) : (
-              filteredAssets.map((asset, i) => (
+          ) : (
+            <div className="space-y-3">
+              {filteredAssets.map((asset, i) => (
                 <div key={asset.id} style={{ animationDelay: `${i * 50}ms` }} className="animate-fade-in-up">
                   <AssetCard
                     asset={asset}
@@ -366,10 +349,9 @@ export default function Assets() {
                     isOffline={isOffline}
                   />
                 </div>
-              ))
-            )}
-          </div>
-
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

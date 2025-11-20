@@ -2,7 +2,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import client from "../../api/client";
-import { Loader2, RefreshCw, ArrowLeft } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -64,7 +64,7 @@ export default function BuyCrypto() {
 
         const listRes = await client.get("/assets/");
         const cryptos = listRes.data.cryptos || [];
-        const found = cryptos.find((c) => String(c.id) === String(id));
+        const found = cryptos.find(c => String(c.id) === String(id));
 
         if (mounted && found) setCrypto(found);
 
@@ -77,9 +77,7 @@ export default function BuyCrypto() {
     }
 
     load();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [id]);
 
   // ----------------------------------
@@ -221,15 +219,6 @@ export default function BuyCrypto() {
       <div className="min-h-screen bg-gray-900 text-white">
         <div className="max-w-4xl mx-auto px-4 py-6">
 
-          {/* Back Arrow */}
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2 mb-4 text-indigo-400 hover:text-indigo-300 transition"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm font-medium">Back</span>
-          </button>
-
           {/* Overlay when submitting */}
           {submitting && (
             <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
@@ -246,17 +235,14 @@ export default function BuyCrypto() {
                 disabled={rateLoading}
                 className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-50"
               >
-                {rateLoading ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-3 h-3" />
-                )}
+                {rateLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                 Refresh rate
               </button>
             </div>
 
             {/* RATE DISPLAY */}
             <div className="bg-gray-800/60 p-3 rounded-xl mb-5 border border-gray-700/50 flex items-center justify-between">
+              {/* Left side: rate info */}
               <div className="flex flex-col">
                 <p className="text-xs text-gray-300">
                   <span className="text-gray-400">1 USD =</span>{" "}
@@ -271,13 +257,12 @@ export default function BuyCrypto() {
                   <span className="font-bold text-indigo-400">
                     ${priceUsd?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     {" → "}
-                    ₦{(priceUsd * exchangeRate)?.toLocaleString(undefined, {
-                      maximumFractionDigits: 0,
-                    })}
+                    ₦{(priceUsd * exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </span>
                 </p>
               </div>
 
+              {/* Right side: crypto logo */}
               <img
                 src={`/images/${crypto.symbol?.toLowerCase()}.png`}
                 alt={crypto.name}
@@ -360,29 +345,20 @@ export default function BuyCrypto() {
               {/* Calculation Display */}
               {form.amount && (
                 <div className="bg-gray-800/60 p-3 rounded-xl text-xs border border-gray-700/50">
-                  <p>
-                    You pay:{" "}
-                    <span className="text-orange-400 font-bold">
-                      ₦{totalNgn.toLocaleString()}
-                    </span>
-                  </p>
+                  <p>You pay: <span className="text-orange-400 font-bold">₦{totalNgn.toLocaleString()}</span></p>
                   <p className="mt-1">
                     You receive:{" "}
                     <span className="text-indigo-400 font-bold">
                       {cryptoReceived.toFixed(8)} {crypto.symbol}
                     </span>
                   </p>
-                  <p className="mt-2 text-[11px] text-gray-500">
-                    Rate locked • Includes all fees
-                  </p>
+                  <p className="mt-2 text-[11px] text-gray-500">Rate locked • Includes all fees</p>
                 </div>
               )}
 
               {/* Wallet Address */}
               <div>
-                <label className="block text-xs mb-1.5">
-                  {crypto.symbol} Wallet Address
-                </label>
+                <label className="block text-xs mb-1.5">{crypto.symbol} Wallet Address</label>
                 <input
                   name="wallet_address"
                   type="text"
@@ -400,9 +376,7 @@ export default function BuyCrypto() {
                         <button
                           key={addr}
                           type="button"
-                          onClick={() =>
-                            setForm((p) => ({ ...p, wallet_address: addr }))
-                          }
+                          onClick={() => setForm((p) => ({ ...p, wallet_address: addr }))}
                           className="px-3 py-1.5 bg-gray-800/60 border border-gray-700 rounded-lg text-xs"
                         >
                           {trimAddress(addr)}
@@ -418,11 +392,7 @@ export default function BuyCrypto() {
                 disabled={submitting}
                 className="w-full bg-indigo-600 py-2.5 rounded-xl font-bold"
               >
-                {submitting ? (
-                  <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-                ) : (
-                  `Buy ${crypto.symbol}`
-                )}
+                {submitting ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : `Buy ${crypto.symbol}`}
               </button>
             </form>
           </div>
@@ -442,11 +412,7 @@ export default function BuyCrypto() {
         {/* Success Animation */}
         {showSuccess && <SuccessOverlay />}
 
-        <Receipt
-          type="crypto"
-          data={receiptData}
-          onClose={() => setReceiptData(null)}
-        />
+        <Receipt type="crypto" data={receiptData} onClose={() => setReceiptData(null)} />
       </div>
     </>
   );
@@ -503,28 +469,18 @@ function LoadingSkeleton() {
           <div className="h-24 rounded-xl shimmer" />
           <div className="h-12 rounded-xl shimmer" />
         </div>
-        <p className="text-sm text-gray-400 mt-5 text-center">
-          Fetching secure rate & crypto data…
-        </p>
+        <p className="text-sm text-gray-400 mt-5 text-center">Fetching secure rate & crypto data…</p>
       </div>
     </div>
   );
 }
 
 function AnimatedTransactionLoader() {
-  const messages = [
-    "Confirming transaction…",
-    "Finalizing purchase…",
-    "Almost done…",
-    "Securing your receipt…",
-  ];
+  const messages = ["Confirming transaction…","Finalizing purchase…","Almost done…","Securing your receipt…"];
   const [step, setStep] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(
-      () => setStep((s) => (s < messages.length - 1 ? s + 1 : s)),
-      2400
-    );
+    const id = setInterval(() => setStep((s) => (s < messages.length - 1 ? s + 1 : s)), 2400);
     return () => clearInterval(id);
   }, []);
 
@@ -574,26 +530,13 @@ function ConfirmModal({ crypto, cryptoReceived, form, onCancel, onConfirm }) {
       <div className="bg-gray-800 rounded-xl p-6 w-80 text-white border border-gray-700">
         <p className="text-sm mb-4">Confirm your purchase</p>
         <p className="text-xs text-gray-400 mb-2">
-          You are about to buy{" "}
-          <span className="text-indigo-400 font-bold">
-            {cryptoReceived.toFixed(8)} {crypto.symbol}
-          </span>{" "}
+          You are about to buy <span className="text-indigo-400 font-bold">{cryptoReceived.toFixed(8)} {crypto.symbol}</span> 
           using <span className="font-bold">{form.amount} {form.currency}</span>
         </p>
 
         <div className="flex gap-3 mt-4">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-2 bg-gray-700 rounded-xl text-sm"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-2 bg-indigo-600 rounded-xl text-sm"
-          >
-            Confirm
-          </button>
+          <button onClick={onCancel} className="flex-1 py-2 bg-gray-700 rounded-xl text-sm">Cancel</button>
+          <button onClick={onConfirm} className="flex-1 py-2 bg-indigo-600 rounded-xl text-sm">Confirm</button>
         </div>
       </div>
     </div>
