@@ -29,10 +29,8 @@ const NETWORK_PREFIXES = {
 
 const normalizePhone = (phone) => {
   let p = phone.replace(/\D/g, "");
-
   if (p.startsWith("234")) p = p.slice(3);
   if (p.startsWith("0")) p = p.slice(1);
-
   return "0" + p;
 };
 
@@ -41,7 +39,6 @@ const detectNetwork = (phone) => {
   if (p.length < 4) return null;
 
   const prefix = p.slice(0, 4);
-
   return (
     Object.keys(NETWORK_PREFIXES).find((n) =>
       NETWORK_PREFIXES[n].includes(prefix)
@@ -51,14 +48,17 @@ const detectNetwork = (phone) => {
 
 const validateNigerianPhone = (phone) => {
   const p = normalizePhone(phone);
-
   if (!/^0\d{10}$/.test(p)) {
     return { valid: false, normalized: p, detected: null };
   }
-
   const detected = detectNetwork(p);
   return { valid: !!detected, normalized: p, detected };
 };
+
+/* ----------------------------------------------------
+   CACHING CONSTANTS
+---------------------------------------------------- */
+const DATA_CACHE_KEY = (network) => `data_plans_cache_${network}`;
 
 /* ----------------------------------------------------
    MAIN COMPONENT
@@ -71,6 +71,8 @@ export default function BuyData() {
   });
 
   const [networkLocked, setNetworkLocked] = useState(false);
+
+  // Cached + Live states
   const [plans, setPlans] = useState([]);
   const [groupedPlans, setGroupedPlans] = useState({});
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -90,26 +92,69 @@ export default function BuyData() {
   };
 
   /* ----------------------------------------------------
-     FETCH PLANS WHEN NETWORK CHANGES
+     FETCH CACHED + LIVE DATA PLANS
+     (Instant load → soft refresh)
   ---------------------------------------------------- */
   useEffect(() => {
-    async function fetchPlans() {
+    let mounted = true;
+
+    async function loadPlans() {
+      const network = form.network;
+      const cacheKey = DATA_CACHE_KEY(network);
+
       setLoadingPlans(true);
+
+      /* -----------------------------
+         1️⃣ Load cached plans instantly
+      ------------------------------ */
+      const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
+
+      if (cached?.plans && mounted) {
+        setGroupedPlans(cached.grouped || {});
+        setPlans(cached.plans);
+      }
+
+      /* -----------------------------
+         2️⃣ Attempt live refresh
+      ------------------------------ */
       try {
-        const res = await client.get(`/bills/data-plans/?network=${form.network}`);
+        const res = await client.get(`/bills/data-plans/?network=${network}`);
+
         const grouped = res.data.plans || {};
-        setGroupedPlans(grouped);
-        setPlans(Object.values(grouped).flat());
+        const flatPlans = Object.values(grouped).flat();
+
+        if (mounted) {
+          setGroupedPlans(grouped);
+          setPlans(flatPlans);
+        }
+
+        // Save new cache
+        localStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            timestamp: Date.now(),
+            grouped,
+            plans: flatPlans,
+          })
+        );
       } catch (err) {
-        console.error("Error fetching plans:", err);
-        toast.error("Failed to load data plans.");
-        setGroupedPlans({});
-        setPlans([]);
+        console.error("Failed to fetch data plans:", err);
+
+        // If we have cache, allow fallback silently
+        if (cached?.plans) {
+          toast.error("Failed to refresh. Showing cached plans.");
+        } else {
+          setGroupedPlans({});
+          setPlans([]);
+          toast.error("Failed to load data plans.");
+        }
       } finally {
-        setLoadingPlans(false);
+        if (mounted) setLoadingPlans(false);
       }
     }
-    fetchPlans();
+
+    loadPlans();
+    return () => (mounted = false);
   }, [form.network]);
 
   /* ----------------------------------------------------
@@ -145,11 +190,17 @@ export default function BuyData() {
     setForm({ ...form, variation_code });
   };
 
+  /* ----------------------------------------------------
+     FILTERED PLANS
+  ---------------------------------------------------- */
   const filteredPlans =
     selectedCategory === "all"
       ? plans
       : groupedPlans[selectedCategory] || [];
 
+  /* ----------------------------------------------------
+     FORMAT TITLES
+  ---------------------------------------------------- */
   const formatPlanTitle = (text = "") => {
     if (!text) return "Unknown Plan";
 
@@ -278,7 +329,7 @@ export default function BuyData() {
     return () => document.removeEventListener("keydown", handleEsc);
   }, [showConfirm]);
 
-  /* ----------------------------------------------------
+    /* ----------------------------------------------------
      UI RENDER
   ---------------------------------------------------- */
   return (

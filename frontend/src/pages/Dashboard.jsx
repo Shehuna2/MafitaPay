@@ -154,6 +154,7 @@ export default function Dashboard() {
           <span className="text-5xl sm:text-6xl font-extrabold tracking-widest text-gray-400 animate-pulse">
             ●●●●
           </span>
+          
         )}
       </div>
     );
@@ -279,9 +280,9 @@ export default function Dashboard() {
               <ArrowDownLeft className="w-4 h-4 group-hover:translate-y-0.5 transition" />
               Deposit
             </button>
-            <button onClick={() => openModal("withdraw")} className="group flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-2xl text-sm font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition haptic-feedback">
+            <button disabled onClick={() => openModal("withdraw")} className="group flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-2xl text-sm font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition haptic-feedback">
               <ArrowUpRight className="w-4 h-4 group-hover:-translate-y-0.5 transition" />
-              Withdraw
+              Withdraw (coming soon)
             </button>
           </div>
 

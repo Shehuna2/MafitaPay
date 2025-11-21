@@ -8,6 +8,9 @@ import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Receipt from "../../components/Receipt";
 
+const ASSET_CACHE_KEY = "asset_cache_v1";
+const RATE_CACHE_KEY = (id) => `buycrypto_cache_${id}`;
+
 export default function BuyCrypto() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -33,60 +36,121 @@ export default function BuyCrypto() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [recentWallets, setRecentWallets] = useState([]);
 
-  // ----------------------------------
-  //        FETCH CORRECT RATE
-  // ----------------------------------
+  // -------------------------------------------------------------------
+  //                FETCH RATE WITH CACHE + OFFLINE SUPPORT
+  // -------------------------------------------------------------------
   const fetchFreshRate = async () => {
     setRateLoading(true);
+
     try {
       const res = await client.get(`/buy-crypto/${id}/`);
 
-      setPriceUsd(res.data.price_usd);
-      setExchangeRate(res.data.usd_ngn_rate);
-      setPriceNgn(res.data.price_ngn);
+      const data = {
+        price_usd: res.data.price_usd,
+        usd_ngn_rate: res.data.usd_ngn_rate,
+        price_ngn: res.data.price_ngn,
+        timestamp: Date.now(),
+      };
+
+      localStorage.setItem(RATE_CACHE_KEY(id), JSON.stringify(data));
+
+      setPriceUsd(data.price_usd);
+      setExchangeRate(data.usd_ngn_rate);
+      setPriceNgn(data.price_ngn);
+
       setMessage(null);
     } catch (err) {
-      setMessage({ type: "error", text: "Failed to refresh rate. Using last known price." });
+      const cached = JSON.parse(localStorage.getItem(RATE_CACHE_KEY(id)) || "null");
+
+      if (cached) {
+        setPriceUsd(cached.price_usd);
+        setExchangeRate(cached.usd_ngn_rate);
+        setPriceNgn(cached.price_ngn);
+
+        setMessage({
+          type: "error",
+          text: "Failed to refresh. Using last known rate.",
+        });
+      } else {
+        setMessage({ type: "error", text: "Failed to refresh rate." });
+      }
     } finally {
       setRateLoading(false);
     }
   };
 
-  // ----------------------------------
-  //  INITIAL LOAD (crypto info + rate)
-  // ----------------------------------
+  // -------------------------------------------------------------------
+  //                   UPGRADED INITIAL LOAD (CACHE FIRST)
+  // -------------------------------------------------------------------
   useEffect(() => {
     let mounted = true;
 
     async function load() {
+      setLoading(true);
+
       try {
-        setLoading(true);
+        let cryptoFromCache = null;
 
-        const listRes = await client.get("/assets/");
-        const cryptos = listRes.data.cryptos || [];
-        const found = cryptos.find((c) => String(c.id) === String(id));
+        // ① Load crypto instantly from asset cache
+        const assetCache = JSON.parse(localStorage.getItem(ASSET_CACHE_KEY) || "null");
 
-        if (mounted && found) setCrypto(found);
+        if (assetCache?.assets) {
+          cryptoFromCache = assetCache.assets.find(
+            (a) => String(a.id) === String(id)
+          );
+        }
 
+        if (mounted && cryptoFromCache) {
+          setCrypto(cryptoFromCache);
+        }
+
+        // ② Load cached rate immediately
+        const cachedRate = JSON.parse(localStorage.getItem(RATE_CACHE_KEY(id)) || "null");
+        if (cachedRate) {
+          setPriceUsd(cachedRate.price_usd);
+          setExchangeRate(cachedRate.usd_ngn_rate);
+          setPriceNgn(cachedRate.price_ngn);
+        }
+
+        // ③ Soft-refresh latest rate
         await fetchFreshRate();
+
+        // ④ If crypto not found in cache, fetch asset list
+        if (!cryptoFromCache) {
+          const listRes = await client.get("/assets/");
+          const cryptos = listRes.data.cryptos || [];
+
+          const found = cryptos.find((c) => String(c.id) === String(id));
+          if (mounted && found) setCrypto(found);
+
+          // Update asset cache so next time is instant
+          localStorage.setItem(
+            ASSET_CACHE_KEY,
+            JSON.stringify({
+              assets: cryptos,
+              exchangeRate: listRes.data.exchange_rate,
+              timestamp: Date.now(),
+            })
+          );
+        }
       } catch (err) {
-        if (mounted) setMessage({ type: "error", text: "Failed to load. Retrying..." });
+        if (mounted)
+          setMessage({ type: "error", text: "Failed to load. Using cached data if available." });
       } finally {
         if (mounted) setLoading(false);
       }
     }
 
     load();
-    return () => {
-      mounted = false;
-    };
+    return () => (mounted = false);
   }, [id]);
 
-  // ----------------------------------
-  //       RECENT WALLETS STORE
-  // ----------------------------------
+  // -------------------------------------------------------------------
+  //               RECENT WALLETS LOADING & SAVING
+  // -------------------------------------------------------------------
   useEffect(() => {
     if (!crypto) return;
+
     const key = `recent_wallets_${crypto.symbol}`;
     try {
       const stored = JSON.parse(localStorage.getItem(key) || "[]");
@@ -105,9 +169,9 @@ export default function BuyCrypto() {
     setRecentWallets(updated);
   };
 
-  // ----------------------------------
-  //       FORM / CALCULATIONS
-  // ----------------------------------
+  // -------------------------------------------------------------------
+  //                   FORM & CALCULATIONS
+  // -------------------------------------------------------------------
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((p) => ({ ...p, [name]: value }));
@@ -124,7 +188,6 @@ export default function BuyCrypto() {
     return [0.1, 0.5, 1.0, 2.0, 5.0, 10.0];
   };
 
-  // ------- CLEAN & CONSISTENT MATH -------
   let cryptoReceived = 0;
   let totalNgn = 0;
 
@@ -147,9 +210,9 @@ export default function BuyCrypto() {
     }
   }
 
-  // ----------------------------------
-  //           SUBMIT ORDER
-  // ----------------------------------
+  // -------------------------------------------------------------------
+  //                       SUBMIT ORDER
+  // -------------------------------------------------------------------
   const confirmAndSubmit = async () => {
     setSubmitting(true);
     setMessage(null);
@@ -191,9 +254,9 @@ export default function BuyCrypto() {
     return addr.length > 10 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr;
   };
 
-  // ----------------------------------
-  //           LOADING UI
-  // ----------------------------------
+  // -------------------------------------------------------------------
+  //                         LOADING UI
+  // -------------------------------------------------------------------
   if (loading) return <LoadingSkeleton />;
 
   if (!crypto)
@@ -211,16 +274,15 @@ export default function BuyCrypto() {
       </div>
     );
 
-  // ----------------------------------
-  //           MAIN RENDER
-  // ----------------------------------
+  // -------------------------------------------------------------------
+  //                          MAIN UI
+  // -------------------------------------------------------------------
   return (
     <>
       <ToastContainer />
 
       <div className="min-h-screen bg-gray-900 text-white">
         <div className="max-w-4xl mx-auto px-4 py-6">
-
           {/* Back Arrow */}
           <button
             onClick={() => navigate(-1)}
@@ -230,7 +292,6 @@ export default function BuyCrypto() {
             <span className="text-sm font-medium">Back</span>
           </button>
 
-          {/* Overlay when submitting */}
           {submitting && (
             <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
               <AnimatedTransactionLoader />
@@ -238,8 +299,7 @@ export default function BuyCrypto() {
           )}
 
           <div className="bg-gray-800/80 p-5 rounded-2xl border border-gray-700/50">
-
-            {/* Refresh Rate Button */}
+            {/* Refresh */}
             <div className="flex justify-end mb-2">
               <button
                 onClick={fetchFreshRate}
@@ -255,7 +315,7 @@ export default function BuyCrypto() {
               </button>
             </div>
 
-            {/* RATE DISPLAY */}
+            {/* Rate panel */}
             <div className="bg-gray-800/60 p-3 rounded-xl mb-5 border border-gray-700/50 flex items-center justify-between">
               <div className="flex flex-col">
                 <p className="text-xs text-gray-300">
@@ -269,8 +329,7 @@ export default function BuyCrypto() {
                 <p className="text-xs text-gray-300 mt-1">
                   <span className="text-gray-400">1 {crypto.symbol} =</span>{" "}
                   <span className="font-bold text-indigo-400">
-                    ${priceUsd?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    {" → "}
+                    ${priceUsd?.toLocaleString(undefined, { minimumFractionDigits: 2 })} →
                     ₦{(priceUsd * exchangeRate)?.toLocaleString(undefined, {
                       maximumFractionDigits: 0,
                     })}
@@ -307,7 +366,7 @@ export default function BuyCrypto() {
               }}
               className="space-y-4"
             >
-              {/* Amount + Currency */}
+              {/* Amount & currency */}
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="block text-xs mb-1.5">Amount</label>
@@ -317,7 +376,7 @@ export default function BuyCrypto() {
                     value={form.amount}
                     onChange={handleChange}
                     required
-                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm"
                   />
                 </div>
 
@@ -327,7 +386,7 @@ export default function BuyCrypto() {
                     name="currency"
                     value={form.currency}
                     onChange={handleChange}
-                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm"
                   >
                     <option value="NGN">NGN</option>
                     <option value="USDT">USDT</option>
@@ -357,7 +416,7 @@ export default function BuyCrypto() {
                 </div>
               </div>
 
-              {/* Calculation Display */}
+              {/* Calculation */}
               {form.amount && (
                 <div className="bg-gray-800/60 p-3 rounded-xl text-xs border border-gray-700/50">
                   <p>
@@ -378,7 +437,7 @@ export default function BuyCrypto() {
                 </div>
               )}
 
-              {/* Wallet Address */}
+              {/* Wallet address */}
               <div>
                 <label className="block text-xs mb-1.5">
                   {crypto.symbol} Wallet Address
@@ -389,7 +448,7 @@ export default function BuyCrypto() {
                   value={form.wallet_address}
                   onChange={handleChange}
                   required
-                  className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                  className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm"
                 />
 
                 {recentWallets.length > 0 && (
@@ -400,9 +459,7 @@ export default function BuyCrypto() {
                         <button
                           key={addr}
                           type="button"
-                          onClick={() =>
-                            setForm((p) => ({ ...p, wallet_address: addr }))
-                          }
+                          onClick={() => setForm((p) => ({ ...p, wallet_address: addr }))}
                           className="px-3 py-1.5 bg-gray-800/60 border border-gray-700 rounded-lg text-xs"
                         >
                           {trimAddress(addr)}
@@ -439,7 +496,7 @@ export default function BuyCrypto() {
           />
         )}
 
-        {/* Success Animation */}
+        {/* Success */}
         {showSuccess && <SuccessOverlay />}
 
         <Receipt
@@ -453,7 +510,7 @@ export default function BuyCrypto() {
 }
 
 /* ---------------------------------------------------------
-   HELPER COMPONENTS
+   HELPER COMPONENTS (unchanged from your original)
 --------------------------------------------------------- */
 
 function LoadingSkeleton() {
