@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [currentEventIndex, setCurrentEventIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  
 
   const location = useLocation();
   const eventRef = useRef(null);
@@ -277,19 +278,37 @@ export default function Dashboard() {
 
           {/* Virtual Accounts */}
           <div className="my-5 border-t border-white/10"></div>
-          <div className="space-y-2">
-            {wallet?.virtual_accounts?.length > 0 ? (
-              <>
-                {wallet.virtual_accounts.slice(0, 3).map((va, i) => (
+            <div className="space-y-2">
+              {wallet?.virtual_accounts?.length > 0 ? (
+                <>
+                  {wallet.virtual_accounts.slice(0, 3).map((va, i) => (
                   <div
                     key={va.id}
-                    className="flex items-center justify-between text-xs bg-white/5 backdrop-blur-sm p-2.5 rounded-xl border border-indigo-500/20 animate-slide-up"
+                    className="relative flex items-center justify-between text-xs bg-white/5 backdrop-blur-sm p-2.5 rounded-xl border border-indigo-500/20 animate-slide-up cursor-pointer"
                     style={{ animationDelay: `${i * 80}ms` }}
+                    onClick={(e) => {
+                      // prevent triggering when clicking the copy button
+                      if (e.target.closest(".copy-btn")) return;
+
+                      navigator.clipboard.writeText(va.account_number);
+                      setCopiedId(va.id);
+                      triggerHaptic();
+                      setTimeout(() => setCopiedId(null), 1500);
+                    }}
                   >
+                    {/* ACCOUNT INFO */}
                     <div className="flex flex-col">
-                      <span className="font-mono font-bold text-white tracking-wider">{va.account_number}</span>
+                      <span
+                        className={`font-mono font-bold tracking-wider transition-all duration-300 ${
+                          copiedId === va.id ? "text-green-400 scale-110" : "text-white"
+                        }`}
+                      >
+                        {va.account_number}
+                      </span>
                       <span className="text-xs text-gray-400">{va.bank_name}</span>
                     </div>
+
+                    {/* COPY BUTTON – same style as before */}
                     <button
                       onClick={() => {
                         navigator.clipboard.writeText(va.account_number);
@@ -297,24 +316,38 @@ export default function Dashboard() {
                         triggerHaptic();
                         setTimeout(() => setCopiedId(null), 1500);
                       }}
-                      className={`text-xs font-medium py-1 px-2 rounded-lg transition haptic-feedback ${
-                        copiedId === va.id ? "bg-green-600 text-white" : "bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/40"
-                      }`}
+                      className={`copy-btn text-xs font-medium py-1 px-2 rounded-lg transition-all duration-300 haptic-feedback 
+                        ${
+                          copiedId === va.id
+                            ? "bg-green-600 text-white scale-105 shadow-lg"
+                            : "bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/40"
+                        }`}
                     >
                       {copiedId === va.id ? "Copied!" : "Copy"}
                     </button>
+
+                    {/* FLOATING LABEL */}
+                    {copiedId === va.id && (
+                      <span className="absolute -top-5 right-2 text-xs text-green-400 animate-fade-in-up">
+                        Copied!
+                      </span>
+                    )}
                   </div>
+
                 ))}
-                {wallet.virtual_accounts.length > 3 && (
-                  <Link to="/deposit" className="text-xs text-indigo-400 hover:text-white underline inline-block mt-1">
-                    View all ({wallet.virtual_accounts.length})
-                  </Link>
-                )}
-              </>
-            ) : (
-              <p className="text-xs text-gray-500">No virtual accounts assigned</p>
-            )}
-          </div>
+
+
+                  {/* VIEW ALL LINK */}
+                  {wallet.virtual_accounts.length > 3 && (
+                    <Link to="/deposit" className="text-xs text-indigo-400 hover:text-white underline inline-block mt-1">
+                      View all ({wallet.virtual_accounts.length})
+                    </Link>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-gray-500">No virtual accounts assigned</p>
+              )}
+            </div>
         </div>
       </div>
 
