@@ -28,7 +28,7 @@ export default function Deposit() {
     const fetchWallet = async () => {
       setLoading(true);
       try {
-        const response = await client.get(`/wallet/?provider=${provider}`); // ← FIXED: Template literal
+        const response = await client.get(`/wallet/?provider=${provider}`); 
         if (response.data.van_account_number) {
           setDvaDetails({
             account_number: response.data.van_account_number,
@@ -227,109 +227,105 @@ export default function Deposit() {
             )}
 
             {dvaDetails.account_number && (
-              <div className="bg-gray-800/60 p-5 rounded-xl space-y-5 border border-gray-700/50">
-                <div className="space-y-4">
-                  {/* TYPE */}
-                  {dvaDetails.type && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-400">Type</span>
-                      <span className="font-bold text-white">
-                        {dvaDetails.type.toUpperCase()}
-                        {dvaDetails.type === "static" && " (Reusable)"}
-                      </span>
-                    </div>
-                  )}
+            <div className="bg-gray-800/60 p-5 rounded-xl space-y-6 border border-gray-700/50 animate-fade-in-up">
 
-                  {/* BANK */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-400">Bank</span>
-                    <span className="font-bold text-white text-right">
-                      {dvaDetails.bank_name || "Mock Bank"}
-                      <span className="block text-xs text-gray-500 mt-0.5">
-                        ({dvaDetails.provider?.toUpperCase() || "FLUTTERWAVE"})
-                      </span>
-                    </span>
-                  </div>
+              {/* ACCOUNT DETAILS */}
+              <div className="space-y-5">
 
-                  {/* ACCOUNT NUMBER */}
+                {/* TYPE */}
+                {dvaDetails.type && (
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-400">Account No.</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-lg text-indigo-300">
-                        {dvaDetails.account_number}
-                      </span>
-                      <button
-                        onClick={() => copyToClipboard(dvaDetails.account_number, "Account number copied!")}
-                        className="text-indigo-400 hover:text-indigo-300 transition"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* ACCOUNT NAME — WITH FALLBACKS */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-400">Name</span>
+                    <span className="text-xs text-gray-400">Account Type</span>
                     <span className="font-bold text-white">
-                      {dvaDetails.account_name?.trim()
-                        ? dvaDetails.account_name
-                        : dvaDetails.account_name === null || dvaDetails.account_name === ""
-                        ? "—"
-                        : "Loading name..."}
+                      {dvaDetails.type.toUpperCase()}
+                      {dvaDetails.type === "static" && " (Reusable)"}
                     </span>
+                  </div>
+                )}
+
+                {/* BANK */}
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Bank</span>
+                  <span className="font-bold text-white text-right">
+                    {dvaDetails.bank_name || "Mock Bank"}
+                  </span>
+                </div>
+
+                {/* ACCOUNT NUMBER */}
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Account Number</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-lg text-indigo-300">
+                      {dvaDetails.account_number}
+                    </span>
+                    <button
+                      onClick={() => copyToClipboard(dvaDetails.account_number)}
+                      className="text-indigo-400 hover:text-indigo-300 transition"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-gray-700/50">
-                  <p className="text-xs text-gray-300 leading-relaxed">
-                    Funds are credited{" "}
-                    <span className="font-bold text-green-400">automatically</span> within minutes.
-                    <br />
-                    <strong className="text-yellow-400">Note:</strong> A 1% fee (up to ₦300) applies per transfer.
-                  </p>
+                {/* ACCOUNT NAME */}
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Account Name</span>
+                  <span className="font-bold text-white">
+                    Mafita Digital Solutions FLW
+                  </span>
                 </div>
+              </div>
 
-                <div className="pt-4 border-t border-gray-700/50">
-                  <div className="flex items-center justify-between mb-3">
-                    <button
-                      onClick={handleRequery}
-                      disabled={requeryLoading}
-                      className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-75"
-                    >
-                      <RefreshCcw className={`w-4 h-4 ${requeryLoading ? "animate-spin" : ""}`} />
-                      {requeryLoading ? "Checking..." : "Requery Funds"}
-                    </button>
+              {/* TRUST HELPER BLOCK */}
+              <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-700/40">
+                <div className="flex items-start gap-3">
+                  <div className="text-indigo-400 mt-0.5">ℹ️</div>
+                  <div className="flex-1 text-sm text-gray-300 leading-relaxed">
+
+                    {/* MAIN TRUST MESSAGE */}
+                    <p>
+                      Banks may show <strong className="text-indigo-300">"Mafita Digital Solutions FLW"</strong>{" "}
+                      as the account owner. This is normal — Flutterwave issues virtual
+                      accounts under our business name, but this account is{" "}
+                      <strong className="text-green-400">assigned exclusively to you</strong>.
+                    </p>
 
                     <button
                       onClick={() => setShowAdvanced(!showAdvanced)}
-                      className="text-xs text-gray-400 hover:text-indigo-300 flex items-center gap-1"
+                      className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-all"
                     >
-                      {showAdvanced ? (
-                        <>
-                          <ChevronUp className="w-3.5 h-3.5" /> Hide
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="w-3.5 h-3.5" /> Advanced
-                        </>
-                      )}
+                      {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      Why is the name different?
                     </button>
-                  </div>
 
-                  {showAdvanced && (
-                    <div className="animate-fade-in-up">
-                      <label className="block text-xs text-gray-400 mb-1">Requery Date</label>
-                      <input
-                        type="date"
-                        value={lastRequeryDate}
-                        onChange={(e) => setLastRequeryDate(e.target.value)}
-                        className="w-full bg-gray-800/60 border border-gray-700/80 p-2 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200"
-                      />
-                    </div>
-                  )}
+                    {/* COLLAPSIBLE EXPLANATION */}
+                    {showAdvanced && (
+                      <div className="mt-3 text-xs text-gray-400 animate-fade-in-up leading-relaxed">
+                        <p>
+                          Flutterwave provides virtual accounts using the merchant’s registered
+                          business name. This is why banks display our company name instead of
+                          your personal name.
+                        </p>
+                        <p className="mt-2">
+                          Regardless of the displayed name, every transfer to this account is
+                          <strong className="text-green-400"> instantly routed to your wallet</strong>.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            )}
+
+              {/* FEES */}
+              <div className="pt-2 space-y-5 border-t border-gray-700/50">
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Transfers reflect instantly.  
+                  <span className="text-yellow-400 ml-1">1% (max ₦300)</span> fee per deposit.
+                </p>
+              </div>
+            </div>
+          )}
+
           </div>
         </div>
       </div>
