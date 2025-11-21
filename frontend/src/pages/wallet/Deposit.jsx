@@ -17,6 +17,8 @@ export default function Deposit() {
   const [loading, setLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [provider, setProvider] = useState("flutterwave");
+  const [copied, setCopied] = useState(false);
+
 
 
   const [bvnOrNin, setBvnOrNin] = useState("");
@@ -89,28 +91,13 @@ export default function Deposit() {
   };
 
 
-  const handleRequery = async () => {
-    if (!dvaDetails?.account_number) return;
-    setRequeryLoading(true);
-    try {
-      await client.post("/wallet/dva/requery/", {
-        account_number: dvaDetails.account_number,
-        provider_slug: provider === "paystack" ? "titan-paystack" : "9psb",
-        date: lastRequeryDate,
-      });
-      toast.success("Requery successful!");
-    } catch (err) {
-      console.error(err);
-      toast.error("Error requerying funds");
-    } finally {
-      setRequeryLoading(false);
-    }
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+
+    setTimeout(() => setCopied(false), 1500);
   };
 
-  const copyToClipboard = (text, label = "Copied!") => {
-    navigator.clipboard.writeText(text);
-    toast.success(label);
-  };
 
   return (
     <>
@@ -234,7 +221,7 @@ export default function Deposit() {
                 {dvaDetails.type && (
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-gray-400">Account Type</span>
-                    <span className="font-bold text-white">
+                    <span className="text-indigo-400 hover:text-indigo-300 transition-all font-bold">
                       {dvaDetails.type.toUpperCase()}
                       {dvaDetails.type === "static" && " (Reusable)"}
                     </span>
@@ -244,31 +231,47 @@ export default function Deposit() {
                 {/* BANK */}
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Bank</span>
-                  <span className="font-bold text-white text-right">
+                  <span className="text-indigo-400 hover:text-indigo-300 transition-all font-bold">
                     {dvaDetails.bank_name || "Mock Bank"}
                   </span>
                 </div>
 
                 {/* ACCOUNT NUMBER */}
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center relative">
                   <span className="text-xs text-gray-400">Account Number</span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-lg text-indigo-300">
+
+                  <div className="flex items-center gap-2 relative">
+                    
+                    {/* Account Number With Glow Animation */}
+                    <span
+                      className={`font-bold text-lg transition-all duration-300 ${
+                        copied ? "text-green-400 scale-110" : "text-indigo-300"
+                      }`}
+                    >
                       {dvaDetails.account_number}
                     </span>
+
+                    {/* Copy Button */}
                     <button
                       onClick={() => copyToClipboard(dvaDetails.account_number)}
                       className="text-indigo-400 hover:text-indigo-300 transition"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
+
+                    {/* Cool Floating Copied Label */}
+                    {copied && (
+                      <span className="absolute -top-6 right-0 text-xs text-green-400 animate-fade-in-up">
+                        Copied!
+                      </span>
+                    )}
                   </div>
                 </div>
 
                 {/* ACCOUNT NAME */}
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Account Name</span>
-                  <span className="font-bold text-white">
+                  <span className="text-indigo-400 hover:text-indigo-300 transition-all font-bold">
                     Mafita Digital Solutions FLW
                   </span>
                 </div>
@@ -284,9 +287,9 @@ export default function Deposit() {
                     <p>
                       Banks may show <strong className="text-indigo-300">"Mafita Digital Solutions FLW"</strong>{" "}
                       as the account owner. Don't worry, Flutterwave issues virtual
-                      accounts under our business name, but this account {" "}
+                      accounts under our business name, but this {" "}
                       <strong className="text-green-300">{dvaDetails.account_number}</strong>{" "}
-                      is assigned exclusively to you.
+                      is yours, and you alone, <strong className="text-green-300">{""} Sir.</strong>
                     </p>
 
                     <button
