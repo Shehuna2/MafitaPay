@@ -133,23 +133,32 @@ export default function Dashboard() {
   }, [wallet?.balance]);
 
   const renderBalance = () => {
-    if (!wallet) return <span className="text-3xl sm:text-4xl font-extrabold text-gray-500">₦0</span>;
+    if (!wallet)
+      return (
+        <span className="text-3xl sm:text-4xl font-extrabold text-gray-500">
+          ₦0
+        </span>
+      );
 
     return (
-      <div className="flex items-center gap-3 cursor-pointer select-none" onClick={() => setShowBalance((v) => !v)}>
+      <div
+        className="flex items-center gap-3 cursor-pointer select-none"
+        onClick={() => setShowBalance((v) => !v)}
+      >
         {showBalance ? (
           <>
             {formatCurrency(displayBalance.toFixed(2))}
             <EyeOff className="w-5 h-5 text-gray-400" />
           </>
         ) : (
-          <>
-            <span className="text-3xl sm:text-4xl font-extrabold tracking-widest text-gray-400">••••••</span>
-          </>
+          <span className="text-5xl sm:text-6xl font-extrabold tracking-widest text-gray-400 animate-pulse">
+            ●●●●
+          </span>
         )}
       </div>
     );
   };
+
 
   if (loading) {
     return (
