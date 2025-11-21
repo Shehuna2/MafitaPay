@@ -15,9 +15,7 @@ export default function Deposit() {
   });
 
   const [loading, setLoading] = useState(false);
-  const [requeryLoading, setRequeryLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [lastRequeryDate, setLastRequeryDate] = useState(new Date().toISOString().split("T")[0]);
   const [provider, setProvider] = useState("flutterwave");
 
 
@@ -285,9 +283,10 @@ export default function Deposit() {
                     {/* MAIN TRUST MESSAGE */}
                     <p>
                       Banks may show <strong className="text-indigo-300">"Mafita Digital Solutions FLW"</strong>{" "}
-                      as the account owner. This is normal — Flutterwave issues virtual
-                      accounts under our business name, but this account is{" "}
-                      <strong className="text-green-400">assigned exclusively to you</strong>.
+                      as the account owner. Don't worry, Flutterwave issues virtual
+                      accounts under our business name, but this account {" "}
+                      <strong className="text-green-300">{dvaDetails.account_number}</strong>{" "}
+                      is assigned exclusively to you.
                     </p>
 
                     <button
@@ -295,20 +294,21 @@ export default function Deposit() {
                       className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-all"
                     >
                       {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                      Why is the name different?
+                      Hausa version?
                     </button>
 
                     {/* COLLAPSIBLE EXPLANATION */}
                     {showAdvanced && (
                       <div className="mt-3 text-xs text-gray-400 animate-fade-in-up leading-relaxed">
                         <p>
-                          Flutterwave provides virtual accounts using the merchant’s registered
-                          business name. This is why banks display our company name instead of
-                          your personal name.
-                        </p>
-                        <p className="mt-2">
-                          Regardless of the displayed name, every transfer to this account is
-                          <strong className="text-green-400"> instantly routed to your wallet</strong>.
+                          Sunan <strong className="text-indigo-300">"Mafita Digital Solutions FLW"</strong>{" "}
+                          da zaka gani yayi turo kudi asusunka, sunan kamfaninmu ne wanda muka rijistar flutterwave dashi. 
+                          Wannan shi ne dalilin da ya sa bankuna ke nuna sunan kamfaninmu maimakon sunanka na mutum.
+
+                          Kar ka damu, duk wani kuɗin da aka tura zuwa _
+                          <strong className="text-green-300">{dvaDetails.account_number}</strong> _
+                           zai shigo kai tsaye cikin asusun ka. Wannan asusun mu keɓance shi ne domin kai kaɗai, 
+                           <strong className="text-green-300">{""} Yallabai.</strong>
                         </p>
                       </div>
                     )}
