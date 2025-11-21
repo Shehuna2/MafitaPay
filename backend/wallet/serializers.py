@@ -95,9 +95,20 @@ class WalletSerializer(serializers.ModelSerializer):
 
     def get_van_account_name(self, obj):
         dva = self.get_dva(obj)
+
+        # when VA exists
         if dva:
-            return getattr(dva, "account_name", obj.user.get_full_name() or obj.user.email)
+            name = dva.account_name
+            if name and name.strip():
+                return name
+
+            # fallback (correct behaviour)
+            return obj.user.get_full_name() or obj.user.email
+
+        # when no VA exists at all
         return obj.user.get_full_name() or obj.user.email
+
+
 
     def get_van_provider_display(self, obj):
         dva = self.get_dva(obj)
