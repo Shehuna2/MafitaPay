@@ -178,7 +178,7 @@ def psb_webhook(request):
 @csrf_exempt
 def flutterwave_webhook(request):
     """
-    Flutterwave v4 Webhook Handler — FULLY FIXED + SAFE METADATA
+    Flutterwave v4 Webhook Handler — safe, idempotent, with WalletTransaction creation
     """
     try:
         raw = request.body or b""
@@ -194,6 +194,7 @@ def flutterwave_webhook(request):
             getattr(settings, "FLW_TEST_HASH_SECRET", None),
             getattr(settings, "FLW_HASH_SECRET", None),
         ]
+
         verified = False
         for secret in filter(None, secrets_to_try):
             try:
@@ -210,98 +211,106 @@ def flutterwave_webhook(request):
             return Response({"error": "invalid signature"}, status=401)
 
         payload = json.loads(raw.decode("utf-8") or "{}")
-        logger.info("Flutterwave webhook received → event: %s", payload.get("event") or payload.get("type"))
-
         event = payload.get("event") or payload.get("event_type") or payload.get("type")
         data = payload.get("data", {}) or payload
 
-        if event in ("charge.completed", "transfer.completed", "transfer.successful"):
-            if data.get("status") not in ("successful", "succeeded", "success"):
-                logger.info("Ignored non-success event %s: %s", event, data.get("status"))
-                return Response({"status": "ignored"}, status=200)
+        logger.info("Flutterwave webhook received → event: %s", event)
 
-            amount = Decimal(str(data.get("amount", "0")))
-            if amount <= 0:
-                return Response({"status": "ignored"}, status=200)
+        # Only process successful deposit/transfer events
+        if event not in ("charge.completed", "transfer.completed", "transfer.successful"):
+            logger.info("Ignored unhandled event type: %s", event)
+            return Response({"status": "ignored"}, status=200)
 
-            ref = data.get("reference") or data.get("tx_ref") or data.get("transaction_reference") or str(data.get("id", ""))
-            provider_ref = ref
+        if data.get("status") not in ("successful", "succeeded", "success"):
+            logger.info("Ignored non-success event %s: %s", event, data.get("status"))
+            return Response({"status": "ignored"}, status=200)
 
-            account_number = (
-                data.get("account_number")
-                or data.get("destination_account")
-                or data.get("receiver_account")
+        amount = Decimal(str(data.get("amount", "0")))
+        if amount <= 0:
+            return Response({"status": "ignored"}, status=200)
+
+        # Reference / provider reference
+        ref = data.get("reference") or data.get("tx_ref") or data.get("transaction_reference") or str(data.get("id", ""))
+        provider_ref = ref
+
+        # Resolve account number from data or VirtualAccount
+        account_number = (
+            data.get("account_number")
+            or data.get("destination_account")
+            or data.get("receiver_account")
+        )
+        payment_method = data.get("payment_method", {})
+        if payment_method.get("type") == "bank_transfer":
+            bt = payment_method.get("bank_transfer", {})
+            account_number = account_number or bt.get("account_display_name")
+
+        if not account_number and ref:
+            va_fb = VirtualAccount.objects.filter(provider_account_id=ref, provider="flutterwave").first()
+            if va_fb:
+                account_number = va_fb.account_number
+                logger.info("Account resolved via reference: %s → %s", ref, account_number)
+
+        if not account_number:
+            logger.warning("Could not resolve account_number")
+            return Response({"status": "ignored"}, status=200)
+
+        va = VirtualAccount.objects.filter(account_number=account_number, provider="flutterwave").select_related("user").first()
+        if not va:
+            logger.warning("No VirtualAccount found for account_number: %s", account_number)
+            return Response({"status": "ignored"}, status=200)
+
+        wallet, _ = Wallet.objects.get_or_create(user=va.user)
+
+        # Idempotent DB transaction
+        with transaction.atomic():
+            if Deposit.objects.select_for_update().filter(provider_reference=provider_ref).exists():
+                logger.info("Duplicate webhook detected and ignored: %s", provider_ref)
+                return Response({"status": "already processed"}, status=200)
+
+            # Build metadata safely
+            raw_metadata = {
+                "provider": "flutterwave",
+                "event": event,
+                "account_number": account_number,
+                "sender_name": payment_method.get("bank_transfer", {}).get("originator_name"),
+                "sender_bank": payment_method.get("bank_transfer", {}).get("originator_bank_name"),
+                "flutterwave_ref": data.get("id"),
+            }
+            metadata = clean_for_json(raw_metadata)
+
+            # === Deposit funds into wallet ===
+            success = wallet.deposit(
+                amount=amount,
+                reference=f"flw_{provider_ref}",
+                metadata=metadata
             )
-            payment_method = data.get("payment_method", {})
-            if payment_method.get("type") == "bank_transfer":
-                bt = payment_method.get("bank_transfer", {})
-                account_number = account_number or bt.get("account_display_name")
 
-            if not account_number and ref:
-                va_fb = VirtualAccount.objects.filter(provider_account_id=ref, provider="flutterwave").first()
-                if va_fb:
-                    account_number = va_fb.account_number
-                    logger.info("Account resolved via reference: %s → %s", ref, account_number)
+            if not success:
+                logger.error("Wallet deposit failed: ref=%s, user=%s", provider_ref, va.user.email)
+                return Response({"status": "deposit_failed"}, status=500)
 
-            if not account_number:
-                logger.warning("Could not resolve account_number")
-                return Response({"status": "ignored"}, status=200)
+            # Create Deposit record
+            Deposit.objects.create(
+                user=va.user,
+                virtual_account=va,
+                amount=amount,
+                provider_reference=provider_ref,
+                status="credited",
+                raw=payload,
+            )
 
-            va = VirtualAccount.objects.filter(account_number=account_number, provider="flutterwave").select_related("user").first()
-            if not va:
-                logger.warning("No VA found for account_number: %s", account_number)
-                return Response({"status": "ignored"}, status=200)
+            logger.info(
+                "CREDITED ₦%s → %s | VA: %s | Ref: %s | Event: %s",
+                amount, va.user.email, account_number, provider_ref, event
+            )
 
-            wallet, _ = Wallet.objects.get_or_create(user=va.user)
-
-            with transaction.atomic():
-                # Idempotency with DB lock
-                if Deposit.objects.select_for_update().filter(provider_reference=provider_ref).exists():
-                    logger.info("Duplicate webhook ignored: %s", provider_ref)
-                    return Response({"status": "already processed"}, status=200)
-
-                # === BUILD & CLEAN METADATA ===
-                raw_metadata = {
-                    "provider": "flutterwave",
-                    "event": event,
-                    "account_number": account_number,
-                    "sender_name": payment_method.get("bank_transfer", {}).get("originator_name"),
-                    "sender_bank": payment_method.get("bank_transfer", {}).get("originator_bank_name"),
-                    "flutterwave_ref": data.get("id"),
-                }
-                metadata = clean_for_json(raw_metadata)
-
-                # === CREDIT WALLET FIRST ===
-                success = wallet.deposit(
-                    amount=amount,
-                    reference=f"flw_{provider_ref}",
-                    metadata=metadata
-                )
-
-                if not success:
-                    logger.error("Wallet deposit failed for ref: %s, user: %s", provider_ref, va.user.email)
-                    return Response({"status": "deposit_failed"}, status=500)
-
-                # === NOW CREATE DEPOSIT RECORD ===
-                Deposit.objects.create(
-                    user=va.user,
-                    virtual_account=va,
-                    amount=amount,
-                    provider_reference=provider_ref,
-                    status="credited",
-                    raw=payload,
-                )
-
-                logger.info(
-                    "CREDITED ₦%s → %s | VA: %s | Ref: %s | Event: %s",
-                    amount, va.user.email, account_number, provider_ref, event
-                )
-
-            return Response({"status": "success"}, status=200)
-
-        logger.info("Unhandled Flutterwave event: %s", event)
-        return Response({"status": "ignored"}, status=200)
+        return Response({"status": "success"}, status=200)
 
     except Exception as e:
         logger.exception("FATAL ERROR in Flutterwave webhook")
         return Response({"error": "server error"}, status=500)
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def health(request):
+    return Response({"status": "ok"})
