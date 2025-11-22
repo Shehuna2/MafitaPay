@@ -282,7 +282,7 @@ export default function Dashboard() {
             </button>
             <button disabled onClick={() => openModal("withdraw")} className="group flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-2xl text-sm font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition haptic-feedback">
               <ArrowUpRight className="w-4 h-4 group-hover:-translate-y-0.5 transition" />
-              Withdraw (coming soon)
+              Withdraw (soon)
             </button>
           </div>
 
