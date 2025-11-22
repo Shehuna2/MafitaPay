@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 # ======================================================
 
 LOCK = threading.Lock()
-MIN_INTERVAL = 4  # seconds – CoinGecko free tier limit
-RATE_LIMIT_KEY = "cg_last_call_ts"  # shared across workers
+MIN_INTERVAL = 4  # seconds – for CoinGecko free tier
+RATE_LIMIT_KEY = "cg_last_call_ts"  # stored in Redis or cache backend
 
 
 def rate_limited_request(url, params=None, timeout=5):
@@ -86,49 +86,60 @@ def fetch_from_binance(asset_id):
 
 def get_crypto_prices_in_usd(asset_ids):
     """
-    Returns { "bitcoin": Decimal("91000"), ... }.
-    Supports caching, fallback, and last-good.
+    Returns { "bitcoin": Decimal("91000"), ... } for each asset.
+    Uses:
+      - Cache per asset (avoids duplicate CG calls)
+      - Bulk CG request per call (efficient)
+      - Per-asset fallback to Binance
+      - Per-asset last-good fallback
     """
+
+    # Step 1 — separate assets that need fresh fetch
     prices = {}
     to_fetch = []
 
     for asset in asset_ids:
         cache_key = f"cg_usd_{asset}"
-        cached = cache.get(cache_key)
+        cached_price = cache.get(cache_key)
 
-        if cached:
-            prices[asset] = cached
+        if cached_price:
+            prices[asset] = cached_price
         else:
             to_fetch.append(asset)
 
+    # Nothing new to fetch → return cached only
     if not to_fetch:
         return prices
 
-    # Try CoinGecko batch lookup
+    # Step 2 — try batch fetch from CoinGecko
     try:
         cg_response = fetch_from_coingecko(to_fetch, "usd")
 
         for asset in to_fetch:
             price = cg_response.get(asset, {}).get("usd")
             if price is not None:
-                price_dec = Decimal(str(price))
-                prices[asset] = price_dec
+                price_decimal = Decimal(str(price))
+                prices[asset] = price_decimal
 
-                cache.set(f"cg_usd_{asset}", price_dec, 30)
-                cache.set(f"cg_usd_backup_{asset}", price_dec, None)
+                # Set fresh cache (30s TTL)
+                cache.set(f"cg_usd_{asset}", price_decimal, 30)
+                cache.set(f"cg_usd_backup_{asset}", price_decimal, None)
             else:
+                # CoinGecko missing this asset → use fallback
                 fallback = fetch_from_binance(asset) or cache.get(f"cg_usd_backup_{asset}")
                 prices[asset] = fallback or Decimal("0")
 
     except Exception as e:
         logger.error(f"[CG] Multi-fetch failed: {e}")
 
+        # Step 3 — fallback for all missing via Binance + last-good
         for asset in to_fetch:
-            prices[asset] = (
+            fallback_price = (
                 fetch_from_binance(asset) or
                 cache.get(f"cg_usd_backup_{asset}") or
                 Decimal("0")
             )
+            prices[asset] = fallback_price
 
     return prices
 
@@ -137,17 +148,20 @@ def get_crypto_prices_in_usd(asset_ids):
 #                  USD → NGN RATE
 # ======================================================
 
-def get_usd_ngn_rate_raw():
+def get_usd_ngn_rate(margin_type="buy"):
     """
-    Gets RAW USD→NGN rate from CoinGecko (tether/ngn).
-    Never applies margin here.
+    Uses CoinGecko (tether/ngn) with:
+      - fresh cache (5 minutes)
+      - full backup fallback
+      - DB margin adjustment
     """
+
     fresh_key = "usd_ngn_rate_fresh"
     backup_key = "usd_ngn_rate_backup"
 
     cached = cache.get(fresh_key)
     if cached:
-        return cached
+        return apply_fx_margin(cached, margin_type)
 
     try:
         cg = fetch_from_coingecko(["tether"], "ngn")
@@ -157,38 +171,23 @@ def get_usd_ngn_rate_raw():
         cache.set(backup_key, base_rate, None)
 
     except Exception as e:
-        logger.error(f"[FX] USD→NGN fetch failed: {e}")
+        logger.error(f"[FX] USD→NGN failed: {e}")
         base_rate = cache.get(backup_key) or Decimal("1500")
 
-    return base_rate
+    return apply_fx_margin(base_rate, margin_type)
 
 
-def get_usd_ngn_rate_with_margin(margin_type: str):
-    """
-    Applies BUY or SELL margin on top of the raw NGN rate.
-    BUY  → adds margin
-    SELL → subtracts margin
-    """
-    raw_rate = get_usd_ngn_rate_raw()
-
+# Margin helper
+def apply_fx_margin(rate, margin_type):
     try:
         from .models import ExchangeRateMargin
-        margin_obj = ExchangeRateMargin.objects.get(
+        margin = ExchangeRateMargin.objects.get(
             currency_pair="USDT/NGN",
-            margin_type=margin_type,
-        )
-        margin = Decimal(margin_obj.profit_margin)
+            margin_type=margin_type
+        ).profit_margin
     except Exception:
         margin = Decimal("0")
 
-    if margin_type == "sell":
-        final_rate = raw_rate - margin
-    else:
-        final_rate = raw_rate + margin
-
-    if final_rate < 0:
-        final_rate = Decimal("0")
-
-    logger.info(f"[FX] USD→NGN ({margin_type}) raw={raw_rate} margin={margin} → {final_rate}")
-
+    final_rate = rate + margin
+    logger.info(f"[FX] NGN rate({margin_type}): base={rate} margin={margin} final={final_rate}")
     return final_rate

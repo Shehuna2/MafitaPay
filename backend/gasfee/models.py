@@ -120,6 +120,7 @@ EXCHANGE_CHOICES = [
 class Asset(models.Model):
     symbol = models.CharField(max_length=10, unique=True)  # e.g. 'usdt'
     name = models.CharField(max_length=50)                 # e.g. 'Tether USD'
+    coingecko_id = models.CharField(max_length=50, null=True, blank=True)  # e.g. 'tether'
     is_active = models.BooleanField(default=True)
 
     def __str__(self):

@@ -11,6 +11,7 @@ from django.conf import settings
 from django.db import transaction
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
+from decimal import InvalidOperation
 
 
 from rest_framework.views import APIView
@@ -18,10 +19,11 @@ from rest_framework.response import Response
 from rest_framework import status, permissions, status as drf_status
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 
-from wallet.models import Wallet, WalletTransaction
+from wallet.models import Wallet, WalletTransaction, Notification
 
 from .services import lookup_rate, get_receiving_details
-from .price_service import get_crypto_prices_in_usd, get_usd_ngn_rate
+from .price_service import get_crypto_prices_in_usd, get_usd_ngn_rate_with_margin
+
 # from .utils import get_crypto_price, get_bulk_crypto_prices, get_exchange_rate, send_bsc, send_evm
 from .utils import send_bsc, send_evm
 from .near_utils import send_near
@@ -36,17 +38,15 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-# Helper: convert crypto amount (in token native units) -> wei-like integer for EVM native ETH
+# small wrappers
 def amount_to_wei(amount) -> int:
+    from web3 import Web3
     try:
         return int(Web3.to_wei(Decimal(amount), "ether"))
     except Exception:
-        # fallback naive conversion (shouldn't happen)
         return int(float(amount) * (10 ** 18))
 
-# Small wrappers for common chains
 def send_eth(recipient, amount, order_id=None):
-    # amount is token amount in ETH; convert to wei
     return send_evm("ETH", recipient, amount_to_wei(amount), order_id)
 
 def send_arbitrum(recipient, amount, order_id=None):
@@ -59,7 +59,7 @@ def send_optimism(recipient, amount, order_id=None):
     return send_evm("OP", recipient, amount_to_wei(amount), order_id)
 
 SENDERS = {
-    "BNB": send_bsc,           # expects (to_address, Decimal amount, order_id)
+    "BNB": send_bsc,
     "SOL": send_solana,
     "TON": send_ton,
     "NEAR": send_near,
@@ -69,6 +69,7 @@ SENDERS = {
     "BASE-ARB": send_arbitrum,
     "BASE-OPT": send_optimism,
 }
+
 
 class AssetListAPI(APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -81,8 +82,8 @@ class AssetListAPI(APIView):
         prices = get_crypto_prices_in_usd(ids)
 
         # Unified FX rate fetch (with margin awareness)
-        usd_ngn_rate = get_usd_ngn_rate("buy")
-
+        usd_ngn_rate = get_usd_ngn_rate_with_margin("buy")
+        
         output = []
         for c in cryptos:
             usd_price = prices.get(c.coingecko_id, Decimal("0"))
@@ -102,23 +103,25 @@ class AssetListAPI(APIView):
         })
 
 
-class BuyCryptoAPI(APIView):
-    permission_classes = [permissions.IsAuthenticated]
 
-    #
+class BuyCryptoAPI(APIView):
+    permission_classes = []
+
     # ======================
-    #     GET RATE
+    # GET RATE
     # ======================
-    #
     def get(self, request, crypto_id):
         try:
             crypto = get_object_or_404(Crypto, id=crypto_id)
             coingecko_id = crypto.coingecko_id
 
+            # ✅ Price fetch
             prices = get_crypto_prices_in_usd([coingecko_id])
             crypto_price_usd = prices.get(coingecko_id, Decimal("0"))
 
-            usd_ngn_rate = get_usd_ngn_rate("buy")
+            # ✅ USD→NGN fetch (with BUY margin)
+            usd_ngn_rate = get_usd_ngn_rate_with_margin("buy")
+
             price_ngn = (crypto_price_usd * usd_ngn_rate).quantize(Decimal("0.01"))
 
             return Response({
@@ -133,11 +136,6 @@ class BuyCryptoAPI(APIView):
             logger.error(f"Error fetching buy rate for {crypto_id}: {str(e)}")
             return Response({"error": str(e)}, status=500)
 
-    #
-    # ======================
-    #     PROCESS ORDER
-    # ======================
-    #
     def post(self, request, crypto_id):
         crypto = get_object_or_404(Crypto, id=crypto_id)
 
@@ -152,9 +150,9 @@ class BuyCryptoAPI(APIView):
         currency = request.data.get("currency", "NGN").upper()
         wallet_address = request.data.get("wallet_address", "").strip()
 
-        # Compute rates
+        # Compute rates (CORRECTED to margin-aware)
         crypto_price = get_crypto_prices_in_usd([crypto.coingecko_id])[crypto.coingecko_id]
-        exchange_rate = get_usd_ngn_rate("buy")
+        exchange_rate = get_usd_ngn_rate_with_margin("buy")  # <-- updated
 
         # Convert
         if currency == "NGN":
@@ -174,11 +172,9 @@ class BuyCryptoAPI(APIView):
 
         req_id = str(uuid.uuid4())
 
-        #
         # =======================================
         #  ATOMIC USER DEBIT + ORDER CREATION
         # =======================================
-        #
         try:
             with transaction.atomic():
                 wallet = Wallet.objects.select_for_update().get(user=request.user)
@@ -221,15 +217,55 @@ class BuyCryptoAPI(APIView):
             logger.error(f"Atomic block failed: {e}")
             return Response({"error": "Could not process transaction"}, status=500)
 
-        #
         # =======================================
         #       CHAIN SEND (OUTSIDE ATOMIC)
         # =======================================
-        #
         sender = SENDERS.get(crypto.symbol.upper())
         if not sender:
             refund_user(order)
             return Response({"success": False, "error": "Unsupported token"}, status=400)
+
+        try:
+            # NEAR special case
+            if crypto.symbol.upper() == "NEAR":
+                tx_hash = sender(wallet_address, float(crypto_amount))
+            else:
+                tx_hash = sender(wallet_address, float(crypto_amount), order.id)
+
+            # Mark success
+            order.tx_hash = tx_hash
+            order.status = "completed"
+            order.save(update_fields=["tx_hash", "status"])
+
+            WalletTransaction.objects.filter(request_id=req_id).update(
+                status="success", reference=tx_hash
+            )
+
+            return Response({
+                "success": True,
+                "crypto": crypto.symbol,
+                "crypto_amount": str(crypto_amount),
+                "total_ngn": str(total_ngn),
+                "wallet_address": wallet_address,
+                "tx_hash": tx_hash,
+            })
+
+        except Exception as e:
+            logger.error(f"Blockchain send failed: {e}")
+
+            # refund ALWAYS on failures
+            refund_user(order)
+
+            msg = "Transaction failed. Please try again."
+            if "InsufficientFunds" in str(e):
+                msg = "Insufficient funds in sender wallet."
+            elif "InvalidAddress" in str(e):
+                msg = "Wallet address is invalid."
+            elif "network" in str(e).lower():
+                msg = "Network issue — try again soon."
+
+            return Response({"error": msg}, status=400)
+
 
         try:
             # NEAR special case
@@ -371,7 +407,7 @@ class ExchangeRateAPI(APIView):
         asset_obj = get_object_or_404(Asset, symbol__iexact=asset)
 
         # ✅ Get base USD→NGN rate with 'sell' margin applied
-        usd_to_ngn = get_exchange_rate(margin_type="sell")
+        usd_to_ngn = get_usd_ngn_rate_with_margin(margin_type="sell")
 
         # ✅ For simplicity, treat every asset as 1:1 to USD (USDT, USDC, etc.)
         #    If you add special tokens later (e.g. PI or SIDRA), handle conversion here.
@@ -401,72 +437,108 @@ class SellAssetListAPI(APIView):
         return Response({"assets": list(assets)}, status=drf_status.HTTP_200_OK)
 
 # ---------- Sell endpoints ----------
-class StartSellOrderAPI(APIView):
-    permission_classes = [IsAuthenticated]
+def compute_ngn_amount_dynamic(asset_symbol: str, amount_asset: Decimal, margin_type="sell") -> tuple[Decimal, Decimal]:
+    """
+    Compute NGN amount dynamically:
+      1. Fetch USD price of asset from CoinGecko / Binance
+      2. Fetch USD→NGN rate with margin
+      3. Multiply to get NGN amount
+    Returns tuple: (amount_ngn, usd_to_ngn_rate)
+    """
+    try:
+        # Map asset symbol -> coingecko_id
+        asset_obj = Asset.objects.get(symbol__iexact=asset_symbol)
+        coingecko_id = asset_obj.coingecko_id
+    except Asset.DoesNotExist:
+        raise ValueError(f"Asset not found: {asset_symbol}")
 
+    try:
+        # Step 1 — get crypto price in USD
+        prices = get_crypto_prices_in_usd([coingecko_id])
+        price_usd = prices.get(coingecko_id)
+        if not price_usd:
+            raise ValueError(f"Price not found for {asset_symbol}")
+    except Exception as e:
+        logger.warning("Crypto price fetch failed: %s", e)
+        price_usd = Decimal("0")
+
+    try:
+        # Step 2 — get USD→NGN rate with margin
+        usd_to_ngn = get_usd_ngn_rate_with_margin(margin_type=margin_type)
+    except Exception as e:
+        logger.warning("USD→NGN fetch failed: %s", e)
+        usd_to_ngn = Decimal("1500")
+
+    # Step 3 — compute NGN amount
+    amount_ngn = (amount_asset * price_usd * usd_to_ngn).quantize(Decimal("0.01"))
+    return amount_ngn, usd_to_ngn
+
+
+class StartSellOrderAPI(APIView):
+    permission_classes = []
 
     def post(self, request):
-        data = {
-            "asset": request.data.get("asset"),
-            "source": request.data.get("source"),
-            "amount_asset": request.data.get("amount_asset"),
-        }
-        print("Incoming source:", request.data.get("source"))
+        asset_symbol = str(request.data.get("asset") or "").strip()
+        source_name = str(request.data.get("source") or "").strip()
+        amount_str = request.data.get("amount_asset")
 
         # --- Basic validation ---
-        if not data["asset"] or not data["source"] or not data["amount_asset"]:
+        if not asset_symbol or not source_name or amount_str is None:
             return Response(
                 {"error": "asset, source and amount_asset are required."},
                 status=drf_status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            amount_asset = Decimal(str(data["amount_asset"]))
+            amount_asset = Decimal(str(amount_str))
             if amount_asset <= 0:
-                return Response(
-                    {"error": "amount_asset must be greater than 0."},
-                    status=drf_status.HTTP_400_BAD_REQUEST,
-                )
-        except Exception:
+                raise ValueError("amount_asset must be greater than 0.")
+        except (InvalidOperation, ValueError):
             return Response(
-                {"error": "Invalid amount_asset."},
+                {"error": f"Invalid amount_asset: {amount_str}"},
                 status=drf_status.HTTP_400_BAD_REQUEST,
             )
 
         # --- Validate asset ---
         try:
-            asset = Asset.objects.get(symbol__iexact=data["asset"])
+            asset = Asset.objects.get(symbol__iexact=asset_symbol)
         except Asset.DoesNotExist:
             return Response(
-                {"error": "Asset not found."},
+                {"error": f"Asset not found: {asset_symbol}"},
                 status=drf_status.HTTP_404_NOT_FOUND,
             )
 
-        # --- Validate source/exchange ---
+        # --- Validate exchange/source ---
         exchanges = get_exchange_details_map()
         exchange_key = next(
-            (k for k in exchanges if k.lower() == str(data["source"]).lower()), None
+            (k for k in exchanges if k.lower() == source_name.lower()), None
         )
         if not exchange_key:
             return Response(
-                {"error": "Exchange/source not supported."},
+                {"error": f"Exchange/source not supported: {source_name}"},
                 status=drf_status.HTTP_400_BAD_REQUEST,
             )
-        exchange_details = exchanges[exchange_key] or {}
+        exchange_details = exchanges.get(exchange_key, {})
 
+        # --- Compute NGN dynamically ---
         try:
-            rate_ngn = get_exchange_rate(margin_type="sell")
-        except ExchangeRateMargin.DoesNotExist:
-            logger.warning("ExchangeRateMargin missing for asset %s", asset)
-            # fallback if rate not found — use live USD→NGN
-            usd_to_ngn = get_exchange_rate(margin_type="sell")
-            rate_ngn = Decimal(usd_to_ngn)
+            amount_ngn, usd_to_ngn_rate = compute_ngn_amount_dynamic(asset_symbol, amount_asset, margin_type="sell")
+        except Exception as e:
+            logger.error("Error computing NGN amount: %s", e)
+            return Response(
+                {"error": "Could not compute NGN equivalent"},
+                status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
-        # --- Compute amount in NGN ---
-        amount_ngn = (amount_asset * rate_ngn).quantize(Decimal("0.01"))
-        logger.info(f"[SELL ORDER] User {request.user.id} selling {amount_asset} {asset.symbol} at rate ₦{rate_ngn} = ₦{amount_ngn}")
-        
-        
+        logger.info(
+            "[SELL ORDER] User %s selling %s %s → NGN₦%s (USD→NGN=%s)",
+            getattr(request.user, "id", "anonymous"),
+            amount_asset,
+            asset.symbol,
+            amount_ngn,
+            usd_to_ngn_rate,
+        )
+
         # --- Create sell order ---
         try:
             with transaction.atomic():
@@ -475,29 +547,30 @@ class StartSellOrderAPI(APIView):
                     asset=asset,
                     source=exchange_key,
                     amount_asset=amount_asset,
-                    rate_ngn=rate_ngn,
+                    rate_ngn=usd_to_ngn_rate,
                     amount_ngn=amount_ngn,
                     status="pending_payment",
                     details={"exchange_contact": exchange_details},
                 )
 
             expires_in = 30 * 60  # 30 min
-
             serializer = AssetSellOrderSerializer(order)
-            resp = {
-                "success": True,
-                "order": serializer.data,
-                "exchange_details": exchange_details,
-                "expires_in": expires_in,
-            }
-            return Response(resp, status=drf_status.HTTP_201_CREATED)
+
+            return Response(
+                {
+                    "success": True,
+                    "order": serializer.data,
+                    "exchange_details": exchange_details,
+                    "expires_in": expires_in,
+                },
+                status=drf_status.HTTP_201_CREATED,
+            )
         except Exception as e:
             logger.exception("Error creating sell order: %s", e)
             return Response(
                 {"success": False, "message": "Could not create sell order"},
                 status=drf_status.HTTP_400_BAD_REQUEST,
             )
-
 
 class UploadSellOrderProofAPI(APIView):
     permission_classes = [IsAuthenticated]
@@ -524,16 +597,13 @@ class UploadSellOrderProofAPI(APIView):
             status=status.HTTP_200_OK,
         )
 
-
 class SellOrderUpdateAPI(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = []
 
     def patch(self, request, order_id):
-        """
-        Allow user to update fields (asset, source, amount_asset)
-        before submitting proof.
-        """
-        order = get_object_or_404(AssetSellOrder, order_id=order_id, user=request.user)
+        order = AssetSellOrder.objects.filter(order_id=order_id, user=request.user).first()
+        if not order:
+            return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if order.status != "pending_payment":
             return Response(
@@ -546,13 +616,17 @@ class SellOrderUpdateAPI(APIView):
             with transaction.atomic():
                 order = serializer.save()
 
-                # 🔹 Recalculate NGN values if amount_asset changed
+                # 🔹 Recalculate NGN values if amount_asset or asset changed
                 if "amount_asset" in serializer.validated_data or "asset" in serializer.validated_data:
-                    from bills.models import ExchangeRate
-                    rate_obj = get_object_or_404(ExchangeRate, asset=order.asset)
-                    order.rate_ngn = rate_obj.rate_ngn
-                    order.amount_ngn = order.amount_asset * rate_obj.rate_ngn
-                    order.save(update_fields=["rate_ngn", "amount_ngn"])
+                    try:
+                        coingecko_id = order.asset.coingecko_id
+                        price_usd = get_crypto_prices_in_usd([coingecko_id])[coingecko_id]
+                        new_rate = get_usd_ngn_rate_with_margin(margin_type="sell")
+                        order.rate_ngn = new_rate
+                        order.amount_ngn = (order.amount_asset * price_usd * new_rate).quantize(Decimal("0.01"))
+                        order.save(update_fields=["rate_ngn", "amount_ngn"])
+                    except Exception as e:
+                        logger.warning("Failed to recalc NGN for updated order %s: %s", order.order_id, e)
 
             return Response(
                 {"success": True, "order": AssetSellOrderSerializer(order).data},
@@ -616,7 +690,7 @@ class AdminUpdateSellOrderAPI(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request, order_id):
-        order = get_object_or_404(SellOrder, order_id=order_id)
+        order = get_object_or_404(AssetSellOrder, order_id=order_id)
         new_status = request.data.get("status")
 
         if new_status not in ["completed", "cancelled", "reversed"]:

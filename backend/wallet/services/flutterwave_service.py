@@ -253,6 +253,15 @@ class FlutterwaveService:
             logger.exception("Failed while verifying Flutterwave webhook signature")
             return False
 
+    # def fetch_va_details(self, account_number):
+    #     endpoint = f"/v4/virtual-account-numbers/{account_number}"
+    #     response = self._get(endpoint)
+
+    #     if not response or response.get("status") != "success":
+    #         return None
+
+    #     return response.get("data")
+
 
 # Example usage:
 # fw = FlutterwaveService(use_live=True)

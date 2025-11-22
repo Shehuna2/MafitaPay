@@ -44,7 +44,7 @@ class CryptoPurchaseAdmin(admin.ModelAdmin):
 
 @admin.register(Asset)
 class AssetAdmin(admin.ModelAdmin):
-    list_display = ("name", "symbol")
+    list_display = ("name", "symbol", "coingecko_id")
     search_fields = ("name", "symbol")
 
 
