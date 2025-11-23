@@ -84,14 +84,44 @@ def fetch_from_binance(asset_id):
 #           UNIFIED FETCH — INDIVIDUAL CACHES
 # ======================================================
 
+SAFE_FALLBACK_NON_STABLE = Decimal("0.25")   # minimal safe fallback
+SAFE_FALLBACK_STABLE = Decimal("1")          # stablecoins always = $1
+
+
+def get_safe_fallback_price(asset_id):
+    """
+    Returns a safe fallback price that is NEVER zero.
+    Stablecoins → always 1
+    Others → a minimal neutral fallback (0.25)
+    """
+
+    stable_ids = {"tether", "usdt", "usd-coin", "usdc"}
+
+    if asset_id.lower() in stable_ids:
+        return SAFE_FALLBACK_STABLE
+
+    return SAFE_FALLBACK_NON_STABLE
+
+
+
 def get_crypto_prices_in_usd(asset_ids):
     """
-    Returns { "bitcoin": Decimal("91000"), ... }.
-    Supports caching, fallback, and last-good.
+    Returns { "bitcoin": Decimal("91000"), ... }
+    with:
+      - global rate limit
+      - CoinGecko batch fetch
+      - Binance fallback
+      - backup cache
+      - safe minimal fallback
+    NEVER returns Decimal("0").
     """
+
     prices = {}
     to_fetch = []
 
+    # ------------------------------------------------------
+    # 1. Check fresh Redis cache
+    # ------------------------------------------------------
     for asset in asset_ids:
         cache_key = f"cg_usd_{asset}"
         cached = cache.get(cache_key)
@@ -104,30 +134,52 @@ def get_crypto_prices_in_usd(asset_ids):
     if not to_fetch:
         return prices
 
-    # Try CoinGecko batch lookup
+    # ------------------------------------------------------
+    # 2. Try CoinGecko batch request
+    # ------------------------------------------------------
     try:
         cg_response = fetch_from_coingecko(to_fetch, "usd")
 
         for asset in to_fetch:
-            price = cg_response.get(asset, {}).get("usd")
-            if price is not None:
-                price_dec = Decimal(str(price))
-                prices[asset] = price_dec
+            raw_price = cg_response.get(asset, {}).get("usd")
 
-                cache.set(f"cg_usd_{asset}", price_dec, 30)
-                cache.set(f"cg_usd_backup_{asset}", price_dec, None)
-            else:
-                fallback = fetch_from_binance(asset) or cache.get(f"cg_usd_backup_{asset}")
-                prices[asset] = fallback or Decimal("0")
+            if raw_price is not None:
+                price_dec = Decimal(str(raw_price))
+
+                if price_dec > 0:
+                    prices[asset] = price_dec
+
+                    # cache fresh & backup
+                    cache.set(f"cg_usd_{asset}", price_dec, 30)
+                    cache.set(f"cg_usd_backup_{asset}", price_dec, None)
+                    continue
+
+            # otherwise: fall back
+            binance_fallback = fetch_from_binance(asset)
+            backup = cache.get(f"cg_usd_backup_{asset}")
+            safe_fallback = get_safe_fallback_price(asset)
+
+            prices[asset] = (
+                binance_fallback
+                or backup
+                or safe_fallback
+            )
 
     except Exception as e:
         logger.error(f"[CG] Multi-fetch failed: {e}")
 
+        # ------------------------------------------------------
+        # 3. If CoinGecko batch fails, fallback per asset
+        # ------------------------------------------------------
         for asset in to_fetch:
+            binance_fallback = fetch_from_binance(asset)
+            backup = cache.get(f"cg_usd_backup_{asset}")
+            safe_fallback = get_safe_fallback_price(asset)
+
             prices[asset] = (
-                fetch_from_binance(asset) or
-                cache.get(f"cg_usd_backup_{asset}") or
-                Decimal("0")
+                binance_fallback
+                or backup
+                or safe_fallback
             )
 
     return prices
@@ -137,40 +189,78 @@ def get_crypto_prices_in_usd(asset_ids):
 #                  USD → NGN RATE
 # ======================================================
 
+SAFE_FX_FALLBACK = Decimal("1500")   # absolute fallback when everything fails
+MIN_VALID_RATE = Decimal("200")      # enforce minimum to avoid invalid 0 or tiny rates
+
+
 def get_usd_ngn_rate_raw():
     """
-    Gets RAW USD→NGN rate from CoinGecko (tether/ngn).
-    Never applies margin here.
+    Gets RAW USD→NGN from CoinGecko (tether/ngn).
+    With:
+      - exponential retry from fetch_from_coingecko
+      - caching
+      - backup cache
+      - safe fallback when everything fails
+    ALWAYS returns a rate > 0.
     """
+
     fresh_key = "usd_ngn_rate_fresh"
     backup_key = "usd_ngn_rate_backup"
 
+    # Use cached 5-minute rate if available
     cached = cache.get(fresh_key)
     if cached:
-        return cached
+        try:
+            if Decimal(cached) > 0:
+                return Decimal(cached)
+        except Exception:
+            pass
 
     try:
+        # Fetch "tether" → NGN, safest USD pair
         cg = fetch_from_coingecko(["tether"], "ngn")
-        base_rate = Decimal(str(cg["tether"]["ngn"]))
+        raw = Decimal(str(cg["tether"]["ngn"]))
 
-        cache.set(fresh_key, base_rate, 300)
-        cache.set(backup_key, base_rate, None)
+        # sanity check
+        if raw <= 0:
+            raise ValueError("CoinGecko returned INVALID FX rate")
+
+        # store fresh + backup
+        cache.set(fresh_key, raw, 300)
+        cache.set(backup_key, raw, None)
+
+        return raw
 
     except Exception as e:
         logger.error(f"[FX] USD→NGN fetch failed: {e}")
-        base_rate = cache.get(backup_key) or Decimal("1500")
 
-    return base_rate
+        # fallback to backup or last resort fallback
+        backup = cache.get(backup_key)
+        if backup:
+            try:
+                backup_dec = Decimal(backup)
+                if backup_dec > 0:
+                    return backup_dec
+            except:
+                pass
+
+        # absolute last fallback
+        logger.warning(
+            f"[FX] Using SAFE USD→NGN fallback: {SAFE_FX_FALLBACK}"
+        )
+        return SAFE_FX_FALLBACK
+
 
 
 def get_usd_ngn_rate_with_margin(margin_type: str):
     """
-    Applies BUY or SELL margin on top of the raw NGN rate.
-    BUY  → adds margin
-    SELL → subtracts margin
+    Applies SELL or BUY margin safely.
+    Ensures the final rate is NEVER zero or negative.
     """
+
     raw_rate = get_usd_ngn_rate_raw()
 
+    # fetch margin from DB
     try:
         from .models import ExchangeRateMargin
         margin_obj = ExchangeRateMargin.objects.get(
@@ -181,14 +271,24 @@ def get_usd_ngn_rate_with_margin(margin_type: str):
     except Exception:
         margin = Decimal("0")
 
+    # apply margin
     if margin_type == "sell":
         final_rate = raw_rate - margin
     else:
         final_rate = raw_rate + margin
 
-    if final_rate < 0:
-        final_rate = Decimal("0")
+    # Absolute safety: never return 0 or negative
+    if final_rate <= 0:
+        logger.warning(
+            f"[FX] Final NGN rate invalid after margin (raw={raw_rate}, margin={margin}). "
+            f"Using minimum floor {MIN_VALID_RATE}"
+        )
+        final_rate = MIN_VALID_RATE
 
-    logger.info(f"[FX] USD→NGN ({margin_type}) raw={raw_rate} margin={margin} → {final_rate}")
+    # Logging for debugging
+    logger.info(
+        f"[FX] USD→NGN ({margin_type}) raw={raw_rate} margin={margin} → {final_rate}"
+    )
 
     return final_rate
+

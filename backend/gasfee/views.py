@@ -108,20 +108,40 @@ class BuyCryptoAPI(APIView):
     permission_classes = []
 
     # ======================
-    # GET RATE
+    # GET RATE (patched)
     # ======================
     def get(self, request, crypto_id):
         try:
             crypto = get_object_or_404(Crypto, id=crypto_id)
             coingecko_id = crypto.coingecko_id
 
-            # ✅ Price fetch
-            prices = get_crypto_prices_in_usd([coingecko_id])
-            crypto_price_usd = prices.get(coingecko_id, Decimal("0"))
+            # ------------------------------
+            # Step 1 — fetch crypto price USD
+            # ------------------------------
+            try:
+                prices = get_crypto_prices_in_usd([coingecko_id])
+                crypto_price_usd = prices.get(coingecko_id)
+                if not crypto_price_usd or crypto_price_usd <= 0:
+                    # Fallback to last good cached price or safe default
+                    crypto_price_usd = cache.get(f"cg_usd_backup_{coingecko_id}") or Decimal("0.25")
+            except Exception as e:
+                logger.warning(f"[BUY] Crypto price fetch failed: {e}")
+                crypto_price_usd = cache.get(f"cg_usd_backup_{coingecko_id}") or Decimal("0.25")
 
-            # ✅ USD→NGN fetch (with BUY margin)
-            usd_ngn_rate = get_usd_ngn_rate_with_margin("buy")
+            # ------------------------------
+            # Step 2 — fetch USD→NGN rate (BUY margin)
+            # ------------------------------
+            try:
+                usd_ngn_rate = get_usd_ngn_rate_with_margin("buy")
+                if not usd_ngn_rate or usd_ngn_rate <= 0:
+                    usd_ngn_rate = cache.get("usd_ngn_rate_backup") or Decimal("755")
+            except Exception as e:
+                logger.warning(f"[BUY] USD→NGN fetch failed: {e}")
+                usd_ngn_rate = cache.get("usd_ngn_rate_backup") or Decimal("755")
 
+            # ------------------------------
+            # Step 3 — compute NGN price
+            # ------------------------------
             price_ngn = (crypto_price_usd * usd_ngn_rate).quantize(Decimal("0.01"))
 
             return Response({
@@ -135,6 +155,7 @@ class BuyCryptoAPI(APIView):
         except Exception as e:
             logger.error(f"Error fetching buy rate for {crypto_id}: {str(e)}")
             return Response({"error": str(e)}, status=500)
+
 
     def post(self, request, crypto_id):
         crypto = get_object_or_404(Crypto, id=crypto_id)
@@ -440,34 +461,39 @@ class SellAssetListAPI(APIView):
 def compute_ngn_amount_dynamic(asset_symbol: str, amount_asset: Decimal, margin_type="sell") -> tuple[Decimal, Decimal]:
     """
     Compute NGN amount dynamically:
-      1. Fetch USD price of asset from CoinGecko / Binance
-      2. Fetch USD→NGN rate with margin
+      1. Fetch USD price of asset from CoinGecko / Binance (with backup)
+      2. Fetch USD→NGN rate with margin (with backup)
       3. Multiply to get NGN amount
     Returns tuple: (amount_ngn, usd_to_ngn_rate)
     """
     try:
-        # Map asset symbol -> coingecko_id
         asset_obj = Asset.objects.get(symbol__iexact=asset_symbol)
         coingecko_id = asset_obj.coingecko_id
     except Asset.DoesNotExist:
         raise ValueError(f"Asset not found: {asset_symbol}")
 
+    # Step 1 — get crypto price in USD
     try:
-        # Step 1 — get crypto price in USD
         prices = get_crypto_prices_in_usd([coingecko_id])
         price_usd = prices.get(coingecko_id)
-        if not price_usd:
-            raise ValueError(f"Price not found for {asset_symbol}")
+        if not price_usd or price_usd == 0:
+            # fallback to backup cache if fresh fetch failed
+            price_usd = cache.get(f"cg_usd_backup_{coingecko_id}") or Decimal("0.25")
+            logger.warning("[CG] Falling back to backup price for %s: %s USD", asset_symbol, price_usd)
     except Exception as e:
         logger.warning("Crypto price fetch failed: %s", e)
-        price_usd = Decimal("0")
+        price_usd = cache.get(f"cg_usd_backup_{coingecko_id}") or Decimal("0.25")
 
+    # Step 2 — get USD→NGN rate with margin
     try:
-        # Step 2 — get USD→NGN rate with margin
         usd_to_ngn = get_usd_ngn_rate_with_margin(margin_type=margin_type)
+        if not usd_to_ngn or usd_to_ngn == 0:
+            # fallback to backup if fresh fetch failed
+            usd_to_ngn = cache.get("usd_ngn_rate_backup") or Decimal("755")  # safer fallback
+            logger.warning("[FX] Falling back to backup USD→NGN rate: %s", usd_to_ngn)
     except Exception as e:
         logger.warning("USD→NGN fetch failed: %s", e)
-        usd_to_ngn = Decimal("1500")
+        usd_to_ngn = cache.get("usd_ngn_rate_backup") or Decimal("755")
 
     # Step 3 — compute NGN amount
     amount_ngn = (amount_asset * price_usd * usd_to_ngn).quantize(Decimal("0.01"))

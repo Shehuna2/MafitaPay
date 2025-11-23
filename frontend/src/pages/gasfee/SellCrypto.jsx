@@ -145,7 +145,7 @@ export default function SellCrypto() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950/40 to-slate-950 text-white">
+    <div className="min-h-screen text-white">
       <ToastContainer theme="dark" position="top-center" autoClose={2000} />
 
       <div className="px-4 pt-4 pb-6 max-w-xl mx-auto">
@@ -184,7 +184,7 @@ export default function SellCrypto() {
                 <div>
                   <label className="text-xs text-gray-400">Send From</label>
                   <select name="source" value={form.source} onChange={handleChange} required
-                    className="mt-1 w-full px-4 py-3 bg-white/10 border border-white/10 rounded-2xl focus:border-indigo-500 text-base">
+                    className="mt-1 w-full px-4 py-3 bg-gray-800 text-white border border-white/10 rounded-2xl focus:border-indigo-500 text-base">
                     <option value="">Select</option>
                     {exchanges.map((ex, i) => {
                       const val = typeof ex === "string" ? ex : ex.exchange || ex.name;
@@ -197,7 +197,7 @@ export default function SellCrypto() {
                 <div>
                   <label className="text-xs text-gray-400">Asset</label>
                   <select name="asset" value={form.asset} onChange={handleChange} required
-                    className="mt-1 w-full px-4 py-3 bg-white/10 border border-white/10 rounded-2xl focus:border-indigo-500 text-base">
+                    className="mt-1 w-full px-4 py-3 bg-gray-800 text-white border border-white/10 rounded-2xl focus:border-indigo-500 text-base">
                     <option value="">Choose</option>
                     {assets.map(a => (
                       <option key={a.id} value={a.symbol.toLowerCase()}>
@@ -223,7 +223,7 @@ export default function SellCrypto() {
                 )}
 
                 <button type="submit" disabled={submitting || !form.asset || !form.source || !form.amount_asset}
-                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 font-bold text-lg disabled:opacity-50">
+                  className="w-full py-4 rounded-2xl bg-indigo-600 font-bold text-lg disabled:opacity-50">
                   {submitting ? <Loader2 className="w-7 h-7 mx-auto animate-spin" /> : "Continue"}
                 </button>
               </form>
@@ -241,60 +241,60 @@ export default function SellCrypto() {
                   </span>
                 </div>
 
-                <div className="text-center py-5 bg-gradient-to-br from-emerald-600/20 to-teal-600/20 rounded-2xl border border-emerald-500/40">
+                <div className="text-center py-5 bg-gradient-to-br from-indigo-600/20 to-indigo-600/20 rounded-2xl border border-indigo-500/40">
                   <p className="text-sm text-gray-300">You receive</p>
                   <p className="text-4xl font-bold text-white mt-1">{formatFiat(backendAmountNgn)}</p>
                 </div>
 
                 <div className="p-4 bg-white/10 rounded-2xl border border-white/20">
-  <p className="text-xs text-gray-400 mb-2">Send to</p>
+                <p className="text-xs text-gray-400 mb-2">Send to</p>
 
-  <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3">
 
-    {/* EMAIL */}
-    <div className="flex items-center justify-between gap-3">
-      <div className="flex flex-col flex-1 min-w-0">
-        <div className="flex items-center justify-between w-full">
-          <p className="text-gray-400 text-xs">Email:</p>
-          <p className="font-mono text-sm break-all text-indigo-300 text-right ml-2">
-            {safeString(exchangeInfo.email || order.source.email)}
-          </p>
-        </div>
-      </div>
+                  {/* EMAIL */}
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <div className="flex items-center justify-between w-full">
+                        <p className="text-gray-400 text-xs">Email:</p>
+                        <p className="font-mono text-sm break-all text-indigo-300 text-right ml-2">
+                          {safeString(exchangeInfo.email || order.source.email)}
+                        </p>
+                      </div>
+                    </div>
 
-      <button
-        onClick={() =>
-          handleCopy(safeString(exchangeInfo.email || order.source.email))
-        }
-        className="p-2 bg-white/20 rounded-xl hover:bg-white/30 transition flex-shrink-0"
-      >
-        <Copy className="w-4 h-4" />
-      </button>
-    </div>
+                    <button
+                      onClick={() =>
+                        handleCopy(safeString(exchangeInfo.email || order.source.email))
+                      }
+                      className="p-2 rounded-xl hover:bg-white/30 transition flex-shrink-0"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
 
-    {/* UID */}
-    <div className="flex items-center justify-between gap-3">
-      <div className="flex flex-col flex-1 min-w-0">
-        <div className="flex items-center justify-between w-full">
-          <p className="text-gray-400 text-xs">UID:</p>
-          <p className="font-mono text-sm break-all text-indigo-300 text-right ml-2">
-            {safeString(exchangeInfo.uid || order.source.uid)}
-          </p>
-        </div>
-      </div>
+                  {/* UID */}
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <div className="flex items-center justify-between w-full">
+                        <p className="text-gray-400 text-xs">UID:</p>
+                        <p className="font-mono text-sm break-all text-indigo-300 text-right ml-2">
+                          {safeString(exchangeInfo.uid || order.source.uid)}
+                        </p>
+                      </div>
+                    </div>
 
-      <button
-        onClick={() =>
-          handleCopy(safeString(exchangeInfo.uid || order.source.uid))
-        }
-        className="p-2 bg-white/20 rounded-xl hover:bg-white/30 transition flex-shrink-0"
-      >
-        <Copy className="w-4 h-4" />
-      </button>
-    </div>
+                    <button
+                      onClick={() =>
+                        handleCopy(safeString(exchangeInfo.uid || order.source.uid))
+                      }
+                      className="p-2 rounded-xl hover:bg-white/30 transition flex-shrink-0"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
 
-  </div>
-</div>
+                </div>
+              </div>
 
 
                 <label className="block">
@@ -311,7 +311,7 @@ export default function SellCrypto() {
 
                 <div className="flex gap-3">
                   <button onClick={handleUploadProof} disabled={submitting || !file}
-                    className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 font-bold disabled:opacity-50">
+                    className="flex-1 py-4 rounded-2xl bg-indigo-600 font-bold disabled:opacity-50">
                     {submitting ? <Loader2 className="w-7 h-7 mx-auto animate-spin" /> : "Submit"}
                   </button>
                   <button onClick={() => setConfirmCancelId(order.order_id)}
@@ -343,7 +343,7 @@ export default function SellCrypto() {
                   </>
                 )}
                 <button onClick={() => { setStep(1); setOrder(null); setForm({ asset: "usdt", source: "", amount_asset: "" }); setFile(null); }}
-                  className="mt-8 w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 font-bold text-lg">
+                  className="mt-8 w-full py-4 rounded-2xl bg-indigo-600 font-bold text-lg">
                   New Order
                 </button>
               </div>
