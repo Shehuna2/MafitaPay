@@ -39,7 +39,7 @@ defusedxml==0.7.1
 dj-database-url==3.0.1
 Django==5.2.7
 django-cors-headers==4.9.0
-
+http2
 djangorestframework==3.16.1
 djangorestframework_simplejwt==5.5.1
 docopt==0.6.2

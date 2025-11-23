@@ -86,7 +86,13 @@ class AssetListAPI(APIView):
         
         output = []
         for c in cryptos:
-            usd_price = prices.get(c.coingecko_id, Decimal("0"))
+            stablecoins = {"usdt", "usdc"}
+
+            if c.symbol.lower() in stablecoins:
+                usd_price = Decimal("1")
+            else:
+                usd_price = prices.get(c.coingecko_id, Decimal("0"))
+
 
             output.append({
                 "id": c.id,
@@ -115,18 +121,23 @@ class BuyCryptoAPI(APIView):
             crypto = get_object_or_404(Crypto, id=crypto_id)
             coingecko_id = crypto.coingecko_id
 
-            # ------------------------------
-            # Step 1 — fetch crypto price USD
-            # ------------------------------
-            try:
-                prices = get_crypto_prices_in_usd([coingecko_id])
-                crypto_price_usd = prices.get(coingecko_id)
-                if not crypto_price_usd or crypto_price_usd <= 0:
-                    # Fallback to last good cached price or safe default
+            # Step 1 — fetch crypto price in USD
+            stablecoins = {"usdt", "usdc"}
+
+            if crypto.symbol.lower() in stablecoins:
+                crypto_price_usd = Decimal("1")
+            else:
+                try:
+                    prices = get_crypto_prices_in_usd([coingecko_id])
+                    crypto_price_usd = prices.get(coingecko_id)
+
+                    if not crypto_price_usd or crypto_price_usd <= 0:
+                        crypto_price_usd = cache.get(f"cg_usd_backup_{coingecko_id}") or Decimal("0.25")
+
+                except Exception as e:
+                    logger.warning(f"[BUY] Crypto price fetch failed: {e}")
                     crypto_price_usd = cache.get(f"cg_usd_backup_{coingecko_id}") or Decimal("0.25")
-            except Exception as e:
-                logger.warning(f"[BUY] Crypto price fetch failed: {e}")
-                crypto_price_usd = cache.get(f"cg_usd_backup_{coingecko_id}") or Decimal("0.25")
+
 
             # ------------------------------
             # Step 2 — fetch USD→NGN rate (BUY margin)
@@ -172,7 +183,12 @@ class BuyCryptoAPI(APIView):
         wallet_address = request.data.get("wallet_address", "").strip()
 
         # Compute rates (CORRECTED to margin-aware)
-        crypto_price = get_crypto_prices_in_usd([crypto.coingecko_id])[crypto.coingecko_id]
+        stablecoins = {"usdt", "usdc"}
+        if crypto.symbol.lower() in stablecoins:
+            crypto_price = Decimal("1")
+        else:
+            crypto_price = get_crypto_prices_in_usd([crypto.coingecko_id])[crypto.coingecko_id]
+
         exchange_rate = get_usd_ngn_rate_with_margin("buy")  # <-- updated
 
         # Convert
@@ -417,28 +433,46 @@ class ExchangeInfoAPI(APIView):
 
 class ExchangeRateAPI(APIView):
     """
-    Returns the current NGN rate for a given asset (used in sell flow).
-    Unified: uses ExchangeRateMargin for 'sell' rates, not the old ExchangeRate table.
+    Returns the NGN rate for 1 unit of an asset.
+    Stablecoins (USDT/USDC) are always treated as exactly $1.00.
+    This makes Step-1 and Step-2 match perfectly.
     """
 
     def get(self, request, asset):
         asset = asset.upper()
 
-        # Validate asset existence
+        # 1. Validate asset exists
         asset_obj = get_object_or_404(Asset, symbol__iexact=asset)
 
-        # ✅ Get base USD→NGN rate with 'sell' margin applied
+        # 2. Fetch USD→NGN SELL rate with margin
         usd_to_ngn = get_usd_ngn_rate_with_margin(margin_type="sell")
 
-        # ✅ For simplicity, treat every asset as 1:1 to USD (USDT, USDC, etc.)
-        #    If you add special tokens later (e.g. PI or SIDRA), handle conversion here.
-        if asset_obj.symbol.lower() in ["usdt", "usdc"]:
-            asset_to_ngn = usd_to_ngn
-        else:
-            # fallback same rate, but you can customize this per asset later
+        symbol_lower = asset_obj.symbol.lower()
+        stablecoins = {"usdt", "usdc"}
+
+        # 3. Stablecoins → always 1 USD
+        if symbol_lower in stablecoins:
             asset_to_ngn = usd_to_ngn
 
-        logger.info(f"[SELL RATE] 1 {asset_obj.symbol} = ₦{asset_to_ngn}")
+        else:
+            # 4. Non-stables: fetch real USD price
+            try:
+                prices = get_crypto_prices_in_usd([asset_obj.coingecko_id])
+                price_usd = prices.get(asset_obj.coingecko_id)
+
+                if not price_usd or price_usd <= 0:
+                    price_usd = cache.get(f"cg_usd_backup_{asset_obj.coingecko_id}") or Decimal("0.25")
+                    logger.warning(
+                        "[CG] Using backup USD price for %s: %s USD", asset_obj.symbol, price_usd
+                    )
+
+            except Exception as e:
+                logger.warning("USD price fetch failed: %s", e)
+                price_usd = cache.get(f"cg_usd_backup_{asset_obj.coingecko_id}") or Decimal("0.25")
+
+            asset_to_ngn = (Decimal(price_usd) * usd_to_ngn).quantize(Decimal("0.01"))
+
+        logger.info(f"[SELL RATE API] 1 {asset_obj.symbol} = ₦{asset_to_ngn}")
 
         return Response(
             {
@@ -449,6 +483,7 @@ class ExchangeRateAPI(APIView):
             },
             status=drf_status.HTTP_200_OK,
         )
+
 
 class SellAssetListAPI(APIView):
     permission_classes = [AllowAny]
@@ -473,16 +508,23 @@ def compute_ngn_amount_dynamic(asset_symbol: str, amount_asset: Decimal, margin_
         raise ValueError(f"Asset not found: {asset_symbol}")
 
     # Step 1 — get crypto price in USD
-    try:
-        prices = get_crypto_prices_in_usd([coingecko_id])
-        price_usd = prices.get(coingecko_id)
-        if not price_usd or price_usd == 0:
-            # fallback to backup cache if fresh fetch failed
+    stablecoins = {"usdt", "usdc"}
+
+    if asset_symbol.lower() in stablecoins:
+        # Stablecoins MUST be treated as $1.00 to match frontend
+        price_usd = Decimal("1")
+    else:
+        try:
+            prices = get_crypto_prices_in_usd([coingecko_id])
+            price_usd = prices.get(coingecko_id)
+
+            if not price_usd or price_usd == 0:
+                price_usd = cache.get(f"cg_usd_backup_{coingecko_id}") or Decimal("0.25")
+                logger.warning("[CG] Falling back to backup price for %s: %s USD", asset_symbol, price_usd)
+
+        except Exception as e:
+            logger.warning("Crypto price fetch failed: %s", e)
             price_usd = cache.get(f"cg_usd_backup_{coingecko_id}") or Decimal("0.25")
-            logger.warning("[CG] Falling back to backup price for %s: %s USD", asset_symbol, price_usd)
-    except Exception as e:
-        logger.warning("Crypto price fetch failed: %s", e)
-        price_usd = cache.get(f"cg_usd_backup_{coingecko_id}") or Decimal("0.25")
 
     # Step 2 — get USD→NGN rate with margin
     try:
