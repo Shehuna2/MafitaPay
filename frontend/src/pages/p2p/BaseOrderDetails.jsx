@@ -47,36 +47,76 @@ export default function BaseOrderDetails({ type }) {
     return Math.max(0, maxTime - elapsedSeconds);
   };
 
-  const getStoredUser = () => {
+  let __mafita_cached_user = null;
+  let __mafita_cached_user_ts = 0;
+  const PROFILE_CACHE_TTL = 5 * 60 * 1000;
+
+  const getCachedUser = async (force = false) => {
     try {
-      const raw = localStorage.getItem("user");
-      const user = raw ? JSON.parse(raw) : null;
-      if (!user?.email || !user?.id || user?.is_merchant === undefined) {
-        console.warn("Invalid user data in localStorage:", user);
-        return null;
+      const now = Date.now();
+
+      // In-memory cache
+      if (!force && __mafita_cached_user && (now - __mafita_cached_user_ts) < PROFILE_CACHE_TTL) {
+        return __mafita_cached_user;
       }
-      return user;
-    } catch {
-      console.warn("Failed to parse user data from localStorage");
+
+      // LocalStorage fallback
+      try {
+        const raw = localStorage.getItem("user");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && (parsed.email || parsed.id || parsed.user_id)) {
+            __mafita_cached_user = parsed;
+            __mafita_cached_user_ts = now;
+            return parsed;
+          }
+        }
+      } catch {}
+
+      // No access → don't spam profile api
+      const access = localStorage.getItem("access");
+      if (!access) return null;
+
+      // Rate-limited profile fetch
+      if (!force && __mafita_cached_user_ts && (now - __mafita_cached_user_ts) < PROFILE_CACHE_TTL) {
+        return __mafita_cached_user;
+      }
+
+      const res = await client.get(`/profile-api/?t=${Date.now()}`);
+      if (res?.data) {
+        __mafita_cached_user = res.data;
+        __mafita_cached_user_ts = Date.now();
+        localStorage.setItem("user", JSON.stringify(res.data));
+        return res.data;
+      }
+
+      return null;
+    } catch (err) {
+      console.warn("getCachedUser() error:", err.message);
       return null;
     }
   };
 
+  // ---- Token Refresh ----
   const refreshAccessToken = async () => {
     try {
       const refresh = localStorage.getItem("refresh");
       if (!refresh) throw new Error("No refresh token");
+
       const res = await client.post("/auth/token/refresh/", { refresh });
-      localStorage.setItem("access", res.data.access);
-      console.debug("Access token refreshed:", res.data.access);
-      return res.data.access;
+      if (res?.data?.access) {
+        localStorage.setItem("access", res.data.access);
+        return res.data.access;
+      }
+      throw new Error("Invalid refresh response");
     } catch (err) {
-      console.error("Token refresh failed:", err.response?.data || err.message);
+      console.error("Token refresh failed:", err.message);
       localStorage.clear();
       window.location.href = "/login";
       return null;
     }
   };
+
 
   const detectRole = (o, user, t, fallbackRole) => {
     if (!o) return fallbackRole || null;
@@ -133,43 +173,53 @@ export default function BaseOrderDetails({ type }) {
     return `https://wa.me/${formattedPhone}?text=${pretext}`;
   };
 
+  // ---- Fetch Order (no profile spam) ----
   const fetchOrder = useCallback(
     async (isManual = false) => {
       if (!orderId) {
-        if (isManual)
-          toast.error("Invalid order ID", { position: "top-right", autoClose: 3000 });
-        setLoading(false);
-        setPolling(false);
+        if (isManual) toast.error("Invalid order ID");
         return;
       }
 
       if (isManual) setLoading(true);
-      setPolling(true);
+
       try {
         const res = await client.get(`${basePath}/${orderId}/`);
         const data = res.data;
+
         setOrder(data);
+
         if (data.status === "pending" && data.created_at) {
           setTimeLeft(calculateTimeLeft(data.created_at));
         }
-        let user = getStoredUser();
-        if (!user) {
-          const profileRes = await client.get(`/profile-api/?t=${Date.now()}`);
-          user = profileRes.data;
-          localStorage.setItem("user", JSON.stringify(user));
+
+        // Use cached user (never spam profile API)
+        let user = await getCachedUser(false);
+
+        // If manual reload and user missing → fetch profile once
+        if (!user && isManual) {
+          user = await getCachedUser(true);
         }
-        const detected = detectRole(data, user, type, type === "withdraw" ? "seller" : "buyer");
+
+        const detected = detectRole(
+          data,
+          user,
+          type,
+          type === "withdraw" ? "seller" : "buyer"
+        );
+
         setRole(detected);
       } catch (err) {
-        const msg =
-          err.response?.data?.detail ||
-          err.response?.data?.error ||
-          "Failed to load order";
-        if (isManual) toast.error(msg, { position: "top-right", autoClose: 3000 });
-        console.error("Fetch order error:", err.response?.data || err.message);
+        if (isManual) {
+          toast.error(
+            err.response?.data?.detail ||
+              err.response?.data?.error ||
+              "Failed to load order"
+          );
+        }
+        console.error("fetchOrder error", err.message);
       } finally {
-        setLoading(false);
-        setPolling(false);
+        if (isManual) setLoading(false);
       }
     },
     [orderId, basePath, type]
@@ -233,40 +283,44 @@ export default function BaseOrderDetails({ type }) {
     };
   }, [orderId, fetchOrder, type]);
 
+  // ---- Adaptive Polling (no storming) ----
   useEffect(() => {
-    if (!orderId) return;
+    if (!orderId || !order) return;
 
-    let pollTimer = null;
-    const POLL_INTERVAL = 10000; // 10 seconds
+    const isActive = ["pending", "paid"].includes(order.status);
+    if (!isActive) return;
 
-    // Polling function
-    const pollOrder = async () => {
-      if (!order) return;
-      if (["completed", "cancelled"].includes(order.status)) {
-        clearInterval(pollTimer);
-        return;
-      }
+    let timer = null;
+    let attempt = 0;
+
+    const BASE = 10000; // 10s
+    const MAX = 60000;
+
+    const poll = async () => {
       try {
         const res = await client.get(`${basePath}/${orderId}/`);
-        if (res.data.status !== order.status) {
-          console.debug("Polling detected order update:", res.data.status);
-          setOrder(res.data);
-          toast.info(`Order updated to ${res.data.status}`, { autoClose: 2000 });
+        const data = res.data;
+
+        // reset backoff
+        attempt = 0;
+
+        if (data.status !== order.status) {
+          setOrder(data);
+          toast.info(`Order updated: ${data.status}`, { autoClose: 2000 });
         }
+
+        timer = setTimeout(poll, BASE);
       } catch (err) {
-        console.warn("Polling failed:", err.message);
+        attempt++;
+        const delay = Math.min(BASE * Math.pow(1.5, attempt), MAX);
+        console.warn("Polling failed → backoff:", delay);
+        timer = setTimeout(poll, delay);
       }
     };
 
-    // Start polling only when active order
-    if (order && ["pending", "paid"].includes(order.status)) {
-      pollTimer = setInterval(pollOrder, POLL_INTERVAL);
-    }
+    timer = setTimeout(poll, BASE);
 
-    // Cleanup
-    return () => {
-      if (pollTimer) clearInterval(pollTimer);
-    };
+    return () => clearTimeout(timer);
   }, [order?.status, orderId]);
 
 

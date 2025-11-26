@@ -14,9 +14,9 @@ from rest_framework.permissions import IsAuthenticated
 from accounts.utils import get_user_wallet
 from wallet.models import WalletTransaction
 from .utils import (
-    purchase_airtime, purchase_data, get_data_plans, purchase_cable_tv, 
-    purchase_electricity, purchase_education, get_bill_variations, EDUCATION_SERVICE_ID_MAP, 
-    CABLE_TV_SERVICE_ID_MAP, ELECTRICITY_SERVICE_ID_MAP
+    purchase_airtime, purchase_data, get_all_plans, get_data_plans, purchase_cable_tv, 
+    purchase_electricity, purchase_education, EDUCATION_SERVICE_ID_MAP, 
+    CABLE_TV_SERVICE_ID_MAP, ELECTRICITY_SERVICE_ID_MAP, get_single_plan 
 )
 
 
@@ -359,34 +359,71 @@ class BuyAirtimeView(APIView):
             return Response({"message": "Purchase failed. Try again."}, status=500)
 
 
+# ===================================================================
+# 1. DATA PLANS (VTU.ng categories + VTpass Regular Only)
+# ===================================================================
+class DataPlansView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        network = request.query_params.get("network", "").lower()
+
+        if network not in ["mtn", "airtel", "glo", "9mobile"]:
+            return Response({"message": "Invalid network"}, status=400)
+
+        from .utils import get_plans_by_network
+        plans = get_plans_by_network(network)
+
+        ordered = {
+            "SME2": plans["SME2"],
+            "SME": plans["SME"],
+            "GIFTING": plans["GIFTING"],
+            "CORPORATE": plans["CORPORATE"],
+            "REGULAR": plans["REGULAR"],
+        }
+
+        return Response({
+            "success": True,
+            "network": network.upper(),
+            "plans": ordered,
+        })
+
+
+
+
+# ===================================================================
+# 2. UNIFIED DATA PURCHASE (VTU.ng first → VTpass fallback)
+# ===================================================================
 class BuyDataView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        phone = request.data.get("phone")
-        variation_code = request.data.get("variation_code")
-        network = request.data.get("network")
-        amount = request.data.get("amount")
+        serializer = DataPurchaseSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"message": serializer.errors}, status=400)
 
-        if not all([phone, variation_code, network, amount]):
-            return Response({"message": "Missing required fields"}, status=400)
+        phone = serializer.validated_data["phone"]
+        variation_id = serializer.validated_data["variation_id"]
+        network = serializer.validated_data["network"]
+        amount = Decimal(str(serializer.validated_data["amount"]))
 
-        if not PHONE_REGEX.match(phone):
-            return Response({"message": "Invalid phone number"}, status=400)
+        from .utils import get_single_plan
+        plan = get_single_plan(network, variation_id)
 
-        try:
-            amount = float(amount)
-        except (ValueError, TypeError):
-            return Response({"message": "Invalid amount"}, status=400)
+        if not plan:
+            return Response({"message": "Invalid data plan"}, status=400)
+
+        provider = plan["provider"]
 
         try:
             with transaction.atomic():
                 wallet = get_user_wallet(request.user)
+
                 if wallet.balance < amount:
                     return Response({"message": "Insufficient balance"}, status=400)
 
                 balance_before = wallet.balance
-                wallet.balance -= Decimal(amount)
+                wallet.balance -= amount
                 wallet.save()
 
                 tx = WalletTransaction.objects.create(
@@ -397,44 +434,98 @@ class BuyDataView(APIView):
                     amount=amount,
                     balance_before=balance_before,
                     balance_after=wallet.balance,
-                    request_id="pending",
                     status="pending",
+                    description=f"{network.upper()} data {plan['category']}"
                 )
 
-                result = purchase_data(phone, amount, network, variation_code)
+                # -------- Provider Routing --------
+                if provider == "vtung":
+                    result = vtung_purchase_data(phone, variation_id, network)
+                else:
+                    result = purchase_data(phone, float(amount), network, variation_id)
+                    result["provider"] = "vtpass"
 
-                tx.request_id = result["request_id"]
-                tx.reference = result["transaction_id"]
-                tx.metadata = result["raw"]
+                # -------- Success --------
+                tx.request_id = result.get("request_id") or result.get("reference")
+                tx.reference = result.get("transaction_id") or result.get("id")
+                tx.metadata = result
                 tx.status = "success"
                 tx.save()
 
-            return Response({"message": "Data purchased successfully"})
+            return Response({
+                "success": True,
+                "provider": provider,
+                "request_id": tx.request_id,
+            })
 
-        except ValueError as e:
+        except Exception as e:
+            logger.error(f"BuyDataView error: {e}", exc_info=True)
             tx.status = "failed"
             tx.save()
-            return Response({"message": str(e)}, status=400)
-        except Exception as e:
-            logger.error(f"Data error: {e}", exc_info=True)
-            return Response({"message": "Purchase failed. Try again."}, status=500)
+            return Response({"message": "Purchase failed"}, status=500)
 
 
-class DataPlansView(APIView):
+
+# ===================================================================
+# 3. AIRTIME TO CASH (2025 Must-Have Feature)
+# ===================================================================
+class AirtimeToCashView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        network = request.query_params.get("network")
-        if not network:
-            return Response({"message": "network is required"}, status=400)
+    def post(self, request):
+        phone = request.data.get("phone")
+        network = request.data.get("network")
+        amount = request.data.get("amount")  # airtime amount to convert
+
+        if not all([phone, network, amount]):
+            return Response({"message": "Missing fields"}, status=400)
+
+        if not PHONE_REGEX.match(phone):
+            return Response({"message": "Invalid phone"}, status=400)
 
         try:
-            plans = get_data_plans(network)
+            amount = Decimal(str(amount))
+            if amount < 100:
+                return Response({"message": "Minimum ₦100"}, status=400)
+        except:
+            return Response({"message": "Invalid amount"}, status=400)
 
-            grouped = {}
-            for p in plans:
-                grouped.setdefault(p["category"], []).append(p)
+        # Use VTU.ng airtime-to-cash (4–6% discount)
+        try:
+            from .vtu_ng import purchase_airtime_to_cash  # lazy import
 
-            return Response({"plans": grouped})
+            with transaction.atomic():
+                result = purchase_airtime_to_cash(phone, network, float(amount))
+
+                if not result.get("success"):
+                    return Response({"message": result.get("message", "Conversion failed")}, status=400)
+
+                credit_amount = Decimal(str(result["credited_amount"]))
+
+                wallet = get_user_wallet(request.user)
+                balance_before = wallet.balance
+                wallet.balance += credit_amount
+                wallet.save()
+
+                WalletTransaction.objects.create(
+                    user=request.user,
+                    wallet=wallet,
+                    tx_type="credit",
+                    category="airtime_to_cash",
+                    amount=credit_amount,
+                    balance_before=balance_before,
+                    balance_after=wallet.balance,
+                    reference=result.get("reference"),
+                    metadata=result,
+                    description=f"Airtime → Cash ({network.upper()})"
+                )
+
+            return Response({
+                "message": f"₦{credit_amount} credited to your wallet!",
+                "credited_amount": credit_amount
+            })
+
         except Exception as e:
-            return Response({"message": str(e)}, status=400)
+            logger.error(f"AirtimeToCash error: {e}")
+            return Response({"message": "Conversion failed"}, status=500)
+

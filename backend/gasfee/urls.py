@@ -21,6 +21,7 @@ urlpatterns = [
     path("api/sell/<uuid:order_id>/status/", SellOrderStatusAPI.as_view(), name="sell-order-status"),
     path("api/sell/<uuid:order_id>/update/", SellOrderUpdateAPI.as_view(), name="update-sell-order"),
     path("api/sell/<uuid:order_id>/upload-proof/", UploadSellOrderProofAPI.as_view(), name="upload-sell-proof"),
+    path("api/sell/<uuid:order_id>/", SellOrderStatusAPI.as_view(), name="sell-order-detail"),
     path("api/sell/<uuid:order_id>/cancel/", CancelSellOrderAPI.as_view(), name="sell-cancel"),
 
     # Pending orders

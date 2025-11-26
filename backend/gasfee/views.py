@@ -1,17 +1,20 @@
 # gasfee/api_views.py
 import uuid
 import json
+import time
 import logging
 import requests
 import traceback
 
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation, getcontext
 from django.conf import settings
 from django.db import transaction
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 from decimal import InvalidOperation
+
+from web3 import Web3, HTTPProvider
 
 
 from rest_framework.views import APIView
@@ -23,9 +26,8 @@ from wallet.models import Wallet, WalletTransaction, Notification
 
 from .services import lookup_rate, get_receiving_details
 from .price_service import get_crypto_prices_in_usd, get_usd_ngn_rate_with_margin
-
-# from .utils import get_crypto_price, get_bulk_crypto_prices, get_exchange_rate, send_bsc, send_evm
-from .utils import send_bsc, send_evm
+from .utils import send_bsc
+from .evm_sender import send_evm
 from .near_utils import send_near
 from .sol_utils import send_solana
 from .ton_utils import send_ton
@@ -38,37 +40,8 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-# small wrappers
-def amount_to_wei(amount) -> int:
-    from web3 import Web3
-    try:
-        return int(Web3.to_wei(Decimal(amount), "ether"))
-    except Exception:
-        return int(float(amount) * (10 ** 18))
 
-def send_eth(recipient, amount, order_id=None):
-    return send_evm("ETH", recipient, amount_to_wei(amount), order_id)
 
-def send_arbitrum(recipient, amount, order_id=None):
-    return send_evm("ARB", recipient, amount_to_wei(amount), order_id)
-
-def send_base(recipient, amount, order_id=None):
-    return send_evm("BASE", recipient, amount_to_wei(amount), order_id)
-
-def send_optimism(recipient, amount, order_id=None):
-    return send_evm("OP", recipient, amount_to_wei(amount), order_id)
-
-SENDERS = {
-    "BNB": send_bsc,
-    "SOL": send_solana,
-    "TON": send_ton,
-    "NEAR": send_near,
-    "ETH": send_eth,
-    "ARB": send_arbitrum,
-    "BASE-ETH": send_base,
-    "BASE-ARB": send_arbitrum,
-    "BASE-OPT": send_optimism,
-}
 
 
 class AssetListAPI(APIView):
@@ -110,122 +83,242 @@ class AssetListAPI(APIView):
 
 
 
-class BuyCryptoAPI(APIView):
-    permission_classes = []
+# ensure enough precision
+getcontext().prec = 28
 
-    # ======================
-    # GET RATE (patched)
-    # ======================
+def _decimal_to_str(d: Decimal) -> str:
+    return format(d, 'f')
+
+def _validate_wallet_address(symbol: str, address: str) -> bool:
+    """
+    Minimal wallet address validation before debiting.
+    - For EVM chains use Web3.is_address
+    - For Solana, NEAR, TON we do a basic length check (best-effort).
+    This is intentionally conservative: callers should still rely on sender RPC errors.
+    """
+    if not address:
+        return False
+
+    sym = symbol.upper()
+    try:
+        if sym in {"ETH", "ARB", "BNB", "BASE-ETH", "BASE-ARB", "BASE-OPT", "OP"}:
+            return Web3.is_address(address)
+        if sym == "SOL":
+            return 40 <= len(address) <= 88  # reasonable range for base58
+        if sym == "NEAR":
+            return 2 <= len(address) <= 64
+        if sym == "TON":
+            return 20 <= len(address) <= 100
+        # Fallback: non-empty
+        return True
+    except Exception:
+        return False
+
+
+def _perform_chain_send(sender_fn, crypto_symbol, wallet_address, crypto_amount, order_id, max_attempts=1) -> tuple[bool, str]:
+    """
+    Executes the actual on-chain send operation with retries.
+    Returns (success: bool, result: tx_hash or error message)
+    """
+    last_error = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            # sender_fn is a callable that takes (recipient, amount, order_id)
+            tx_hash = sender_fn(wallet_address, crypto_amount, order_id)
+            return True, tx_hash
+        except Exception as e:
+            last_error = str(e)
+            logger.warning(
+                "Attempt %d/%d failed for %s send: %s",
+                attempt, max_attempts, crypto_symbol, last_error
+            )
+
+    # all attempts failed
+    return False, last_error or "Unknown error"
+
+
+# small wrappers
+def amount_to_wei(amount) -> int:
+    from web3 import Web3
+    try:
+        return int(Web3.to_wei(Decimal(amount), "ether"))
+    except Exception:
+        return int(float(amount) * (10 ** 18))
+
+SENDERS = {
+    # EVM chains
+    "ETH": lambda to, amt, oid: send_evm("ETH", to, amt),
+    "ARB": lambda to, amt, oid: send_evm("ARB", to, amt),
+    "BASE": lambda to, amt, oid: send_evm("BASE", to, amt),
+    "OP": lambda to, amt, oid: send_evm("OP", to, amt),
+    "POL": lambda to, amt, oid: send_evm("POL", to, amt),
+    "AVAX": lambda to, amt, oid: send_evm("AVAX", to, amt),
+    "LINEA": lambda to, amt, oid: send_evm("LINEA", to, amt),
+
+    # Non-EVM chains
+    "BSC": send_bsc,
+    "BNB": send_bsc,
+    "SOL": send_solana,
+    "NEAR": send_near,
+    "TON": send_ton,
+}
+
+
+
+
+
+class BuyCryptoAPI(APIView):
+    """
+    GET → fetch quoted price for a crypto (price_usd, usd_ngn_rate, price_ngn)
+    POST → execute buy:
+       payload:
+         - amount: number (in currency)
+         - currency: "NGN" | "USDT" | "<CRYPTO_SYMBOL>"
+         - wallet_address: destination address (string)
+         - request_id: optional idempotency key (recommended)
+    """
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, crypto_id):
+        """
+        Quote endpoint — returns price snapshot and computed NGN price (strings).
+        """
         try:
             crypto = get_object_or_404(Crypto, id=crypto_id)
-            coingecko_id = crypto.coingecko_id
+            coingecko_id = (crypto.coingecko_id or "").lower()
+            stablecoins = {"usdt", "usdc", "tether", "usd-coin"}
 
-            # Step 1 — fetch crypto price in USD
-            stablecoins = {"usdt", "usdc"}
-
+            # price USD
             if crypto.symbol.lower() in stablecoins:
                 crypto_price_usd = Decimal("1")
             else:
-                try:
-                    prices = get_crypto_prices_in_usd([coingecko_id])
-                    crypto_price_usd = prices.get(coingecko_id)
+                prices = get_crypto_prices_in_usd([coingecko_id])
+                crypto_price_usd = Decimal(str(prices.get(coingecko_id) or get_safe_fallback_price(coingecko_id)))
 
-                    if not crypto_price_usd or crypto_price_usd <= 0:
-                        crypto_price_usd = cache.get(f"cg_usd_backup_{coingecko_id}") or Decimal("0.25")
+            # usd-ngn with buy margin
+            usd_ngn_rate = get_usd_ngn_rate_with_margin("buy")
+            if not usd_ngn_rate or Decimal(str(usd_ngn_rate)) <= 0:
+                usd_ngn_rate = Decimal("755")
 
-                except Exception as e:
-                    logger.warning(f"[BUY] Crypto price fetch failed: {e}")
-                    crypto_price_usd = cache.get(f"cg_usd_backup_{coingecko_id}") or Decimal("0.25")
-
-
-            # ------------------------------
-            # Step 2 — fetch USD→NGN rate (BUY margin)
-            # ------------------------------
-            try:
-                usd_ngn_rate = get_usd_ngn_rate_with_margin("buy")
-                if not usd_ngn_rate or usd_ngn_rate <= 0:
-                    usd_ngn_rate = cache.get("usd_ngn_rate_backup") or Decimal("755")
-            except Exception as e:
-                logger.warning(f"[BUY] USD→NGN fetch failed: {e}")
-                usd_ngn_rate = cache.get("usd_ngn_rate_backup") or Decimal("755")
-
-            # ------------------------------
-            # Step 3 — compute NGN price
-            # ------------------------------
-            price_ngn = (crypto_price_usd * usd_ngn_rate).quantize(Decimal("0.01"))
+            price_ngn = (crypto_price_usd * Decimal(str(usd_ngn_rate))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
             return Response({
                 "crypto": crypto.symbol,
                 "network": crypto.network,
-                "price_usd": float(crypto_price_usd),
-                "usd_ngn_rate": float(usd_ngn_rate),
-                "price_ngn": float(price_ngn),
-            })
+                "price_usd": _decimal_to_str(crypto_price_usd),
+                "usd_ngn_rate": _decimal_to_str(Decimal(str(usd_ngn_rate))),
+                "price_ngn": _decimal_to_str(price_ngn),
+            }, status=drf_status.HTTP_200_OK)
 
-        except Exception as e:
-            logger.error(f"Error fetching buy rate for {crypto_id}: {str(e)}")
-            return Response({"error": str(e)}, status=500)
+        except Exception as exc:
+            logger.exception("Error fetching buy rate for %s: %s", crypto_id, exc)
+            return Response({"error": "failed_to_fetch_rate"}, status=drf_status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
     def post(self, request, crypto_id):
-        crypto = get_object_or_404(Crypto, id=crypto_id)
-
-        # Validate amount
+        """
+        Execute buy flow:
+         1) validate input
+         2) idempotency check (request_id)
+         3) compute price & crypto_amount
+         4) atomic: lock/debit wallet & create CryptoPurchase + WalletTransaction (pending)
+         5) perform chain send (outside DB atomic)
+         6) on success mark completed; on failure refund locked funds + mark failed
+        """
+        # ---- 1) Basic validation ----
         try:
-            amount = Decimal(request.data.get("amount", "0"))
+            crypto = get_object_or_404(Crypto, id=crypto_id)
+        except Exception:
+            return Response({"error": "invalid_crypto"}, status=drf_status.HTTP_404_NOT_FOUND)
+
+        raw_amount = request.data.get("amount")
+        currency = (request.data.get("currency") or "NGN").upper()
+        wallet_address = (request.data.get("wallet_address") or "").strip()
+        request_id = request.data.get("request_id") or request.data.get("idempotency_key") or str(uuid.uuid4())
+
+        if raw_amount is None:
+            return Response({"error": "amount_required"}, status=drf_status.HTTP_400_BAD_REQUEST)
+
+        # parse decimal safely
+        try:
+            amount = Decimal(str(raw_amount))
             if amount <= 0:
-                return Response({"success": False, "error": "Invalid amount"}, status=400)
-        except:
-            return Response({"success": False, "error": "Invalid amount format"}, status=400)
+                raise InvalidOperation("non-positive")
+        except Exception:
+            return Response({"error": "invalid_amount"}, status=drf_status.HTTP_400_BAD_REQUEST)
 
-        currency = request.data.get("currency", "NGN").upper()
-        wallet_address = request.data.get("wallet_address", "").strip()
+        # basic address validation before debiting
+        if not _validate_wallet_address(crypto.symbol, wallet_address):
+            return Response({"error": "invalid_wallet_address"}, status=drf_status.HTTP_400_BAD_REQUEST)
 
-        # Compute rates (CORRECTED to margin-aware)
-        stablecoins = {"usdt", "usdc"}
+        # ---- 2) idempotency: return existing order if same request_id ----
+        existing_order = CryptoPurchase.objects.filter(request_id=request_id, user=request.user).first()
+        if existing_order:
+            logger.info("Idempotent request detected: %s for user %s", request_id, request.user.id)
+            return Response({
+                "transaction_id": existing_order.id,
+                "status": existing_order.status,
+                "crypto": existing_order.crypto.symbol,
+                "crypto_amount": _decimal_to_str(existing_order.crypto_amount),
+                "total_ngn": _decimal_to_str(existing_order.total_price),
+                "tx_hash": existing_order.tx_hash,
+            }, status=drf_status.HTTP_200_OK)
+
+        # ---- 3) Compute pricing ----
+        coingecko_id = (crypto.coingecko_id or "").lower()
+        stablecoins = {"usdt", "usdc", "tether", "usd-coin"}
+
         if crypto.symbol.lower() in stablecoins:
             crypto_price = Decimal("1")
         else:
-            crypto_price = get_crypto_prices_in_usd([crypto.coingecko_id])[crypto.coingecko_id]
+            prices = get_crypto_prices_in_usd([coingecko_id])
+            crypto_price = Decimal(str(prices.get(coingecko_id) or get_safe_fallback_price(coingecko_id)))
 
-        exchange_rate = get_usd_ngn_rate_with_margin("buy")  # <-- updated
+        usd_ngn_rate = get_usd_ngn_rate_with_margin("buy")
+        usd_ngn_rate = Decimal(str(usd_ngn_rate or DEFAULT_USD_NGN_FALLBACK))
 
-        # Convert
-        if currency == "NGN":
-            total_ngn = amount
-            crypto_amount = (amount / exchange_rate) / crypto_price
+        # compute total in NGN and crypto_amount depending on input currency
+        try:
+            if currency == "NGN":
+                total_ngn = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                crypto_amount = (amount / usd_ngn_rate / crypto_price).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
+            elif currency in {"USDT", "USDC"}:
+                total_ngn = (amount * usd_ngn_rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                crypto_amount = (amount / crypto_price).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
+            elif currency == crypto.symbol.upper():
+                crypto_amount = amount.quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
+                total_ngn = (crypto_amount * crypto_price * usd_ngn_rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            else:
+                return Response({"error": "unsupported_currency"}, status=drf_status.HTTP_400_BAD_REQUEST)
+        except (InvalidOperation, ZeroDivisionError) as exc:
+            logger.exception("Pricing calculation failed: %s", exc)
+            return Response({"error": "calculation_error"}, status=drf_status.HTTP_400_BAD_REQUEST)
 
-        elif currency == "USDT":
-            total_ngn = amount * exchange_rate
-            crypto_amount = amount / crypto_price
+        # enforce minimum/maximum amounts (basic fraud protection)
+        MIN_BUY_NGN = Decimal(getattr(settings, "MIN_BUY_NGN", 200))  # example: ₦200 default
+        MAX_BUY_NGN = Decimal(getattr(settings, "MAX_BUY_NGN", 10_000_000))  # example
+        if total_ngn < MIN_BUY_NGN:
+            return Response({"error": "amount_too_small"}, status=drf_status.HTTP_400_BAD_REQUEST)
+        if total_ngn > MAX_BUY_NGN:
+            return Response({"error": "amount_too_large"}, status=drf_status.HTTP_400_BAD_REQUEST)
 
-        elif currency == crypto.symbol.upper():
-            crypto_amount = amount
-            total_ngn = amount * crypto_price * exchange_rate
-
-        else:
-            return Response({"success": False, "error": "Unsupported currency"}, status=400)
-
-        req_id = str(uuid.uuid4())
-
-        # =======================================
-        #  ATOMIC USER DEBIT + ORDER CREATION
-        # =======================================
+        # ---- 4) Atomic debit & create pending records ----
         try:
             with transaction.atomic():
+                # lock wallet row
                 wallet = Wallet.objects.select_for_update().get(user=request.user)
 
                 if wallet.balance < total_ngn:
-                    return Response(
-                        {"success": False, "error": "Insufficient balance"},
-                        status=400,
-                    )
+                    return Response({"error": "insufficient_funds"}, status=drf_status.HTTP_402_PAYMENT_REQUIRED)
 
                 balance_before = wallet.balance
+                # move funds to locked_balance (so other processes can't use them)
                 wallet.balance -= total_ngn
-                wallet.save(update_fields=["balance"])
+                wallet.locked_balance += total_ngn
+                wallet.save(update_fields=["balance", "locked_balance"])
 
+                # create crypto purchase order
                 order = CryptoPurchase.objects.create(
                     user=request.user,
                     crypto=crypto,
@@ -234,10 +327,11 @@ class BuyCryptoAPI(APIView):
                     crypto_amount=crypto_amount,
                     total_price=total_ngn,
                     wallet_address=wallet_address,
-                    request_id=req_id,
                     status="pending",
+                    request_id=request_id,
                 )
 
+                # create WalletTransaction (pending debit)
                 WalletTransaction.objects.create(
                     user=request.user,
                     wallet=wallet,
@@ -246,105 +340,114 @@ class BuyCryptoAPI(APIView):
                     amount=total_ngn,
                     balance_before=balance_before,
                     balance_after=wallet.balance,
-                    request_id=req_id,
+                    request_id=request_id,
+                    reference=str(order.id),
                     status="pending",
+                    metadata={
+                        "crypto": crypto.symbol,
+                        "crypto_amount": _decimal_to_str(crypto_amount),
+                        "price_usd": _decimal_to_str(crypto_price),
+                        "usd_ngn_rate": _decimal_to_str(usd_ngn_rate),
+                    },
                 )
 
-        except Exception as e:
-            logger.error(f"Atomic block failed: {e}")
-            return Response({"error": "Could not process transaction"}, status=500)
+        except Exception as exc:
+            logger.exception("Atomic debit + order creation failed: %s", exc)
+            return Response({"error": "transaction_failed"}, status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # =======================================
-        #       CHAIN SEND (OUTSIDE ATOMIC)
-        # =======================================
-        sender = SENDERS.get(crypto.symbol.upper())
-        if not sender:
-            refund_user(order)
-            return Response({"success": False, "error": "Unsupported token"}, status=400)
+        # ---- 5) Perform chain send (outside DB atomic) ----
+        sender_fn = SENDERS.get(crypto.network.upper())
+        if not sender_fn:
+            # unsupported network
+            logger.error(f"Unsupported network for onchain send: {crypto.network}")
+            # refund locked funds
+            try:
+                with transaction.atomic():
+                    wallet = Wallet.objects.select_for_update().get(user=request.user)
+                    # refund locked -> balance
+                    wallet.locked_balance -= total_ngn
+                    wallet.balance += total_ngn
+                    wallet.save(update_fields=["balance", "locked_balance"])
 
-        try:
-            # NEAR special case
-            if crypto.symbol.upper() == "NEAR":
-                tx_hash = sender(wallet_address, float(crypto_amount))
-            else:
-                tx_hash = sender(wallet_address, float(crypto_amount), order.id)
+                    WalletTransaction.objects.filter(request_id=request_id).update(
+                        status="failed",
+                        balance_after=wallet.balance
+                    )
+                    order.status = "failed"
+                    order.save(update_fields=["status"])
+            except Exception:
+                logger.exception("Refund after unsupported token failed")
+            return Response({"error": "unsupported_token"}, status=drf_status.HTTP_400_BAD_REQUEST)
 
-            # Mark success
-            order.tx_hash = tx_hash
-            order.status = "completed"
-            order.save(update_fields=["tx_hash", "status"])
+        success, result = _perform_chain_send(sender_fn, crypto.symbol, wallet_address, crypto_amount, order.id, max_attempts=2)
+        if not success:
+            # chain send failed - refund
+            err_msg = result
+            logger.error("Chain send failed for order %s: %s", order.id, err_msg)
 
-            WalletTransaction.objects.filter(request_id=req_id).update(
-                status="success", reference=tx_hash
-            )
+            try:
+                with transaction.atomic():
+                    wallet = Wallet.objects.select_for_update().get(user=request.user)
+                    wallet.locked_balance -= total_ngn
+                    wallet.balance += total_ngn
+                    wallet.save(update_fields=["balance", "locked_balance"])
 
-            return Response({
-                "success": True,
-                "crypto": crypto.symbol,
-                "crypto_amount": str(crypto_amount),
-                "total_ngn": str(total_ngn),
-                "wallet_address": wallet_address,
-                "tx_hash": tx_hash,
-            })
+                    WalletTransaction.objects.filter(request_id=request_id).update(
+                        status="failed",
+                        balance_after=wallet.balance,
+                        metadata={"error": err_msg}
+                    )
 
-        except Exception as e:
-            logger.error(f"Blockchain send failed: {e}")
+                    order.status = "failed"
+                    order.save(update_fields=["status"])
+            except Exception:
+                logger.exception("Refund after chain failure failed for order %s", order.id)
 
-            # refund ALWAYS on failures
-            refund_user(order)
-
+            # Map common errors to user-friendly messages
             msg = "Transaction failed. Please try again."
-            if "InsufficientFunds" in str(e):
+            if "Insufficient" in err_msg:
                 msg = "Insufficient funds in sender wallet."
-            elif "InvalidAddress" in str(e):
-                msg = "Wallet address is invalid."
-            elif "network" in str(e).lower():
-                msg = "Network issue — try again soon."
+            elif "Invalid" in err_msg or "address" in err_msg.lower():
+                msg = "Wallet address invalid."
+            elif "network" in err_msg.lower():
+                msg = "Network problem — try again soon."
 
-            return Response({"error": msg}, status=400)
+            return Response({"error": msg, "detail": str(err_msg)}, status=drf_status.HTTP_400_BAD_REQUEST)
 
-
+        # ---- 6) success path — mark order + tx success and release locked funds appropriately ----
+        tx_hash = result
         try:
-            # NEAR special case
-            if crypto.symbol.upper() == "NEAR":
-                tx_hash = sender(wallet_address, float(crypto_amount))
-            else:
-                tx_hash = sender(wallet_address, float(crypto_amount), order.id)
+            with transaction.atomic():
+                wallet = Wallet.objects.select_for_update().get(user=request.user)
+                # Remove locked funds permanently (they were spent on chain)
+                wallet.locked_balance -= total_ngn
+                # balance already reduced earlier; no change to balance
+                wallet.save(update_fields=["locked_balance"])
 
-            # Mark success
-            order.tx_hash = tx_hash
-            order.status = "completed"
-            order.save(update_fields=["tx_hash", "status"])
+                order.status = "completed"
+                order.tx_hash = tx_hash
+                order.save(update_fields=["status", "tx_hash"])
 
-            WalletTransaction.objects.filter(request_id=req_id).update(
-                status="success", reference=tx_hash
-            )
+                WalletTransaction.objects.filter(request_id=request_id).update(
+                    status="success",
+                    reference=tx_hash,
+                    balance_after=wallet.balance
+                )
+        except Exception as exc:
+            # This is bad (DB update failure after on-chain success), we must log and surface
+            logger.exception("Failed to finalize order %s after chain success: %s", order.id, exc)
+            return Response({"error": "post_processing_failed", "tx_hash": tx_hash}, status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            return Response({
-                "success": True,
-                "crypto": crypto.symbol,
-                "crypto_amount": str(crypto_amount),
-                "total_ngn": str(total_ngn),
-                "wallet_address": wallet_address,
-                "tx_hash": tx_hash,
-            })
-
-        except Exception as e:
-            logger.error(f"Blockchain send failed: {e}")
-
-            # refund ALWAYS on failures
-            refund_user(order)
-
-            msg = "Transaction failed. Please try again."
-            if "InsufficientFunds" in str(e):
-                msg = "Insufficient funds in sender wallet."
-            elif "InvalidAddress" in str(e):
-                msg = "Wallet address is invalid."
-            elif "network" in str(e).lower():
-                msg = "Network issue — try again soon."
-
-            return Response({"error": msg}, status=400)
-
+        # Return success
+        return Response({
+            "success": True,
+            "crypto": crypto.symbol,
+            "crypto_amount": _decimal_to_str(crypto_amount),
+            "total_ngn": _decimal_to_str(total_ngn),
+            "wallet_address": wallet_address,
+            "tx_hash": tx_hash,
+            "transaction_id": order.id,
+        }, status=drf_status.HTTP_201_CREATED)
 
 def refund_user(purchase):
     """Refund NGN balance when blockchain send failed."""

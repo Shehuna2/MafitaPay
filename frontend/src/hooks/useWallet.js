@@ -1,5 +1,3 @@
-// File: src/hooks/useWallet.js
-// purpose: fetch wallet info per provider and cache it
 import { useState, useEffect, useRef, useCallback } from "react";
 import client from "../api/client";
 
@@ -7,16 +5,15 @@ export default function useWallet(provider) {
   const cacheRef = useRef({});
   const [wallet, setWallet] = useState(null);
   const [loading, setLoading] = useState(false);
-  const isMounted = useRef(true);
+  const fetchedRef = useRef(false);
 
-  useEffect(() => () => { isMounted.current = false }, []);
-
-  const fetch = useCallback(async (force = false) => {
+  const fetchWallet = useCallback(async (force = false) => {
     if (!provider) return;
     if (cacheRef.current[provider] && !force) {
       setWallet(cacheRef.current[provider]);
       return;
     }
+
     setLoading(true);
     try {
       const res = await client.get(`/wallet/?provider=${provider}`);
@@ -28,18 +25,26 @@ export default function useWallet(provider) {
         type: res?.data?.type || null,
       };
       cacheRef.current[provider] = payload;
-      if (isMounted.current) setWallet(payload);
+      setWallet(payload);
     } catch (err) {
-      // keep silent; caller can show toast
-      if (isMounted.current) setWallet(null);
+      setWallet(null);
     } finally {
-      if (isMounted.current) setLoading(false);
+      setLoading(false);
     }
   }, [provider]);
 
   useEffect(() => {
-    fetch();
-  }, [fetch]);
+    if (!provider) return;
 
-  return { wallet, loading, refresh: () => fetch(true) };
+    if (!fetchedRef.current) {
+      fetchedRef.current = true;
+      fetchWallet();
+    }
+  }, [provider]);
+
+  return {
+    wallet,
+    loading,
+    refresh: () => fetchWallet(true),
+  };
 }
