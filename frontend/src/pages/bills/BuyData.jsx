@@ -55,6 +55,26 @@ const validateNigerianPhone = (phone) => {
   return { valid: !!detected, normalized: p, detected };
 };
 
+// FORMAT PLAN NAME CLEANLY → "1GB - 7 DAYS"
+const formatPlanName = (rawName) => {
+  if (!rawName) return rawName;
+
+  rawName = rawName.toUpperCase();
+
+  const sizeMatch = rawName.match(/(\d+(\.\d+)?)\s*(GB|MB)/);
+  const size = sizeMatch ? sizeMatch[0] : null;
+
+  const daysMatch = rawName.match(/(\d+)\s*DAY/);
+  const days = daysMatch ? `${daysMatch[1]} DAYS` : null;
+
+  if (size && days) return `${size} - ${days}`;
+  if (size) return size;
+  return rawName;
+};
+
+
+
+
 /* ----------------------------------------------------
    CACHING
 ---------------------------------------------------- */
@@ -272,7 +292,15 @@ export default function BuyData() {
         <div>
           <p className="text-xs text-gray-400 mb-3">Available Plans ({selectedCategory})</p>
           <div className="max-h-96 overflow-y-auto">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="
+                grid 
+                grid-cols-3         
+                sm:grid-cols-3      
+                md:grid-cols-4      
+                lg:grid-cols-5      
+                gap-2 sm:gap-3
+              ">
+
               {loadingPlans ? (
                 [...Array(6)].map((_, i) => (
                   <div key={i} className="bg-gray-800/60 border border-gray-700 rounded-xl p-4 animate-pulse">
@@ -286,20 +314,36 @@ export default function BuyData() {
                     key={plan.id}
                     type="button"
                     onClick={() => handlePlanClick(plan)}
-                    className="relative p-4 rounded-xl text-left transition-all border-2 bg-gray-800/60 border-gray-700 hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-500/30"
+                    className="
+                      relative p-3 
+                      rounded-lg text-left 
+                      transition-all
+                      border border-gray-700 
+                      bg-gray-800/60 
+                      hover:border-indigo-500/50 
+                      hover:shadow-md hover:shadow-indigo-500/20
+                      flex flex-col gap-1
+                    "
+                    style={{ minHeight: "70px" }}
                   >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-bold text-sm">{plan.name}</p>
-                        <p className="text-xs text-gray-400">₦{plan.amount}</p>
-                      </div>
-                    </div>
+                    {/* Compact name */}
+                    <p className="font-semibold text-[12px] leading-tight text-white">
+                      {formatPlanName(plan.name)}
+                    </p>
+
+                    {/* Compact price */}
+                    <p className="text-[11px] font-bold text-indigo-300">
+                      ₦{Number(plan.amount).toLocaleString()}
+                    </p>
+
+                    {/* Cheaper tag */}
                     {plan.provider === "vtung" && (
-                      <span className="absolute top-0 right-4 transform -translate-y-1/2 text-[10px] bg-green-500/20 text-green-400 px-2 py-1 rounded-full z-10">
+                      <span className="absolute top-1 right-1 text-[9px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full">
                         CHEAPEST
                       </span>
                     )}
                   </button>
+
                 ))
               )}
             </div>
