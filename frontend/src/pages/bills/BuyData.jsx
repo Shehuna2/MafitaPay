@@ -268,7 +268,7 @@ export default function BuyData() {
   // UI
   // ----------------------------------------------------
   return (
-    <ShortFormLayout title="Buy Data (v6) — Fastest & Cheapest">
+    <ShortFormLayout>
 
       {loadingPurchase && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
@@ -277,126 +277,130 @@ export default function BuyData() {
       )}
 
       <div className="space-y-6">
+        {/* 🔒 Sticky Top Section */}
+        <div className="sticky top-0 z-40 bg-gray-900/95 backdrop-blur-md pb-4 space-y-6">
+          {/* Phone + Network */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            
+            {/* PHONE INPUT */}
+            <div className="flex-1">
+              <label className="text-xs text-gray-400">Phone Number</label>
+              <input
+                type="text"
+                placeholder="0803..."
+                value={form.phone}
+                onChange={handlePhoneChange}
+                className={`w-full mt-1 bg-gray-800/70 rounded-xl px-4 py-3 text-white
+                  border 
+                  ${
+                    form.phone.length === 0
+                      ? "border-gray-700"
+                      : networkMismatch
+                      ? "border-yellow-400 shadow-[0_0_8px_#facc15]"
+                      : livePhoneInfo.valid
+                      ? "border-green-500"
+                      : "border-red-500"
+                  }
+                `}
+              />
+              {/* LIVE FEEDBACK */}
+              {form.phone.length > 0 && (
+                <p className={`mt-1 text-xs ${livePhoneInfo.valid ? "text-green-400" : "text-red-400"}`}>
+                  {livePhoneInfo.message}
+                </p>
+              )}
 
-        {/* Phone + Network */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          
-          {/* PHONE INPUT */}
-          <div className="flex-1">
-            <label className="text-xs text-gray-400">Phone Number</label>
-            <input
-              type="text"
-              placeholder="0803..."
-              value={form.phone}
-              onChange={handlePhoneChange}
-              className={`w-full mt-1 bg-gray-800/70 rounded-xl px-4 py-3 text-white
-                border 
-                ${
-                  form.phone.length === 0
-                    ? "border-gray-700"
-                    : networkMismatch
-                    ? "border-yellow-400 shadow-[0_0_8px_#facc15]"
-                    : livePhoneInfo.valid
-                    ? "border-green-500"
-                    : "border-red-500"
-                }
-              `}
-            />
-            {/* LIVE FEEDBACK */}
-            {form.phone.length > 0 && (
-              <p className={`mt-1 text-xs ${livePhoneInfo.valid ? "text-green-400" : "text-red-400"}`}>
-                {livePhoneInfo.message}
-              </p>
-            )}
+              {/* DETECTED NETWORK */}
+              {livePhoneInfo.detected && (
+                <div className="mt-1 flex items-center gap-2 text-green-400 text-xs">
+                  <img src={NETWORK_LOGOS[livePhoneInfo.detected]} className="w-4 h-4" />
+                  <span>Detected: {livePhoneInfo.detected.toUpperCase()}</span>
+                </div>
+              )}
+            </div>
 
-            {/* DETECTED NETWORK */}
-            {livePhoneInfo.detected && (
-              <div className="mt-1 flex items-center gap-2 text-green-400 text-xs">
-                <img src={NETWORK_LOGOS[livePhoneInfo.detected]} className="w-4 h-4" />
-                <span>Detected: {livePhoneInfo.detected.toUpperCase()}</span>
+            {/* NETWORK SELECTOR */}
+            <div className="w-full sm:w-72">
+              <label className="text-xs text-gray-400">Network</label>
+              <div className="mt-1 grid grid-cols-4 gap-2 bg-gray-800/50 p-3 rounded-xl">
+                {["mtn", "airtel", "glo", "9mobile"].map((network) => (
+                  <button
+                    key={network}
+                    type="button"
+                    onClick={() => handleNetworkSelect(network)}
+                    className={`p-2 rounded-xl transition border ${
+                      form.network === network
+                        ? "border-indigo-500 bg-indigo-600/20"
+                        : "border-transparent bg-gray-800/30 hover:bg-gray-700/40"
+                    }`}
+                  >
+                    <img src={NETWORK_LOGOS[network]} className="w-9 h-9 mx-auto" />
+                    <p className="text-[10px] text-white text-center mt-1">{network.toUpperCase()}</p>
+                  </button>
+                ))}
               </div>
-            )}
-          </div>
-
-          {/* NETWORK SELECTOR */}
-          <div className="w-full sm:w-72">
-            <label className="text-xs text-gray-400">Network</label>
-            <div className="mt-1 grid grid-cols-4 gap-2 bg-gray-800/50 p-3 rounded-xl">
-              {["mtn", "airtel", "glo", "9mobile"].map((network) => (
-                <button
-                  key={network}
-                  type="button"
-                  onClick={() => handleNetworkSelect(network)}
-                  className={`p-2 rounded-xl transition border ${
-                    form.network === network
-                      ? "border-indigo-500 bg-indigo-600/20"
-                      : "border-transparent bg-gray-800/30 hover:bg-gray-700/40"
-                  }`}
-                >
-                  <img src={NETWORK_LOGOS[network]} className="w-9 h-9 mx-auto" />
-                  <p className="text-[10px] text-white text-center mt-1">{network.toUpperCase()}</p>
-                </button>
-              ))}
             </div>
           </div>
-        </div>
 
-        {/* CATEGORY TABS */}
-        <div className="flex gap-2 flex-wrap">
-          {["SME2","SME","GIFTING","CORPORATE","REGULAR"].map((cat) => {
-            const style = CATEGORY_STYLES[cat];
-            const Icon = style.icon;
-            return (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-4 py-2 rounded-xl border text-xs font-bold flex items-center gap-1 ${
-                  selectedCategory === cat
-                    ? `${style.border} ${style.color} bg-gray-900`
-                    : "bg-gray-800 text-gray-400 border-gray-700"
-                }`}
-              >
-                {Icon && <Icon className="w-4 h-4" />}
-                {cat}
-                <span className="text-xs opacity-60">
-                  ({(groupedPlans[cat] || []).length})
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* PLANS */}
-        <div>
-          <p className="text-xs text-gray-400 mb-2">Available ({selectedCategory})</p>
-
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-            {loadingPlans ? (
-              [...Array(8)].map((_, i) => (
-                <div key={i} className="bg-gray-800/50 p-4 rounded-xl border border-gray-700 animate-pulse" />
-              ))
-            ) : (
-              (groupedPlans[selectedCategory] || []).map(plan => (
+          {/* CATEGORY TABS */}
+          <div className="flex gap-2 flex-wrap">
+            {["SME2","SME","GIFTING","CORPORATE","REGULAR"].map((cat) => {
+              const style = CATEGORY_STYLES[cat];
+              const Icon = style.icon;
+              return (
                 <button
-                  key={plan.id}
-                  onClick={() => handlePlanClick(plan)}
-                  className="p-3 rounded-xl bg-gray-800/60 border border-gray-700 hover:border-indigo-500 transition text-left relative"
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-4 py-2 rounded-xl border text-xs font-bold flex items-center gap-1 ${
+                    selectedCategory === cat
+                      ? `${style.border} ${style.color} bg-gray-900`
+                      : "bg-gray-800 text-gray-400 border-gray-700"
+                  }`}
                 >
-                  <p className="font-semibold text-[12px] text-white">
-                    {formatPlanName(plan.name)}
-                  </p>
-                  <p className="text-[11px] font-bold text-indigo-300">
-                    ₦{Number(plan.amount).toLocaleString()}
-                  </p>
-
-                  {plan.provider === "vtung" && (
-                    <span className="text-[9px] text-green-400 bg-green-500/20 px-1 rounded absolute right-1 top-1">
-                      CHEAPEST
-                    </span>
-                  )}
+                  {Icon && <Icon className="w-4 h-4" />}
+                  {cat}
+                  <span className="text-xs opacity-60">
+                    ({(groupedPlans[cat] || []).length})
+                  </span>
                 </button>
-              ))
-            )}
+              );
+            })}
+          </div>
+
+          {/* PLANS */}
+          <div>
+            <div className="overflow-y-auto max-h-[70vh] pr-1 scroll-smooth">
+              <p className="text-xs text-gray-400 mb-2">Available ({selectedCategory})</p>
+
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                {loadingPlans ? (
+                  [...Array(8)].map((_, i) => (
+                    <div key={i} className="bg-gray-800/50 p-4 rounded-xl border border-gray-700 animate-pulse" />
+                  ))
+                ) : (
+                  (groupedPlans[selectedCategory] || []).map(plan => (
+                    <button
+                      key={plan.id}
+                      onClick={() => handlePlanClick(plan)}
+                      className="p-3 rounded-xl bg-gray-800/60 border border-gray-700 hover:border-indigo-500 transition text-left relative"
+                    >
+                      <p className="font-semibold text-[12px] text-white">
+                        {formatPlanName(plan.name)}
+                      </p>
+                      <p className="text-[11px] font-bold text-indigo-300">
+                        ₦{Number(plan.amount).toLocaleString()}
+                      </p>
+
+                      {plan.provider === "vtung" && (
+                        <span className="text-[9px] text-green-400 bg-green-500/20 px-1 rounded absolute right-1 top-1">
+                          CHEAPEST
+                        </span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
