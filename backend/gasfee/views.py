@@ -217,25 +217,33 @@ class BuyCryptoAPI(APIView):
 
 
     def post(self, request, crypto_id):
-        """
-        Execute buy flow:
-         1) validate input
-         2) idempotency check (request_id)
-         3) compute price & crypto_amount
-         4) atomic: lock/debit wallet & create CryptoPurchase + WalletTransaction (pending)
-         5) perform chain send (outside DB atomic)
-         6) on success mark completed; on failure refund locked funds + mark failed
-        """
+        # ---- 0) Parse request_id early ----
+        request_id = request.data.get("request_id") or request.data.get("idempotency_key") or str(uuid.uuid4())
+
         # ---- 1) Basic validation ----
         try:
             crypto = get_object_or_404(Crypto, id=crypto_id)
         except Exception:
             return Response({"error": "invalid_crypto"}, status=drf_status.HTTP_404_NOT_FOUND)
 
+        # ---- 2) Idempotency: return existing order if same request_id ----
+        existing_order = CryptoPurchase.objects.filter(request_id=request_id, user=request.user).first()
+        if existing_order:
+            logger.info("Idempotent request detected: %s for user %s", request_id, request.user.id)
+            return Response({
+                "transaction_id": existing_order.id,
+                "status": existing_order.status,
+                "crypto": existing_order.crypto.symbol,
+                "crypto_amount": _decimal_to_str(existing_order.crypto_amount),
+                "total_ngn": _decimal_to_str(existing_order.total_price),
+                "tx_hash": existing_order.tx_hash,
+            }, status=drf_status.HTTP_200_OK)
+
+        # ---- 3) Extract other request params ----
         raw_amount = request.data.get("amount")
         currency = (request.data.get("currency") or "NGN").upper()
         wallet_address = (request.data.get("wallet_address") or "").strip()
-        request_id = request.data.get("request_id") or request.data.get("idempotency_key") or str(uuid.uuid4())
+
 
         if raw_amount is None:
             return Response({"error": "amount_required"}, status=drf_status.HTTP_400_BAD_REQUEST)

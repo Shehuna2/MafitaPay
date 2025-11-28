@@ -11,12 +11,32 @@ import Receipt from "../../components/Receipt";
 const ASSET_CACHE_KEY = "asset_cache_v1";
 const RATE_CACHE_KEY = (id) => `buycrypto_cache_${id}`;
 
+const MIN_AMOUNT = 200;
+const MAX_AMOUNT = 10000000;
+
+
+function parseBackendError(err) {
+  if (!err?.response?.data) return "Network error. Please try again.";
+  const data = err.response.data;
+  if (typeof data.error === "string") return data.error;
+  if (data.detail) return data.detail;
+  if (data.amount_required) return "Amount is required.";
+  if (data.invalid_amount) return "Invalid amount entered.";
+  if (data.unsupported_currency) return "Unsupported currency.";
+  if (data.invalid_wallet_address) return "Invalid wallet address.";
+  if (data.amount_too_small) return "Amount is below the minimum allowed.";
+  if (data.amount_too_large) return "Amount exceeds the maximum limit.";
+  if (data.insufficient_funds) return "Insufficient funds in system wallet.";
+  if (data.transaction_failed) return "Transaction failed — please try again.";
+  if (data.post_processing_failed) return "Your order went through but syncing failed. Support has been notified.";
+  return "Transaction failed. Please try again.";
+}
+
 export default function BuyCrypto() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [crypto, setCrypto] = useState(null);
-
   const [priceUsd, setPriceUsd] = useState(null);
   const [exchangeRate, setExchangeRate] = useState(null);
   const [priceNgn, setPriceNgn] = useState(null);
@@ -27,6 +47,7 @@ export default function BuyCrypto() {
     wallet_address: "",
   });
 
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [rateLoading, setRateLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -36,41 +57,29 @@ export default function BuyCrypto() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [recentWallets, setRecentWallets] = useState([]);
 
-  // -------------------------------------------------------------------
-  //                FETCH RATE WITH CACHE + OFFLINE SUPPORT
-  // -------------------------------------------------------------------
+  // ---------------- FETCH RATE WITH CACHE ----------------
   const fetchFreshRate = async () => {
     setRateLoading(true);
-
     try {
       const res = await client.get(`/buy-crypto/${id}/`);
-
       const data = {
         price_usd: res.data.price_usd,
         usd_ngn_rate: res.data.usd_ngn_rate,
         price_ngn: res.data.price_ngn,
         timestamp: Date.now(),
       };
-
       localStorage.setItem(RATE_CACHE_KEY(id), JSON.stringify(data));
-
       setPriceUsd(data.price_usd);
       setExchangeRate(data.usd_ngn_rate);
       setPriceNgn(data.price_ngn);
-
       setMessage(null);
     } catch (err) {
       const cached = JSON.parse(localStorage.getItem(RATE_CACHE_KEY(id)) || "null");
-
       if (cached) {
         setPriceUsd(cached.price_usd);
         setExchangeRate(cached.usd_ngn_rate);
         setPriceNgn(cached.price_ngn);
-
-        setMessage({
-          type: "error",
-          text: "Failed to refresh. Using last known rate.",
-        });
+        setMessage({ type: "error", text: "Failed to refresh. Using last known rate." });
       } else {
         setMessage({ type: "error", text: "Failed to refresh rate." });
       }
@@ -79,32 +88,20 @@ export default function BuyCrypto() {
     }
   };
 
-  // -------------------------------------------------------------------
-  //                   UPGRADED INITIAL LOAD (CACHE FIRST)
-  // -------------------------------------------------------------------
+  // ---------------- INITIAL LOAD (CACHE FIRST) ----------------
   useEffect(() => {
     let mounted = true;
 
     async function load() {
       setLoading(true);
-
       try {
         let cryptoFromCache = null;
-
-        // ① Load crypto instantly from asset cache
         const assetCache = JSON.parse(localStorage.getItem(ASSET_CACHE_KEY) || "null");
-
         if (assetCache?.assets) {
-          cryptoFromCache = assetCache.assets.find(
-            (a) => String(a.id) === String(id)
-          );
+          cryptoFromCache = assetCache.assets.find((a) => String(a.id) === String(id));
         }
+        if (mounted && cryptoFromCache) setCrypto(cryptoFromCache);
 
-        if (mounted && cryptoFromCache) {
-          setCrypto(cryptoFromCache);
-        }
-
-        // ② Load cached rate immediately
         const cachedRate = JSON.parse(localStorage.getItem(RATE_CACHE_KEY(id)) || "null");
         if (cachedRate) {
           setPriceUsd(cachedRate.price_usd);
@@ -112,18 +109,14 @@ export default function BuyCrypto() {
           setPriceNgn(cachedRate.price_ngn);
         }
 
-        // ③ Soft-refresh latest rate
         await fetchFreshRate();
 
-        // ④ If crypto not found in cache, fetch asset list
         if (!cryptoFromCache) {
           const listRes = await client.get("/assets/");
           const cryptos = listRes.data.cryptos || [];
-
           const found = cryptos.find((c) => String(c.id) === String(id));
           if (mounted && found) setCrypto(found);
 
-          // Update asset cache so next time is instant
           localStorage.setItem(
             ASSET_CACHE_KEY,
             JSON.stringify({
@@ -145,12 +138,9 @@ export default function BuyCrypto() {
     return () => (mounted = false);
   }, [id]);
 
-  // -------------------------------------------------------------------
-  //               RECENT WALLETS LOADING & SAVING
-  // -------------------------------------------------------------------
+  // ---------------- RECENT WALLETS ----------------
   useEffect(() => {
     if (!crypto) return;
-
     const key = `recent_wallets_${crypto.symbol}`;
     try {
       const stored = JSON.parse(localStorage.getItem(key) || "[]");
@@ -169,16 +159,95 @@ export default function BuyCrypto() {
     setRecentWallets(updated);
   };
 
-  // -------------------------------------------------------------------
-  //                   FORM & CALCULATIONS
-  // -------------------------------------------------------------------
+  // ---------------- LIVE VALIDATION ----------------
+  const validateField = (name, value) => {
+    switch (name) {
+      case "amount":
+        if (!value) return "Amount is required";
+        if (isNaN(Number(value))) return "Amount must be a number";
+
+        const num = Number(value);
+        if (num < MIN_AMOUNT) return `Minimum amount is ₦${MIN_AMOUNT.toLocaleString()}`;
+        if (num > MAX_AMOUNT) return `Maximum amount is ₦${MAX_AMOUNT.toLocaleString()}`;
+        return "";
+
+      case "wallet_address":
+        if (!value) return "Wallet address is required";
+
+        const symbol = crypto?.symbol?.toUpperCase();
+
+        /* ---------- EVM Chains ---------- */
+        const EVM = ["ETH", "BNB", "MATIC", "AVAX", "USDT"]; // USDT (ERC20)
+        if (EVM.includes(symbol)) {
+          if (!/^0x[a-fA-F0-9]{40}$/.test(value)) {
+            return "Invalid EVM address (must be 0x followed by 40 hex chars)";
+          }
+          return "";
+        }
+
+        /* ---------- TRON (TRC20 USDT) ---------- */
+        if (symbol === "USDT-TRC20" || symbol === "TRX") {
+          if (!/^T[a-zA-Z0-9]{33}$/.test(value)) {
+            return "Invalid TRON (TRC20) address";
+          }
+          return "";
+        }
+
+        /* ---------- SOLANA ---------- */
+        if (symbol === "SOL") {
+          // Base58 chars (no 0, O, I, l)
+          const base58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+          if (!base58.test(value)) return "Invalid Solana address";
+          return "";
+        }
+
+        /* ---------- NEAR ---------- */
+        if (symbol === "NEAR") {
+          // Named accounts: ends with .near or .tg
+          if (/^[a-z0-9._-]+\.(near|tg)$/i.test(value)) return "";
+
+          // Implicit (64 hex)
+          if (/^[a-fA-F0-9]{64}$/.test(value)) return "";
+
+          return "Invalid NEAR wallet address";
+        }
+
+
+        /* ---------- TON ---------- */
+        if (symbol === "TON") {
+          // Base64url TON addresses: EQxxxxx or UQxxxxx
+          const tonBase64 = /^[EU][A-Za-z0-9_-]{47,48}$/;
+
+          // Optional: raw 64-hex TON address
+          const tonHex = /^[a-fA-F0-9]{64}$/;
+
+          if (tonBase64.test(value) || tonHex.test(value)) {
+            return "";
+          }
+
+          return "Invalid TON wallet address";
+        }
+
+
+        /* ---------- Fallback (unknown asset) ---------- */
+        return "Invalid wallet address format for this asset";
+
+      default:
+        return "";
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((p) => ({ ...p, [name]: value }));
+    setForm((prev) => ({ ...prev, [name]: value }));
+
+    // Live validation
+    setErrors((prev) => ({ ...prev, [name]: validateField(name, value) }));
   };
 
   const handleQuickPick = (val) => {
-    setForm((p) => ({ ...p, amount: String(val) }));
+    setForm((prev) => ({ ...prev, amount: String(val) }));
+    setErrors((prev) => ({ ...prev, amount: validateField("amount", val) }));
   };
 
   const quickPickOptions = () => {
@@ -188,32 +257,38 @@ export default function BuyCrypto() {
     return [0.1, 0.5, 1.0, 2.0, 5.0, 10.0];
   };
 
+  const validateForm = () => {
+    const newErrors = {};
+    Object.keys(form).forEach((key) => {
+      const errMsg = validateField(key, form[key]);
+      if (errMsg) newErrors[key] = errMsg;
+    });
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   let cryptoReceived = 0;
   let totalNgn = 0;
 
   if (priceUsd && exchangeRate && form.amount) {
     const amt = Number(form.amount);
-
     if (form.currency === "NGN") {
       totalNgn = amt;
       cryptoReceived = amt / (priceUsd * exchangeRate);
     }
-
     if (form.currency === "USDT") {
       totalNgn = amt * exchangeRate;
       cryptoReceived = amt / priceUsd;
     }
-
     if (form.currency === crypto?.symbol) {
       cryptoReceived = amt;
       totalNgn = amt * priceUsd * exchangeRate;
     }
   }
 
-  // -------------------------------------------------------------------
-  //                       SUBMIT ORDER
-  // -------------------------------------------------------------------
+  // ---------------- SUBMIT ----------------
   const confirmAndSubmit = async () => {
+    if (!validateForm()) return;
     setSubmitting(true);
     setMessage(null);
     setShowConfirm(false);
@@ -221,7 +296,6 @@ export default function BuyCrypto() {
     try {
       const res = await client.post(`/buy-crypto/${id}/`, form);
       saveWalletToRecent(form.wallet_address);
-
       setReceiptData({
         status: "success",
         type: "crypto",
@@ -231,72 +305,48 @@ export default function BuyCrypto() {
         tx_hash: res.data?.tx_hash ?? null,
         reference: res.data?.reference ?? null,
       });
-
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 1200);
     } catch (err) {
-      setMessage({ type: "error", text: "Transaction failed. Try again." });
+      const pretty = parseBackendError(err);
+      setMessage({ type: "error", text: pretty });
       setReceiptData({
         status: "failed",
         type: "crypto",
         crypto: crypto?.symbol ?? "CRYPTO",
         amount: totalNgn,
         wallet_address: form.wallet_address,
+        backend_error: pretty,
+        raw: err?.response?.data || null,
       });
     } finally {
       setSubmitting(false);
-      setForm({ amount: "", currency: "NGN", wallet_address: "" });
     }
   };
 
-  const trimAddress = (addr) => {
-    if (!addr) return addr;
-    return addr.length > 10 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr;
-  };
+  const trimAddress = (addr) => (addr && addr.length > 10 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr);
 
-  // -------------------------------------------------------------------
-  //                         LOADING UI
-  // -------------------------------------------------------------------
   if (loading) return <LoadingSkeleton />;
-
-  if (!crypto)
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
-        <div className="max-w-md w-full text-center text-red-400">
-          <p>Crypto not found.</p>
-          <button
-            onClick={() => navigate(-1)}
-            className="mt-4 px-4 py-2 bg-indigo-600 rounded-xl text-white font-bold"
-          >
-            Go back
-          </button>
-        </div>
+  if (!crypto) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
+      <div className="max-w-md w-full text-center text-red-400">
+        <p>Crypto not found.</p>
+        <button onClick={() => navigate(-1)} className="mt-4 px-4 py-2 bg-indigo-600 rounded-xl text-white font-bold">Go back</button>
       </div>
-    );
+    </div>
+  );
 
-  // -------------------------------------------------------------------
-  //                          MAIN UI
-  // -------------------------------------------------------------------
   return (
     <>
       <ToastContainer />
-
       <div className="min-h-screen bg-gray-900 text-white">
         <div className="max-w-4xl mx-auto px-4 py-6">
           {/* Back Arrow */}
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2 mb-4 text-indigo-400 hover:text-indigo-300 transition"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm font-medium">Back</span>
+          <button onClick={() => navigate(-1)} className="flex items-center gap-2 mb-4 text-indigo-400 hover:text-indigo-300 transition">
+            <ArrowLeft className="w-5 h-5" /><span className="text-sm font-medium">Back</span>
           </button>
 
-          {submitting && (
-            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-              <AnimatedTransactionLoader />
-            </div>
-          )}
+          {submitting && <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"><AnimatedTransactionLoader /></div>}
 
           <div className="bg-gray-800/80 p-5 rounded-2xl border border-gray-700/50">
             {/* Refresh */}
@@ -306,11 +356,7 @@ export default function BuyCrypto() {
                 disabled={rateLoading}
                 className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-50"
               >
-                {rateLoading ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-3 h-3" />
-                )}
+                {rateLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                 Refresh rate
               </button>
             </div>
@@ -325,18 +371,14 @@ export default function BuyCrypto() {
                   </span>{" "}
                   <span className="text-[10px] text-green-300">(incl. fees)</span>
                 </p>
-
                 <p className="text-xs text-gray-300 mt-1">
                   <span className="text-gray-400">1 {crypto.symbol} =</span>{" "}
                   <span className="font-bold text-indigo-400">
-                    ${priceUsd?.toLocaleString(undefined, { minimumFractionDigits: 2 })} →
-                    ₦{(priceUsd * exchangeRate)?.toLocaleString(undefined, {
-                      maximumFractionDigits: 0,
-                    })}
+                    ${priceUsd?.toLocaleString(undefined, { minimumFractionDigits: 2 })} → ₦
+                    {(priceUsd * exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </span>
                 </p>
               </div>
-
               <img
                 src={`/images/${crypto.symbol?.toLowerCase()}.png`}
                 alt={crypto.name}
@@ -362,7 +404,7 @@ export default function BuyCrypto() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                setShowConfirm(true);
+                if (validateForm()) setShowConfirm(true);
               }}
               className="space-y-4"
             >
@@ -378,6 +420,7 @@ export default function BuyCrypto() {
                     required
                     className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm"
                   />
+                  {errors.amount && <p className="text-red-400 text-xs mt-1">{errors.amount}</p>}
                 </div>
 
                 <div className="w-28">
@@ -420,28 +463,18 @@ export default function BuyCrypto() {
               {form.amount && (
                 <div className="bg-gray-800/60 p-3 rounded-xl text-xs border border-gray-700/50">
                   <p>
-                    You pay:{" "}
-                    <span className="text-orange-400 font-bold">
-                      ₦{totalNgn.toLocaleString()}
-                    </span>
+                    You pay: <span className="text-orange-400 font-bold">₦{totalNgn.toLocaleString()}</span>
                   </p>
                   <p className="mt-1">
-                    You receive:{" "}
-                    <span className="text-indigo-400 font-bold">
-                      {cryptoReceived.toFixed(8)} {crypto.symbol}
-                    </span>
+                    You receive: <span className="text-indigo-400 font-bold">{cryptoReceived.toFixed(8)} {crypto.symbol}</span>
                   </p>
-                  <p className="mt-2 text-[11px] text-gray-500">
-                    Rate locked • Includes all fees
-                  </p>
+                  <p className="mt-2 text-[11px] text-gray-500">Rate locked • Includes all fees</p>
                 </div>
               )}
 
-              {/* Wallet address */}
+              {/* Wallet */}
               <div>
-                <label className="block text-xs mb-1.5">
-                  {crypto.symbol} Wallet Address
-                </label>
+                <label className="block text-xs mb-1.5">{crypto.symbol} Wallet Address</label>
                 <input
                   name="wallet_address"
                   type="text"
@@ -450,6 +483,7 @@ export default function BuyCrypto() {
                   required
                   className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm"
                 />
+                {errors.wallet_address && <p className="text-red-400 text-xs mt-1">{errors.wallet_address}</p>}
 
                 {recentWallets.length > 0 && (
                   <div className="mt-3">
@@ -459,7 +493,13 @@ export default function BuyCrypto() {
                         <button
                           key={addr}
                           type="button"
-                          onClick={() => setForm((p) => ({ ...p, wallet_address: addr }))}
+                          onClick={() => {
+                            setForm((p) => ({ ...p, wallet_address: addr }));
+                            setErrors((prev) => ({
+                              ...prev,
+                              wallet_address: validateField("wallet_address", addr),
+                            }));
+                          }}
                           className="px-3 py-1.5 bg-gray-800/60 border border-gray-700 rounded-lg text-xs"
                         >
                           {trimAddress(addr)}
@@ -475,11 +515,7 @@ export default function BuyCrypto() {
                 disabled={submitting}
                 className="w-full bg-indigo-600 py-2.5 rounded-xl font-bold"
               >
-                {submitting ? (
-                  <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-                ) : (
-                  `Buy ${crypto.symbol}`
-                )}
+                {submitting ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : `Buy ${crypto.symbol}`}
               </button>
             </form>
           </div>
@@ -499,40 +535,20 @@ export default function BuyCrypto() {
         {/* Success */}
         {showSuccess && <SuccessOverlay />}
 
-        <Receipt
-          type="crypto"
-          data={receiptData}
-          onClose={() => setReceiptData(null)}
-        />
+        <Receipt type="crypto" data={receiptData} onClose={() => setReceiptData(null)} />
       </div>
     </>
   );
 }
 
-/* ---------------------------------------------------------
-   HELPER COMPONENTS (unchanged from your original)
---------------------------------------------------------- */
-
+/* ---------------- HELPER COMPONENTS ---------------- */
 function LoadingSkeleton() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
       <style>{`
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-        .shimmer {
-          background: linear-gradient(
-            110deg,
-            rgba(55,65,81,0.28) 8%,
-            rgba(99,102,241,0.14) 18%,
-            rgba(55,65,81,0.28) 33%
-          );
-          background-size: 200% 100%;
-          animation: shimmer 1.8s linear infinite;
-        }
+        @keyframes shimmer {0% { background-position: -200% 0; } 100% { background-position: 200% 0; }}
+        .shimmer { background: linear-gradient(110deg, rgba(55,65,81,0.28) 8%, rgba(99,102,241,0.14) 18%, rgba(55,65,81,0.28) 33%); background-size: 200% 100%; animation: shimmer 1.8s linear infinite; }
       `}</style>
-
       <div className="w-full max-w-4xl bg-gray-900 rounded-2xl p-4 sm:p-5 shadow-xl border border-gray-700">
         <div className="flex items-center gap-4 mb-5">
           <div className="w-12 h-12 rounded-full shimmer" />
@@ -541,7 +557,6 @@ function LoadingSkeleton() {
             <div className="h-4 w-1/3 rounded shimmer" />
           </div>
         </div>
-
         <div className="bg-gray-800 rounded-xl p-4 mb-5 flex justify-between items-center border border-gray-700">
           <div className="space-y-2 w-3/4">
             <div className="h-4 w-32 rounded shimmer" />
@@ -549,62 +564,34 @@ function LoadingSkeleton() {
           </div>
           <div className="w-12 h-12 rounded-full shimmer" />
         </div>
-
         <div className="space-y-4">
           <div className="h-12 rounded-xl shimmer" />
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-10 rounded-xl shimmer" />
-            ))}
-          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">{[...Array(6)].map((_, i) => <div key={i} className="h-10 rounded-xl shimmer" />)}</div>
           <div className="h-24 rounded-xl shimmer" />
           <div className="h-12 rounded-xl shimmer" />
         </div>
-        <p className="text-sm text-gray-400 mt-5 text-center">
-          Fetching secure rate & crypto data…
-        </p>
+        <p className="text-sm text-gray-400 mt-5 text-center">Fetching secure rate & crypto data…</p>
       </div>
     </div>
   );
 }
 
 function AnimatedTransactionLoader() {
-  const messages = [
-    "Confirming transaction…",
-    "Finalizing purchase…",
-    "Almost done…",
-    "Securing your receipt…",
-  ];
+  const messages = ["Confirming transaction…", "Finalizing purchase…", "Almost done…", "Securing your receipt…"];
   const [step, setStep] = useState(0);
-
   useEffect(() => {
-    const id = setInterval(
-      () => setStep((s) => (s < messages.length - 1 ? s + 1 : s)),
-      2400
-    );
+    const id = setInterval(() => setStep((s) => (s < messages.length - 1 ? s + 1 : s)), 2400);
     return () => clearInterval(id);
   }, []);
-
   return (
     <div className="flex flex-col items-center space-y-6">
       <div className="relative">
         <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-xl animate-pulse" />
-        <motion.div
-          className="w-16 h-16 border-4 border-indigo-400 border-t-transparent rounded-full"
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
-        />
+        <motion.div className="w-16 h-16 border-4 border-indigo-400 border-t-transparent rounded-full" animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }} />
       </div>
-
       <div className="w-72 h-2 bg-gray-700 rounded-full overflow-hidden">
-        <motion.div
-          className="h-full bg-indigo-500"
-          initial={{ width: 0 }}
-          animate={{ width: "100%" }}
-          transition={{ repeat: Infinity, duration: 2 }}
-        />
+        <motion.div className="h-full bg-indigo-500" initial={{ width: 0 }} animate={{ width: "100%" }} transition={{ repeat: Infinity, duration: 2 }} />
       </div>
-
       <p className="text-sm text-gray-300">{messages[step]}</p>
     </div>
   );
@@ -613,12 +600,7 @@ function AnimatedTransactionLoader() {
 function SuccessOverlay() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-      <motion.div
-        className="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center text-white text-xl font-bold"
-        initial={{ scale: 0 }}
-        animate={{ scale: 1.2 }}
-        transition={{ type: "spring", stiffness: 200, damping: 15 }}
-      >
+      <motion.div className="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center text-white text-xl font-bold" initial={{ scale: 0 }} animate={{ scale: 1.2 }} transition={{ type: "spring", stiffness: 200, damping: 15 }}>
         ✓
       </motion.div>
     </div>
@@ -631,26 +613,11 @@ function ConfirmModal({ crypto, cryptoReceived, form, onCancel, onConfirm }) {
       <div className="bg-gray-800 rounded-xl p-6 w-80 text-white border border-gray-700">
         <p className="text-sm mb-4">Confirm your purchase</p>
         <p className="text-xs text-gray-400 mb-2">
-          You are about to buy{" "}
-          <span className="text-indigo-400 font-bold">
-            {cryptoReceived.toFixed(8)} {crypto.symbol}
-          </span>{" "}
-          using <span className="font-bold">{form.amount} {form.currency}</span>
+          You are about to buy <span className="text-indigo-400 font-bold">{cryptoReceived.toFixed(8)} {crypto.symbol}</span> using <span className="font-bold">{form.amount} {form.currency}</span>
         </p>
-
         <div className="flex gap-3 mt-4">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-2 bg-gray-700 rounded-xl text-sm"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-2 bg-indigo-600 rounded-xl text-sm"
-          >
-            Confirm
-          </button>
+          <button onClick={onCancel} className="flex-1 py-2 bg-gray-700 rounded-xl text-sm">Cancel</button>
+          <button onClick={onConfirm} className="flex-1 py-2 bg-indigo-600 rounded-xl text-sm">Confirm</button>
         </div>
       </div>
     </div>

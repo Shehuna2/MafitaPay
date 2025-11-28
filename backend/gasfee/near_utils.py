@@ -15,54 +15,38 @@ NEAR_RPC_URL = get_env_var("NEAR_RPC_URL", required=True)  # e.g., "https://rpc.
 NEAR_PRIVATE_KEY = get_env_var("NEAR_PRIVATE_KEY", required=True).strip('"')
 NEAR_ACCOUNT_ID = get_env_var("NEAR_ACCOUNT_ID", required=True)
 
-# -------------------------
-# Safe runner for coroutines
-# -------------------------
-def _run_coro_in_new_loop(coro):
-    """
-    Execute coro in a fresh event loop on a background thread and
-    return the result. This avoids touching the process-global loop.
-    """
-    result = {"value": None, "exc": None}
-    def _target():
-        loop = asyncio.new_event_loop()
-        try:
-            asyncio.set_event_loop(loop)
-            result["value"] = loop.run_until_complete(coro)
-        except Exception as e:
-            result["exc"] = e
-        finally:
-            try:
-                loop.close()
-            except Exception:
-                pass
 
-    t = threading.Thread(target=_target, daemon=True)
-    t.start()
-    t.join()
-    if result["exc"]:
-        raise result["exc"]
-    return result["value"]
+# Persistent background event loop for all NEAR RPC activity
+_background_loop = None
+_background_thread = None
+
+def _ensure_background_loop():
+    global _background_loop, _background_thread
+
+    if _background_loop and _background_loop.is_running():
+        return _background_loop
+
+    _background_loop = asyncio.new_event_loop()
+
+    def _loop_thread():
+        asyncio.set_event_loop(_background_loop)
+        _background_loop.run_forever()
+
+    _background_thread = threading.Thread(target=_loop_thread, daemon=True)
+    _background_thread.start()
+    return _background_loop
+
 
 def run_async(coro):
     """
-    Run coro safely from synchronous code.
-
-    Strategy:
-      - If there's no running event loop in this thread -> use asyncio.run(coro)
-      - If there *is* a running loop (e.g. inside ASGI), run the coro in a fresh loop
-        on a background thread to avoid interfering with the running loop.
+    NEAR-safe async runner.
+    Never uses asyncio.run().
+    Always dispatches work to a persistent background loop.
     """
-    try:
-        # Python 3.7+
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        # no loop running in this thread
-        return asyncio.run(coro)
-    else:
-        # running loop exists in *this* thread (or current thread). Avoid using it;
-        # run the coroutine in a fresh loop on a worker thread.
-        return _run_coro_in_new_loop(coro)
+    loop = _ensure_background_loop()
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    return future.result()
+
 
 
 # -------------------------
@@ -115,21 +99,24 @@ def check_near_balance(account_id: str) -> Decimal:
         raise ValueError(f"Failed to fetch balance: {e}")
 
 def validate_near_account_id(account_id: str) -> bool:
-    """Validate a NEAR account ID. Accepts implicit hex 64-char or human readable accounts."""
     if not account_id or not isinstance(account_id, str):
         return False
-    account_id = account_id.strip()
+
+    account_id = account_id.strip().lower()
+
     if len(account_id) < 2 or len(account_id) > 64:
         return False
-    # Implicit 64-char hex
-    if len(account_id) == 64 and re.fullmatch(r'[0-9a-fA-F]{64}', account_id):
+
+    # implicit hex account (64-char)
+    if len(account_id) == 64 and re.fullmatch(r'[0-9a-f]{64}', account_id):
         return True
-    # human readable: allow common characters (dot, dash, underscore)
-    if not re.fullmatch(r'[0-9a-zA-Z._\-]+', account_id):
+
+    # strict NEAR human readable rule: lowercase only
+    if not re.fullmatch(r'[0-9a-z._\-]+', account_id):
         return False
-    # optionally enforce a suffix (optional): many accounts have .near, .testnet, .tg etc.
-    # we allow both plain human ids and those with known suffixes.
+
     return True
+
 
 def send_near(receiver_account_id: str, amount_near, order_id=None) -> str:
     """
@@ -144,6 +131,7 @@ def send_near(receiver_account_id: str, amount_near, order_id=None) -> str:
 
     logger.info(f"Initiating transfer: {Decimal(amount_yocto) / (Decimal(10) ** 24)} NEAR -> {receiver_account_id}")
 
+    receiver_account_id = receiver_account_id.strip().lower()
     # Validate receiver account ID
     if not validate_near_account_id(receiver_account_id):
         raise ValueError(f"Invalid receiver account ID: {receiver_account_id}")
