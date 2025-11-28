@@ -97,7 +97,7 @@ def get_variations(network: Optional[str] = None) -> list:
         return []
 
 
-def purchase_data(phone: str, variation_id: str, network: str, request_id: Optional[str] = None) -> Dict[Any, Any]:
+def vtung_purchase_data(phone: str, variation_id: str, network: str, request_id: Optional[str] = None) -> Dict[Any, Any]:
     url = "https://vtu.ng/wp-json/api/v2/data"
     payload = {
         "request_id": request_id or f"mf_{uuid.uuid4().hex[:10]}",

@@ -19,6 +19,7 @@ from .utils import (
     purchase_electricity, purchase_education, EDUCATION_SERVICE_ID_MAP, 
     CABLE_TV_SERVICE_ID_MAP, ELECTRICITY_SERVICE_ID_MAP, get_single_plan 
 )
+from .vtu_ng import get_variations, vtung_purchase_data
 
 
 logger = logging.getLogger(__name__)
@@ -401,7 +402,10 @@ class BuyDataView(APIView):
     def post(self, request):
         serializer = DataPurchaseSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response({"message": serializer.errors}, status=400)
+            return Response({
+                "success": False,
+                "message": serializer.errors
+            }, status=400)
 
         phone = serializer.validated_data["phone"]
         variation_id = serializer.validated_data["variation_id"]
@@ -412,21 +416,29 @@ class BuyDataView(APIView):
         plan = get_single_plan(network, variation_id)
 
         if not plan:
-            return Response({"message": "Invalid data plan"}, status=400)
+            return Response({
+                "success": False,
+                "message": "Invalid data plan selected."
+            }, status=400)
 
         provider = plan["provider"]
+        tx = None  # Safe guard for exception scope
 
         try:
             with transaction.atomic():
                 wallet = get_user_wallet(request.user)
 
                 if wallet.balance < amount:
-                    return Response({"message": "Insufficient balance"}, status=400)
+                    return Response({
+                        "success": False,
+                        "message": "Insufficient wallet balance."
+                    }, status=400)
 
                 balance_before = wallet.balance
                 wallet.balance -= amount
                 wallet.save()
 
+                # Create pending TX
                 tx = WalletTransaction.objects.create(
                     user=request.user,
                     wallet=wallet,
@@ -436,19 +448,43 @@ class BuyDataView(APIView):
                     balance_before=balance_before,
                     balance_after=wallet.balance,
                     status="pending",
-                    description=f"{network.upper()} data {plan['category']}"
                 )
 
-                # -------- Provider Routing --------
-                if provider == "vtung":
-                    result = vtung_purchase_data(phone, variation_id, network)
-                else:
-                    result = purchase_data(phone, float(amount), network, variation_id)
-                    result["provider"] = "vtpass"
+                # ---------- PROVIDER ROUTING ----------
+                try:
+                    if provider == "vtung":
+                        result = vtung_purchase_data(phone, variation_id, network)
+                    else:
+                        result = purchase_data(phone, float(amount), network, variation_id)
+                        result["provider"] = "vtpass"
 
-                # -------- Success --------
-                tx.request_id = result.get("request_id") or result.get("reference")
-                tx.reference = result.get("transaction_id") or result.get("id")
+                except Exception as api_error:
+                    # API hard error: request timeout, connection dropped, etc.
+                    raise Exception(f"Network error contacting provider: {str(api_error)}")
+
+                # --------- HANDLE PROVIDER RESPONSE ----------
+                if not result.get("success"):
+                    # FAILED RESPONSE FROM PROVIDER (VTU.ng or VTpass)
+                    error_msg = result.get("error") or "Provider returned failure."
+
+                    # Rollback TX to failed
+                    tx.status = "failed"
+                    tx.metadata = result
+                    tx.save()
+
+                    # Refund wallet
+                    wallet.balance += amount
+                    wallet.save()
+
+                    return Response({
+                        "success": False,
+                        "message": error_msg,   # USER SEES EXACT REASON
+                        "provider": provider
+                    }, status=400)
+
+                # -------- SUCCESS --------
+                tx.request_id = result.get("request_id")
+                tx.reference = result.get("transaction_id")
                 tx.metadata = result
                 tx.status = "success"
                 tx.save()
@@ -457,13 +493,23 @@ class BuyDataView(APIView):
                 "success": True,
                 "provider": provider,
                 "request_id": tx.request_id,
+                "message": "Data purchase successful!"
             })
 
         except Exception as e:
-            logger.error(f"BuyDataView error: {e}", exc_info=True)
-            tx.status = "failed"
-            tx.save()
-            return Response({"message": "Purchase failed"}, status=500)
+            logger.error(f"BuyDataView FATAL → {e}", exc_info=True)
+
+            # ensure TX exists
+            if tx:
+                tx.status = "failed"
+                tx.save()
+
+            return Response({
+                "success": False,
+                "message": "We could not complete your purchase. Please try again.",
+                "error_details": str(e)[:200]  # sent to UI
+            }, status=500)
+
 
 
 
@@ -476,30 +522,33 @@ class AirtimeToCashView(APIView):
     def post(self, request):
         phone = request.data.get("phone")
         network = request.data.get("network")
-        amount = request.data.get("amount")  # airtime amount to convert
+        amount = request.data.get("amount")
 
         if not all([phone, network, amount]):
-            return Response({"message": "Missing fields"}, status=400)
+            return Response({"success": False, "message": "All fields are required."}, status=400)
 
         if not PHONE_REGEX.match(phone):
-            return Response({"message": "Invalid phone"}, status=400)
+            return Response({"success": False, "message": "Invalid phone number."}, status=400)
 
         try:
             amount = Decimal(str(amount))
             if amount < 100:
-                return Response({"message": "Minimum ₦100"}, status=400)
+                return Response({"success": False, "message": "Minimum amount is ₦100."}, status=400)
         except:
-            return Response({"message": "Invalid amount"}, status=400)
+            return Response({"success": False, "message": "Amount must be numeric."}, status=400)
 
-        # Use VTU.ng airtime-to-cash (4–6% discount)
         try:
-            from .vtu_ng import purchase_airtime_to_cash  # lazy import
+            from .vtu_ng import purchase_airtime_to_cash
 
             with transaction.atomic():
                 result = purchase_airtime_to_cash(phone, network, float(amount))
 
                 if not result.get("success"):
-                    return Response({"message": result.get("message", "Conversion failed")}, status=400)
+                    return Response({
+                        "success": False,
+                        "message": result.get("message") or "Conversion failed.",
+                        "provider_error": result
+                    }, status=400)
 
                 credit_amount = Decimal(str(result["credited_amount"]))
 
@@ -522,11 +571,15 @@ class AirtimeToCashView(APIView):
                 )
 
             return Response({
-                "message": f"₦{credit_amount} credited to your wallet!",
+                "success": True,
+                "message": f"₦{credit_amount} successfully added to wallet.",
                 "credited_amount": credit_amount
             })
 
         except Exception as e:
-            logger.error(f"AirtimeToCash error: {e}")
-            return Response({"message": "Conversion failed"}, status=500)
-
+            logger.error(f"AirtimeToCashView ERROR → {e}", exc_info=True)
+            return Response({
+                "success": False,
+                "message": "Something went wrong. Try again.",
+                "error_details": str(e)[:200]
+            }, status=500)
