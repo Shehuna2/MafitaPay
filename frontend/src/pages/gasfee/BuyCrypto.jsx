@@ -40,6 +40,11 @@ export default function BuyCrypto() {
   const [priceUsd, setPriceUsd] = useState(null);
   const [exchangeRate, setExchangeRate] = useState(null);
   const [priceNgn, setPriceNgn] = useState(null);
+  const [touched, setTouched] = useState({
+    amount: false,
+    wallet_address: false,
+  });
+
 
   const [form, setForm] = useState({
     amount: "",
@@ -238,12 +243,22 @@ export default function BuyCrypto() {
   };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    let { name, value } = e.target;
+
+    // prevent paste spacing issues
+    if (name === "wallet_address") {
+      value = value.trim();
+    }
+
     setForm((prev) => ({ ...prev, [name]: value }));
 
-    // Live validation
-    setErrors((prev) => ({ ...prev, [name]: validateField(name, value) }));
+    // live validation
+    setErrors((prev) => ({
+      ...prev,
+      [name]: validateField(name, value),
+    }));
   };
+
 
   const handleQuickPick = (val) => {
     setForm((prev) => ({ ...prev, amount: String(val) }));
@@ -415,12 +430,22 @@ export default function BuyCrypto() {
                   <input
                     name="amount"
                     type="number"
+                    placeholder="Enter amount (min 200)"
                     value={form.amount}
                     onChange={handleChange}
+                    onBlur={() => setTouched((t) => ({ ...t, amount: true }))}
                     required
-                    className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm"
+                    className={`w-full bg-gray-800/60 backdrop-blur-md p-2.5 rounded-xl text-gray-400 text-sm border 
+                      ${
+                        touched.amount && errors.amount
+                          ? "border-red-500"
+                          : "border-gray-700/80"
+                      }
+                    `}
                   />
-                  {errors.amount && <p className="text-red-400 text-xs mt-1">{errors.amount}</p>}
+                  {touched.amount && errors.amount && (
+                    <p className="text-red-500 text-xs mt-1">{errors.amount}</p>
+                  )}
                 </div>
 
                 <div className="w-28">
@@ -478,13 +503,25 @@ export default function BuyCrypto() {
                 <input
                   name="wallet_address"
                   type="text"
+                  placeholder={`Enter your ${crypto.symbol} wallet address`}
                   value={form.wallet_address}
-                  onChange={handleChange}
+                  onChange={(e) => {
+                    const v = e.target.value.trim(); // fixes paste issues
+                    handleChange({ target: { name: "wallet_address", value: v } });
+                  }}
+                  onBlur={() => setTouched((t) => ({ ...t, wallet_address: true }))}
                   required
-                  className="w-full bg-gray-800/60 backdrop-blur-md border border-gray-700/80 p-2.5 rounded-xl text-white text-sm"
+                  className={`w-full bg-gray-800/60 backdrop-blur-md p-2.5 rounded-xl text-gray-400 text-sm border 
+                    ${
+                      touched.wallet_address && errors.wallet_address
+                        ? "border-red-500"
+                        : "border-gray-700/80"
+                    }
+                  `}
                 />
-                {errors.wallet_address && <p className="text-red-400 text-xs mt-1">{errors.wallet_address}</p>}
-
+                {touched.wallet_address && errors.wallet_address && (
+                  <p className="text-red-500 text-xs mt-1">{errors.wallet_address}</p>
+                )}
                 {recentWallets.length > 0 && (
                   <div className="mt-3">
                     <p className="text-xs text-gray-500 mb-2">Recently used</p>
