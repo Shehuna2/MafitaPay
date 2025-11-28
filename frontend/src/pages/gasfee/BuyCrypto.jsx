@@ -40,6 +40,7 @@ export default function BuyCrypto() {
   const [priceUsd, setPriceUsd] = useState(null);
   const [exchangeRate, setExchangeRate] = useState(null);
   const [priceNgn, setPriceNgn] = useState(null);
+  const [submitted, setSubmitted] = useState(false);
   const [touched, setTouched] = useState({
     amount: false,
     wallet_address: false,
@@ -164,6 +165,16 @@ export default function BuyCrypto() {
     setRecentWallets(updated);
   };
 
+  const getAmountInNgn = (amt, currency) => {
+    if (!priceUsd || !exchangeRate) return 0;
+    const num = Number(amt);
+
+    if (currency === "NGN") return num;
+    if (currency === "USDT") return num * exchangeRate;
+    if (currency === crypto?.symbol) return num * priceUsd * exchangeRate;
+    return 0;
+  };
+
   // ---------------- LIVE VALIDATION ----------------
   const validateField = (name, value) => {
     switch (name) {
@@ -171,10 +182,16 @@ export default function BuyCrypto() {
         if (!value) return "Amount is required";
         if (isNaN(Number(value))) return "Amount must be a number";
 
-        const num = Number(value);
-        if (num < MIN_AMOUNT) return `Minimum amount is ₦${MIN_AMOUNT.toLocaleString()}`;
-        if (num > MAX_AMOUNT) return `Maximum amount is ₦${MAX_AMOUNT.toLocaleString()}`;
+        const ngnValue = getAmountInNgn(value, form.currency);
+
+        if (ngnValue < MIN_AMOUNT)
+          return `Minimum amount is ₦${MIN_AMOUNT.toLocaleString()}`;
+
+        if (ngnValue > MAX_AMOUNT)
+          return `Maximum amount is ₦${MAX_AMOUNT.toLocaleString()}`;
+
         return "";
+
 
       case "wallet_address":
         if (!value) return "Wallet address is required";
@@ -310,7 +327,18 @@ export default function BuyCrypto() {
 
     try {
       const res = await client.post(`/buy-crypto/${id}/`, form);
+
       saveWalletToRecent(form.wallet_address);
+
+      // 🔥 Prevent double submission + clear form safely
+      setSubmitted(true);
+      setForm({ amount: "", currency: "NGN", wallet_address: "" });
+      setErrors({});
+      setTouched({ amount: false, wallet_address: false });
+
+      // Optional: re-enable submit after success overlay disappears
+      setTimeout(() => setSubmitted(false), 1500);
+
       setReceiptData({
         status: "success",
         type: "crypto",
@@ -320,8 +348,10 @@ export default function BuyCrypto() {
         tx_hash: res.data?.tx_hash ?? null,
         reference: res.data?.reference ?? null,
       });
+
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 1200);
+
     } catch (err) {
       const pretty = parseBackendError(err);
       setMessage({ type: "error", text: pretty });
@@ -430,7 +460,7 @@ export default function BuyCrypto() {
                   <input
                     name="amount"
                     type="number"
-                    placeholder="Enter amount (min 200)"
+                    placeholder="Enter amount"
                     value={form.amount}
                     onChange={handleChange}
                     onBlur={() => setTouched((t) => ({ ...t, amount: true }))}
@@ -549,10 +579,25 @@ export default function BuyCrypto() {
 
               <button
                 type="submit"
-                disabled={submitting}
-                className="w-full bg-indigo-600 py-2.5 rounded-xl font-bold"
+                disabled={
+                  loading ||
+                  submitted ||
+                  !form.amount ||
+                  !form.wallet_address ||
+                  Object.values(errors).some((e) => e)
+                }
+                className={`w-full py-3 rounded-xl font-medium text-white transition
+                  ${
+                    loading || submitted ||
+                    !form.amount ||
+                    !form.wallet_address ||
+                    Object.values(errors).some((e) => e)
+                      ? "bg-gray-600 cursor-not-allowed"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  }
+                `}
               >
-                {submitting ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : `Buy ${crypto.symbol}`}
+                {submitted ? "Submitted" : loading ? "Processing..." : "Buy Crypto"}
               </button>
             </form>
           </div>
