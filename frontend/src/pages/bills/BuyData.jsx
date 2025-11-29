@@ -269,7 +269,7 @@ export default function BuyData() {
      UI
   ---------------------------------------------------- */
   return (
-    <ShortFormLayout title="Buy Data - Cheapest in Nigeria">
+    <ShortFormLayout>
 
       {loading && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
