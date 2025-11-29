@@ -282,43 +282,7 @@ export default function BuyData() {
         {/* Phone + Network */}
         <div className="flex flex-col sm:flex-row gap-4">
           
-          {/* PHONE INPUT */}
-          <div className="flex-1">
-            <label className="text-xs text-gray-400">Phone Number</label>
-            <input
-              type="text"
-              placeholder="0803..."
-              value={form.phone}
-              onChange={handlePhoneChange}
-              className={`w-full mt-1 bg-gray-800/70 rounded-xl px-4 py-3 text-gray-400
-                border border-indigo-500/30 focus:border-indigo-400 focus:shadow-[0_0_8px_#a78bfa] outline-none
-                ${
-                  form.phone.length === 0
-                    ? "border-gray-700"
-                    : livePhoneInfo.detected && livePhoneInfo.detected !== form.network
-                    ? "border-indigo-400 shadow-[0_0_8px_#facc15]"
-                    : livePhoneInfo.valid
-                    ? "border-green-500"
-                    : "border-red-500"
-                }
-              `}
-            />
-
-            {/* LIVE FEEDBACK */}
-            {form.phone.length > 0 && (
-              <p className={`mt-1 text-xs ${livePhoneInfo.valid ? "text-green-400" : "text-red-400"}`}>
-                {livePhoneInfo.message}
-              </p>
-            )}
-
-            {/* DETECTED NETWORK DISPLAY */}
-            {livePhoneInfo.detected && (
-              <div className="mt-1 flex items-center gap-2 text-green-400 text-xs">
-                <img src={NETWORK_LOGOS[livePhoneInfo.detected]} className="w-4 h-4" />
-                <span>Detected: {livePhoneInfo.detected.toUpperCase()}</span>
-              </div>
-            )}
-          </div>
+          
 
           {/* NETWORK SELECTOR */}
           <div className="w-full sm:w-80">
@@ -368,6 +332,44 @@ export default function BuyData() {
             );
           })}
         </div>
+        
+        {/* PHONE INPUT */}
+          <div className="flex-1">
+            <label className="text-xs text-gray-400">Phone Number</label>
+            <input
+              type="number"
+              placeholder="0803..."
+              value={form.phone}
+              onChange={handlePhoneChange}
+              className={`w-full mt-1 bg-gray-800/70 rounded-xl px-4 py-3 text-gray-400
+                border border-indigo-500/30 focus:border-indigo-400 focus:shadow-[0_0_8px_#a78bfa] outline-none
+                ${
+                  form.phone.length === 0
+                    ? "border-gray-700"
+                    : livePhoneInfo.detected && livePhoneInfo.detected !== form.network
+                    ? "border-indigo-400 shadow-[0_0_8px_#facc15]"
+                    : livePhoneInfo.valid
+                    ? "border-green-500"
+                    : "border-red-500"
+                }
+              `}
+            />
+
+            {/* LIVE FEEDBACK */}
+            {form.phone.length > 0 && (
+              <p className={`mt-1 text-xs ${livePhoneInfo.valid ? "text-green-400" : "text-red-400"}`}>
+                {livePhoneInfo.message}
+              </p>
+            )}
+
+            {/* DETECTED NETWORK DISPLAY */}
+            {livePhoneInfo.detected && (
+              <div className="mt-1 flex items-center gap-2 text-green-400 text-xs">
+                <img src={NETWORK_LOGOS[livePhoneInfo.detected]} className="w-4 h-4" />
+                <span>Detected: {livePhoneInfo.detected.toUpperCase()}</span>
+              </div>
+            )}
+          </div>
 
         {/* PLANS */}
         <div>
