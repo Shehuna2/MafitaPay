@@ -1,17 +1,15 @@
-// ⭐ Buy Data Engine v6 — Fastest, Cleanest, Most Stable Version (2025)
+// Buy Data Engine v6 — PREMIUM EDITION (2025)
 
 import { useEffect, useState } from "react";
 import { 
-  Loader2, CheckCircle, Zap, Crown, Gift, Shield 
+  Loader2, CheckCircle, Zap, Crown, Gift, Shield, Sparkles, Lock 
 } from "lucide-react";
 import client from "../../api/client";
 import { toast } from "react-toastify";
 import Receipt from "../../components/Receipt";
 import ShortFormLayout from "../../layouts/ShortFormLayout";
 
-// -----------------------------------------------
 // NETWORK LOGOS
-// -----------------------------------------------
 const NETWORK_LOGOS = {
   mtn: "/networks/mtn.png",
   airtel: "/networks/airtel.png",
@@ -19,20 +17,51 @@ const NETWORK_LOGOS = {
   "9mobile": "/networks/9mobile.png",
 };
 
-// -----------------------------------------------
-// CATEGORY STYLING
-// -----------------------------------------------
+// PREMIUM CATEGORY STYLING
 const CATEGORY_STYLES = {
-  SME2: { color: "text-yellow-400", border: "border-yellow-500/40", icon: Crown },
-  SME: { color: "text-green-400", border: "border-green-500/40", icon: Zap },
-  GIFTING: { color: "text-purple-400", border: "border-purple-500/40", icon: Gift },
-  CORPORATE: { color: "text-blue-400", border: "border-blue-500/40", icon: Shield },
-  REGULAR: { color: "text-gray-400", border: "border-gray-500/40", icon: null },
+  SME2: { 
+    color: "text-yellow-400", 
+    bg: "bg-yellow-500/10", 
+    border: "border-yellow-500/50", 
+    glow: "shadow-yellow-500/30",
+    gradient: "from-yellow-400/20 to-amber-600/10",
+    icon: Crown 
+  },
+  SME: { 
+    color: "text-emerald-400", 
+    bg: "bg-emerald-500/10", 
+    border: "border-emerald-500/50", 
+    glow: "shadow-emerald-500/30",
+    gradient: "from-emerald-400/20 to-teal-600/10",
+    icon: Zap 
+  },
+  GIFTING: { 
+    color: "text-purple-400", 
+    bg: "bg-purple-500/10", 
+    border: "border-purple-500/50", 
+    glow: "shadow-purple-500/30",
+    gradient: "from-purple-400/20 to-pink-600/10",
+    icon: Gift 
+  },
+  CORPORATE: { 
+    color: "text-blue-400", 
+    bg: "bg-blue-500/10", 
+    border: "border-blue-500/50", 
+    glow: "shadow-blue-500/30",
+    gradient: "from-blue-400/20 to-cyan-600/10",
+    icon: Shield 
+  },
+  REGULAR: { 
+    color: "text-gray-400", 
+    bg: "bg-gray-500/10", 
+    border: "border-gray-500/50", 
+    glow: "shadow-gray-500/20",
+    gradient: "from-gray-400/10",
+    icon: null 
+  },
 };
 
-// -----------------------------------------------
-// PHONE DETECTION
-// -----------------------------------------------
+// PHONE DETECTION & VALIDATION (unchanged logic)
 const NETWORK_PREFIXES = {
   mtn: ["0803","0806","0703","0706","0813","0816","0810","0814","0903","0906","0913","0916"],
   airtel: ["0802","0808","0708","0812","0701","0902","0907","0901","0912"],
@@ -61,9 +90,6 @@ const validateNigerianPhone = (phone) => {
   return { valid: !!detected, normalized, detected };
 };
 
-// -----------------------------------------------
-// PLAN NAME FORMATTER
-// -----------------------------------------------
 const formatPlanName = (rawName) => {
   if (!rawName) return "Unknown";
   rawName = rawName.toUpperCase();
@@ -71,26 +97,16 @@ const formatPlanName = (rawName) => {
   const days = rawName.match(/(\d+)\s*DAY/)?.[1]
     ? rawName.match(/(\d+)\s*DAY/)[1] + " DAYS"
     : "";
-  return [size, days].filter(Boolean).join(" - ") || rawName;
+  return [size, days].filter(Boolean).join(" • ") || rawName;
 };
 
-// -----------------------------------------------
-// CACHE KEY
-// -----------------------------------------------
 const CACHE_KEY = (nw) => `data_plans_${nw}_v6`;
 
-// -----------------------------------------------
-// COMPONENT
-// -----------------------------------------------
 export default function BuyData() {
   const [form, setForm] = useState({ phone: "", network: "mtn", variation_id: "" });
   const [networkLocked, setNetworkLocked] = useState(false);
-
   const [livePhoneInfo, setLivePhoneInfo] = useState({
-    normalized: "",
-    detected: null,
-    valid: false,
-    message: ""
+    normalized: "", detected: null, valid: false, message: ""
   });
 
   const [groupedPlans, setGroupedPlans] = useState({});
@@ -100,22 +116,18 @@ export default function BuyData() {
   const [loadingPurchase, setLoadingPurchase] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
-  const networkMismatch =
-    form.phone.length >= 4 &&
-    livePhoneInfo.detected &&
-    livePhoneInfo.detected !== form.network;
 
-  // ----------------------------------------------------
-  // LOAD PLANS FAST
-  // ----------------------------------------------------
+  const networkMismatch = form.phone.length >= 4 && livePhoneInfo.detected && livePhoneInfo.detected !== form.network;
+  const selectedPlan = plans.find(p => p.id === form.variation_id);
+
+  // LOAD PLANS (same logic, faster UX)
   useEffect(() => {
     let mounted = true;
-
     const loadPlans = async () => {
       setLoadingPlans(true);
       const cacheKey = CACHE_KEY(form.network);
-
       const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
+
       if (cached?.grouped) {
         setGroupedPlans(cached.grouped);
         setPlans(Object.values(cached.grouped).flat());
@@ -125,27 +137,21 @@ export default function BuyData() {
         const res = await client.get(`/bills/data/plans/?network=${form.network}`);
         const grouped = res.data.plans || {};
         const flat = Object.values(grouped).flat();
-
         if (mounted) {
           setGroupedPlans(grouped);
           setPlans(flat);
         }
-
         localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), grouped }));
       } catch (err) {
-        toast.error("Failed to refresh plans. Using cached.");
+        toast.error("Using cached plans");
       } finally {
         if (mounted) setLoadingPlans(false);
       }
     };
-
     loadPlans();
     return () => (mounted = false);
   }, [form.network]);
 
-  // ----------------------------------------------------
-  // AUTO-SELECT FIRST CATEGORY
-  // ----------------------------------------------------
   useEffect(() => {
     if (!loadingPlans && Object.keys(groupedPlans).length > 0) {
       const order = ["SME2","SME","GIFTING","CORPORATE","REGULAR"];
@@ -154,48 +160,26 @@ export default function BuyData() {
     }
   }, [groupedPlans, loadingPlans]);
 
-  // ----------------------------------------------------
-  // LIVE PHONE VALIDATION + NETWORK AUTO-DETECT
-  // ----------------------------------------------------
   const handlePhoneChange = (e) => {
     const value = e.target.value;
-
     const normalized = normalizePhone(value);
     const detected = detectNetwork(normalized);
     const validFormat = /^0\d{10}$/.test(normalized);
 
-
     let message = "";
     if (value.length < 4) message = "Enter phone number";
-    else if (!normalized.startsWith("0")) message = "Number must start with 0";
+    else if (!normalized.startsWith("0")) message = "Must start with 0";
     else if (normalized.length < 11) message = "Incomplete number";
-    else if (!detected) message = "Unknown Nigerian network";
-    else message = `✔ Valid ${detected.toUpperCase()} number`;
+    else if (!detected) message = "Unknown network";
+    else message = `Valid ${detected.toUpperCase()} number`;
 
     setLivePhoneInfo({ valid: validFormat && !!detected, normalized, detected, message });
 
     setForm(prev => {
       let newNetwork = prev.network;
-
-      // If a network is detected
-      if (detected) {
-        // If user selected manually BUT phone number is clearly another network
-        if (networkLocked && detected !== prev.network) {
-          setNetworkLocked(false); // unlock auto-selection
-          newNetwork = detected;
-        }
-
-        // If auto mode is enabled
-        if (!networkLocked) {
-          newNetwork = detected;
-        }
-      }
-
-      return {
-        ...prev,
-        phone: value,
-        network: newNetwork,
-      };
+      if (detected && !networkLocked) newNetwork = detected;
+      if (detected && networkLocked && detected !== prev.network) setNetworkLocked(false);
+      return { ...prev, phone: value, network: newNetwork };
     });
   };
 
@@ -204,31 +188,21 @@ export default function BuyData() {
     setForm(prev => ({ ...prev, network }));
   };
 
-  // ----------------------------------------------------
-  // PLAN SELECT
-  // ----------------------------------------------------
   const handlePlanClick = (plan) => {
     const { valid, detected } = validateNigerianPhone(form.phone);
     if (!valid) return toast.error("Invalid phone number");
-    if (detected !== form.network)
-      return toast.error(`This number belongs to ${detected?.toUpperCase()}`);
-
+    if (detected !== form.network) return toast.error(`This is a ${detected?.toUpperCase()} number`);
     setForm(prev => ({ ...prev, variation_id: plan.id }));
     setShowConfirm(true);
   };
 
-  const selectedPlan = plans.find(p => p.id === form.variation_id);
-
-  // ----------------------------------------------------
-  // CONFIRM PURCHASE
-  // ----------------------------------------------------
   const confirmPurchase = async () => {
     setShowConfirm(false);
-
     const { valid, normalized, detected } = validateNigerianPhone(form.phone);
-    if (!valid) return toast.error("Invalid phone number");
-    if (detected !== form.network) return toast.error("Wrong network selected.");
-    if (!selectedPlan) return toast.error("Please select a plan.");
+    if (!valid || detected !== form.network || !selectedPlan) {
+      toast.error("Invalid details");
+      return;
+    }
 
     const payload = {
       phone: normalized,
@@ -238,190 +212,198 @@ export default function BuyData() {
     };
 
     setLoadingPurchase(true);
-
     try {
       await client.post("/bills/data/", payload);
-
-      setReceiptData({
-        status: "success",
-        type: "data",
-        ...payload,
-        plan: selectedPlan.name,
-        provider: selectedPlan.provider
-      });
-
-      toast.success("Data delivered!");
-
+      setReceiptData({ status: "success", type: "data", ...payload, plan: selectedPlan.name });
+      toast.success("Data delivered instantly!");
     } catch (err) {
       const msg = err.response?.data?.message || "Purchase failed";
-
       setReceiptData({ status: "failed", type: "data", ...payload, error: msg });
-
       toast.error(msg);
-
     } finally {
       setLoadingPurchase(false);
     }
   };
 
-  // ----------------------------------------------------
-  // UI
-  // ----------------------------------------------------
   return (
     <ShortFormLayout>
-
+      {/* FULL SCREEN LOADER */}
       {loadingPurchase && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <Loader2 className="w-14 h-14 text-indigo-400 animate-spin" />
+        <div className="fixed inset-0 bg-gradient-to-br from-purple-900 via-black to-blue-900 flex items-center justify-center z-50">
+          <div className="text-center">
+            <Loader2 className="w-16 h-16 text-cyan-400 animate-spin mx-auto mb-4" />
+            <p className="text-cyan-300 text-lg font-medium">Delivering your data...</p>
+          </div>
         </div>
       )}
 
-      <div className="space-y-6">
-        {/* 🔒 Sticky Top Section */}
-        <div className="sticky top-0 z-40 bg-gray-900/95 backdrop-blur-md pb-4 space-y-6">
-          {/* Phone + Network */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            
-            {/* PHONE INPUT */}
-            <div className="flex-1">
-              <label className="text-xs text-gray-400">Phone Number</label>
+      <div className="space-y-8 pb-10">
+        {/* PREMIUM HERO HEADER */}
+        <div className="text-center py-6  rounded-2xl border border-white/10 backdrop-blur-xl">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+            Buy Data Instantly
+          </h1>
+          <p className="text-gray-300 mt-2 flex items-center justify-center gap-2">
+            <Sparkles className="w-5 h-5 text-yellow-400" />
+            Cheapest Rates • Instant Delivery • 100% Reliable
+            <Sparkles className="w-5 h-5 text-yellow-400" />
+          </p>
+        </div>
+
+        {/* STICKY INPUT SECTION */}
+        <div className="sticky top-0 z-40 bg-black/80 backdrop-blur-2xl border-b border-white/10 pb-6 space-y-6 rounded-2xl p-6 shadow-2xl">
+          {/* PHONE + NETWORK ROW */}
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* PHONE INPUT - PREMIUM FLOATING LABEL */}
+            <div className="relative">
               <input
                 type="text"
-                placeholder="0803..."
+                placeholder=" "
                 value={form.phone}
                 onChange={handlePhoneChange}
-                className={`w-full mt-1 bg-gray-800/70 rounded-xl px-4 py-3 text-white
-                  border 
-                  ${
-                    form.phone.length === 0
-                      ? "border-gray-700"
-                      : networkMismatch
-                      ? "border-yellow-400 shadow-[0_0_8px_#facc15]"
-                      : livePhoneInfo.valid
-                      ? "border-green-500"
-                      : "border-red-500"
-                  }
-                `}
+                className={`peer w-full px-5 py-4 bg-white/5 border ${
+                  networkMismatch ? "border-yellow-500/80" : 
+                  livePhoneInfo.valid ? "border-cyan-500/80" : "border-white/20"
+                } rounded-2xl text-white placeholder-transparent focus:outline-none focus:border-cyan-400 transition-all duration-300 backdrop-blur-xl`}
               />
-              {/* LIVE FEEDBACK */}
-              {form.phone.length > 0 && (
-                <p className={`mt-1 text-xs ${livePhoneInfo.valid ? "text-green-400" : "text-red-400"}`}>
-                  {livePhoneInfo.message}
-                </p>
-              )}
-
-              {/* DETECTED NETWORK */}
+              <label className="absolute left-5 -top-3 bg-black px-2 text-sm text-gray-400 peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-focus:-top-3 peer-focus:text-cyan-400 transition-all">
+                Phone Number
+              </label>
               {livePhoneInfo.detected && (
-                <div className="mt-1 flex items-center gap-2 text-green-400 text-xs">
-                  <img src={NETWORK_LOGOS[livePhoneInfo.detected]} className="w-4 h-4" />
-                  <span>Detected: {livePhoneInfo.detected.toUpperCase()}</span>
+                <div className="absolute right-3 top-3.5 flex items-center gap-2">
+                  <img src={NETWORK_LOGOS[livePhoneInfo.detected]} className="w-6 h-6 rounded" />
+                  {networkLocked && <Lock className="w-4 h-4 text-cyan-400" />}
                 </div>
               )}
+              <p className={`mt-2 text-xs ${livePhoneInfo.valid ? "text-cyan-400" : "text-red-400"} flex items-center gap-1`}>
+                {livePhoneInfo.message}
+              </p>
             </div>
 
-            {/* NETWORK SELECTOR */}
-            <div className="w-full sm:w-72">
-              <label className="text-xs text-gray-400">Network</label>
-              <div className="mt-1 grid grid-cols-4 gap-2 bg-gray-800/50 p-3 rounded-xl">
+            {/* NETWORK SELECTOR - GLASS CARDS */}
+            <div>
+              <p className="text-sm text-gray-400 mb-3">Select Network {networkLocked && "(Locked)"}</p>
+              <div className="grid grid-cols-4 gap-3">
                 {["mtn", "airtel", "glo", "9mobile"].map((network) => (
                   <button
                     key={network}
-                    type="button"
                     onClick={() => handleNetworkSelect(network)}
-                    className={`p-2 rounded-xl transition border ${
+                    className={`group relative p-4 rounded-2xl overflow-hidden transition-all duration-300 ${
                       form.network === network
-                        ? "border-indigo-500 bg-indigo-600/20"
-                        : "border-transparent bg-gray-800/30 hover:bg-gray-700/40"
+                        ? "ring-2 ring-cyan-400 shadow-2xl shadow-cyan-500/30"
+                        : "bg-white/5 hover:bg-white/10"
                     }`}
                   >
-                    <img src={NETWORK_LOGOS[network]} className="w-9 h-9 mx-auto" />
-                    <p className="text-[10px] text-white text-center mt-1">{network.toUpperCase()}</p>
+                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 to-purple-500/20 opacity-0 group-hover:opacity-100 transition" />
+                    <img src={NETWORK_LOGOS[network]} className="w-10 h-10 mx-auto relative z-10" />
+                    <p className="text-xs text-center mt-2 font-medium uppercase tracking-wider">
+                      {network}
+                    </p>
                   </button>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* CATEGORY TABS */}
-          <div className="flex gap-2 flex-wrap">
+          {/* CATEGORY TABS - GLOWING */}
+          <div className="flex flex-wrap gap-3 justify-center">
             {["SME2","SME","GIFTING","CORPORATE","REGULAR"].map((cat) => {
               const style = CATEGORY_STYLES[cat];
               const Icon = style.icon;
+              const isActive = selectedCategory === cat;
               return (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-4 py-2 rounded-xl border text-xs font-bold flex items-center gap-1 ${
-                    selectedCategory === cat
-                      ? `${style.border} ${style.color} bg-gray-900`
-                      : "bg-gray-800 text-gray-400 border-gray-700"
+                  className={`relative px-5 py-3 rounded-xl font-bold text-sm transition-all duration-300 overflow-hidden group ${
+                    isActive 
+                      ? `${style.bg} ${style.border} ${style.color} shadow-lg ${style.glow} shadow-2xl` 
+                      : "bg-white/5 text-gray-400 border border-white/10"
                   }`}
                 >
-                  {Icon && <Icon className="w-4 h-4" />}
-                  {cat}
-                  <span className="text-xs opacity-60">
-                    ({(groupedPlans[cat] || []).length})
+                  <div className={`absolute inset-0 bg-gradient-to-r ${style.gradient} opacity-50 group-hover:opacity-80 transition`} />
+                  <span className="relative flex items-center gap-2">
+                    {Icon && <Icon className="w-5 h-5" />}
+                    {cat}
+                    <span className="text-xs opacity-70">
+                      ({(groupedPlans[cat] || []).length})
+                    </span>
                   </span>
                 </button>
               );
             })}
           </div>
+        </div>
 
-          {/* PLANS */}
-          <div>
-            <div className="overflow-y-auto max-h-[70vh] pr-1 scroll-smooth">
-              <p className="text-xs text-gray-400 mb-2">Available ({selectedCategory})</p>
+        {/* PLANS GRID - EXACT SAME LAYOUT AS BEFORE */}
+        <div className="px-2">
+          <div className="text-center mb-6">
+            <h2 className="text-2xl font-bold text-white">
+              {selectedCategory} Plans
+            </h2>
+            <p className="text-gray-400">Choose your preferred data bundle</p>
+          </div>
 
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                {loadingPlans ? (
-                  [...Array(8)].map((_, i) => (
-                    <div key={i} className="bg-gray-800/50 p-4 rounded-xl border border-gray-700 animate-pulse" />
-                  ))
-                ) : (
-                  (groupedPlans[selectedCategory] || []).map(plan => (
-                    <button
-                      key={plan.id}
-                      onClick={() => handlePlanClick(plan)}
-                      className="p-3 rounded-xl bg-gray-800/60 border border-gray-700 hover:border-indigo-500 transition text-left relative"
-                    >
-                      <p className="font-semibold text-[12px] text-white">
-                        {formatPlanName(plan.name)}
-                      </p>
-                      <p className="text-[11px] font-bold text-indigo-300">
-                        ₦{Number(plan.amount).toLocaleString()}
-                      </p>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+            {loadingPlans ? (
+              [...Array(15)].map((_, i) => (
+                <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5 animate-pulse">
+                  <div className="h-4 bg-white/20 rounded mb-3" />
+                  <div className="h-6 bg-white/30 rounded" />
+                </div>
+              ))
+            ) : (
+              (groupedPlans[selectedCategory] || []).map(plan => (
+                <button
+                  key={plan.id}
+                  onClick={() => handlePlanClick(plan)}
+                  className="group relative p-5 bg-white/5 border border-white/10 rounded-2xl hover:border-cyan-500/50 hover:bg-white/10 transition-all duration-300 overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition" />
+                  
+                  <p className="font-bold text-sm text-white relative z-10">
+                    {formatPlanName(plan.name)}
+                  </p>
+                  <p className="text-xl font-extrabold text-cyan-400 mt-2 relative z-10">
+                    ₦{Number(plan.amount).toLocaleString()}
+                  </p>
 
-                      {plan.provider === "vtung" && (
-                        <span className="text-[9px] text-green-400 bg-green-500/20 px-1 rounded absolute right-1 top-1">
-                          CHEAPEST
-                        </span>
-                      )}
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
+                  {plan.provider === "vtung" && (
+                    <div className="absolute top-2 right-2 bg-gradient-to-r from-green-400 to-emerald-500 text-black text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+                      BEST PRICE
+                    </div>
+                  )}
+                </button>
+              ))
+            )}
           </div>
         </div>
       </div>
 
-      {/* CONFIRM MODAL */}
+      {/* CONFIRM MODAL - PREMIUM */}
       {showConfirm && selectedPlan && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-900 p-6 rounded-xl w-full max-w-sm border border-gray-700">
-            <h3 className="text-xl font-bold text-white mb-4">Confirm Purchase</h3>
-
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between text-gray-300"><span>Phone</span><span>{form.phone}</span></div>
-              <div className="flex justify-between text-gray-300"><span>Plan</span><span>{selectedPlan.name}</span></div>
-              <div className="flex justify-between text-gray-300"><span>Price</span><span className="font-bold">₦{selectedPlan.amount}</span></div>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 z-50">
+          <div className="bg-gradient-to-br from-gray-900 via-purple-900/20 to-black p-8 rounded-3xl border border-white/20 shadow-2xl max-w-md w-full">
+            <h3 className="text-2xl font-bold text-white mb-6 text-center">Confirm Purchase</h3>
+            
+            <div className="space-y-4 text-lg">
+              <div className="flex justify-between"><span className="text-gray-400">Phone</span><span className="text-cyan-400 font-bold">{form.phone}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Network</span><span className="text-white font-bold uppercase">{form.network}</span></div>
+              <div className="flex justify-between"><span className="text-gray-400">Plan</span><span className="text-white">{selectedPlan.name}</span></div>
+              <div className="flex justify-between text-2xl font-bold"><span className="text-gray-400">Amount</span><span className="text-cyan-400">₦{selectedPlan.amount}</span></div>
             </div>
 
-            <div className="flex gap-3 mt-6">
-              <button onClick={confirmPurchase} className="flex-1 bg-green-600 py-3 rounded-xl font-bold">
-                Confirm
+            <div className="flex gap-4 mt-8">
+              <button 
+                onClick={confirmPurchase}
+                className="flex-1 bg-gradient-to-r from-cyan-500 to-purple-600 py-4 rounded-2xl font-bold text-lg shadow-lg hover:shadow-cyan-500/50 transition"
+              >
+                Confirm & Pay
               </button>
-              <button onClick={() => setShowConfirm(false)} className="flex-1 bg-red-600 py-3 rounded-xl font-bold">
+              <button 
+                onClick={() => setShowConfirm(false)}
+                className="flex-1 bg-white/10 border border-white/20 py-4 rounded-2xl font-bold hover:bg-white/20 transition"
+              >
                 Cancel
               </button>
             </div>
