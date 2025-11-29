@@ -290,13 +290,13 @@ export default function BuyData() {
               placeholder="0803..."
               value={form.phone}
               onChange={handlePhoneChange}
-              className={`w-full mt-1 bg-gray-800/70 rounded-xl px-4 py-3 text-white
-                border 
+              className={`w-full mt-1 bg-gray-800/70 rounded-xl px-4 py-3 text-gray-400
+                border border-indigo-500/30 focus:border-indigo-400 focus:shadow-[0_0_8px_#a78bfa] outline-none
                 ${
                   form.phone.length === 0
                     ? "border-gray-700"
                     : livePhoneInfo.detected && livePhoneInfo.detected !== form.network
-                    ? "border-yellow-400 shadow-[0_0_8px_#facc15]"
+                    ? "border-indigo-400 shadow-[0_0_8px_#facc15]"
                     : livePhoneInfo.valid
                     ? "border-green-500"
                     : "border-red-500"
