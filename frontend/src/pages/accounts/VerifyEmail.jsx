@@ -126,16 +126,28 @@ export default function VerifyEmail() {
 
           // 3) Fresh register (no verified query param present)
           ) : !hasVerifiedParam && email ? (
-            <div className="space-y-6 animate-fade-in-up">
-              <Mail className="w-20 h-20 mx-auto text-indigo-400" />
-              <h1 className="text-3xl font-bold text-indigo-400">Check Your Email</h1>
-              <p className="text-gray-300">
-                We sent a verification link to:
-                <br />
-                <strong className="text-white">{email}</strong>
-              </p>
-              <p className="text-sm text-gray-400">Click the link in your email to activate your account.</p>
-            </div>
+            <>
+              <div className="space-y-6 animate-fade-in-up">
+                <Mail className="w-20 h-20 mx-auto text-indigo-400" />
+                <h1 className="text-3xl font-bold text-indigo-400">Check Your Email</h1>
+                <p className="text-gray-300">
+                  We sent a verification link to:
+                  <br />
+                  <strong className="text-white">{email}</strong>
+                </p>
+                <p className="text-sm text-gray-400">Click the link in your email to activate your account.</p>
+              </div>
+
+              <div className="space-y-6 animate-fade-in-up">
+                <button
+                  onClick={handleResend}
+                  disabled={resending || cooldown > 0}
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-70 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  {resending ? "Sending..." : (cooldown > 0 ? `Resend in ${cooldown}s` : "Resend Email")}
+                </button>
+              </div>
+            </>
 
           // 4) No email / invalid access
           ) : (

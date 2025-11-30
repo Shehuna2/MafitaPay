@@ -280,10 +280,10 @@ export default function Dashboard() {
               <ArrowDownLeft className="w-4 h-4 group-hover:translate-y-0.5 transition" />
               Deposit
             </button>
-            <button disabled onClick={() => openModal("withdraw")} className="group flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-2xl text-sm font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition haptic-feedback">
+            <Link to="/p2p/marketplace" className="group flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-2xl text-sm font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition haptic-feedback">
               <ArrowUpRight className="w-4 h-4 group-hover:-translate-y-0.5 transition" />
-              Withdraw (soon)
-            </button>
+              Withdraw (P2P)
+            </Link>
           </div>
 
           {/* Virtual Accounts */}
@@ -361,8 +361,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* MODAL, QUICK ACTIONS, EVENT CAROUSEL — UNCHANGED */}
-        {/* ... (your existing modal, quick actions, and event carousel) */}
         {/* UNIVERSAL MODAL */}
         {showModal && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">

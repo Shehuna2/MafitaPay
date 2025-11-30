@@ -199,7 +199,10 @@ export default function BuyCrypto() {
         const symbol = crypto?.symbol?.toUpperCase();
 
         /* ---------- EVM Chains ---------- */
-        const EVM = ["ETH", "BNB", "MATIC", "AVAX", "BNB-USDT", "OP-ETH", "ARB-ETH", "BASE-ETH", "LINEA-ETH"]; // USDT (ERC20)
+        const EVM = [
+          "ETH-ERC20", "BNB", "POL-MATIC", "AVAX", "BNB-USDT", "BASE-USDC", 
+          "OP-ETH", "ARB-ETH", "BASE-ETH", "LINEA-ETH"
+        ]; 
         if (EVM.includes(symbol)) {
           if (!/^0x[a-fA-F0-9]{40}$/.test(value)) {
             return "Invalid EVM address (must be 0x followed by 40 hex chars)";

@@ -1,20 +1,7 @@
-// FULL PREMIUM Assets.jsx – Pure JavaScript, Zero TypeScript
-import React, {
-  useEffect,
-  useRef,
-  useState,
-  useCallback,
-  useMemo,
-} from "react";
+// FULL PREMIUM Assets.jsx – Scrollable Asset List Version
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  ArrowUpRight,
-  ArrowDown,
-  Search,
-  Clock,
-  Star,
-  ArrowLeft,
-} from "lucide-react";
+import { ArrowUpRight, ArrowDown, Search, Clock, Star, ArrowLeft } from "lucide-react";
 import client from "../../api/client";
 
 const triggerHaptic = () => {
@@ -24,20 +11,14 @@ const triggerHaptic = () => {
 // ────────────────────────────── Error Boundary ──────────────────────────────
 class AssetCardErrorBoundary extends React.Component {
   state = { hasError: false };
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-  componentDidCatch(e, i) {
-    console.error("AssetCard error:", e, i);
-  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(e, i) { console.error("AssetCard error:", e, i); }
   render() {
     return this.state.hasError ? (
       <div className="p-4 rounded-xl bg-red-900/20 border border-red-500/30 text-red-400 text-center text-xs">
         Failed to load
       </div>
-    ) : (
-      this.props.children
-    );
+    ) : this.props.children;
   }
 }
 
@@ -76,7 +57,6 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite, isO
         className="group relative w-full bg-gray-800/80 backdrop-blur-xl p-3 rounded-xl border border-gray-700/50 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:border-indigo-500/50 cursor-pointer"
       >
         <div className="absolute inset-0 rounded-xl bg-indigo-600/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
         <div className="relative flex items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden border border-gray-600/50 bg-gray-700/50 flex-shrink-0">
@@ -94,7 +74,6 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite, isO
               <p className="text-xs text-gray-400 uppercase">{asset.symbol}</p>
             </div>
           </div>
-
           <div className="text-right flex-shrink-0 flex items-center gap-1.5 sm:gap-2">
             <div className="text-right">
               <p className="text-sm font-mono font-bold text-white leading-tight">
@@ -103,11 +82,7 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite, isO
                   maximumFractionDigits: price < 1 ? 6 : 2,
                 })}
               </p>
-              <p
-                className={`text-xs font-medium flex items-center justify-end gap-0.5 ${
-                  isPositive ? "text-green-400" : "text-red-400"
-                }`}
-              >
+              <p className={`text-xs font-medium flex items-center justify-end gap-0.5 ${isPositive ? "text-green-400" : "text-red-400"}`}>
                 {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
                 {Math.abs(change)}%
               </p>
@@ -185,35 +160,21 @@ export default function Assets() {
   const [favorites, setFavorites] = useState(JSON.parse(localStorage.getItem("favoriteAssets") || "[]"));
   const retryRef = useRef(0);
 
-  // Premium scroll handling
+  // ─────────────── Scroll tracking for sticky header ───────────────
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-
-    let ticking = false;
-    const update = () => {
-      const y = container.scrollTop;
-      setScrollY(y);
-      setIsSticky(y > 80);
-      ticking = false;
-    };
-
-    const onScroll = () => {
-      if (!ticking) {
-        requestAnimationFrame(update);
-        ticking = true;
-      }
-    };
-
-    container.addEventListener("scroll", onScroll, { passive: true });
-    return () => container.removeEventListener("scroll", onScroll);
+    const handleScroll = () => setScrollY(container.scrollTop);
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
   }, []);
+
+  useEffect(() => setIsSticky(scrollY > 80), [scrollY]);
 
   const progress = Math.min(scrollY / 180, 1);
   const scale = 1 - progress * 0.08;
-  const backdropBlur = 8 + progress * 16;
 
-  // All your original useEffects (unchanged)
+  // ─────────────── Network Status ───────────────
   useEffect(() => {
     const goOnline = () => { setIsOffline(false); fetchAssets(); };
     const goOffline = () => setIsOffline(true);
@@ -225,6 +186,7 @@ export default function Assets() {
     };
   }, []);
 
+  // ─────────────── Cache Load ───────────────
   useEffect(() => {
     const cached = localStorage.getItem(ASSET_CACHE_KEY);
     if (cached) {
@@ -235,6 +197,7 @@ export default function Assets() {
     }
   }, []);
 
+  // ─────────────── Fetch Assets ───────────────
   const fetchAssets = useCallback(async () => {
     if (isOffline) return;
     try {
@@ -274,6 +237,7 @@ export default function Assets() {
     }
   }, [isOffline, assets.length]);
 
+  // ─────────────── WebSocket Live Updates ───────────────
   useEffect(() => {
     if (isOffline) return;
     fetchAssets();
@@ -294,6 +258,7 @@ export default function Assets() {
     return () => ws.close();
   }, [fetchAssets, isOffline]);
 
+  // ─────────────── Filtering ───────────────
   const filteredAssets = useMemo(() =>
     assets.filter(a =>
       a.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -333,6 +298,7 @@ export default function Assets() {
       </div>
     ));
 
+  // ─────────────── Render ───────────────
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-3 text-center bg-gray-950">
@@ -348,7 +314,7 @@ export default function Assets() {
 
   return (
     <>
-      <div className="min-h-screen text-white">
+      <div className="min-h-screen flex flex-col text-white">
 
         {isOffline && (
           <div className="bg-yellow-600/20 border border-yellow-500/40 text-yellow-300 text-xs p-2.5 text-center">
@@ -356,121 +322,90 @@ export default function Assets() {
           </div>
         )}
 
-        <div className="max-w-4xl mx-auto h-screen flex flex-col overflow-hidden">
+        <div className="w-full flex flex-col h-screen">
 
-          <div
-            ref={scrollContainerRef}
-            className="flex-1 overflow-y-auto scrollbar-hide"
-            style={{ WebkitOverflowScrolling: "touch" }}
-          >
+          {/* Sticky Header */}
+          <div className="sticky top-0 z-50 pointer-events-auto">
+            <div
+              className="rounded-2xl border border-gray-800/50 bg-gradient-to-b from-gray-900/80 to-gray-900/60 backdrop-blur-2xl shadow-2xl transition-all duration-500 ease-out m-3 p-4"
+              style={{
+                transform: `scale(${scale})`,
+                padding: isSticky ? "12px" : "20px",
+              }}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <ArrowLeft className="w-6 h-6 text-indigo-400 flex-shrink-0" />
+                <h1
+                  className="text-2xl font-black bg-indigo-400 bg-clip-text text-transparent tracking-tight"
+                  style={{ fontSize: `${2 - progress * 0.5}rem` }}
+                >
+                  Assets
+                </h1>
+              </div>
 
-            {/* Premium Sticky Header — Now Sidebar-Friendly */}
-            <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex flex-col">
-
-              {/* This div now matches your main content width */}
-              <div
-                className="relative pointer-events-auto mx-auto w-full max-w-4xl px-3 mt-3
-                          lg:px-0 lg:pr-3"  // ← Critical: removes left padding on lg+, keeps right padding
-                style={{
-                  transform: `translateY(${isSticky ? 0 : -12}px) scale(${scale})`,
-                }}
-              >
-                <div
-                  className="rounded-2xl border border-gray-800/50 bg-gradient-to-b from-gray-900/80 to-gray-900/60 backdrop-blur-2xl shadow-2xl transition-all duration-500 ease-out"
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search 200+ assets..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-white/10 backdrop-blur-xl pl-12 pr-5 py-3.5 rounded-xl border border-gray-700/80 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/70 focus:border-indigo-500 transition-all font-medium"
                   style={{
-                    padding: isSticky ? "12px" : "20px 20px 28px",
-                    marginTop: isSticky ? "8px" : "12px",
+                    height: isSticky ? "48px" : "56px",
+                    fontSize: isSticky ? "1rem" : "1.1rem",
+                  }}
+                />
+              </div>
+
+              {recentViewed.length > 0 && (
+                <div
+                  className="mt-5 transition-all duration-500 origin-top overflow-hidden"
+                  style={{
+                    opacity: isSticky ? 0 : 1,
+                    transform: `scaleY(${isSticky ? 0.8 : 1})`,
+                    height: isSticky ? "0px" : "auto",
+                    marginTop: isSticky ? "0" : "20px",
                   }}
                 >
-                  <div className="flex items-center gap-3 mb-4">
-                    <ArrowLeft className="w-6 h-6 text-indigo-400 flex-shrink-0" />
-                    <h1
-                      className="text-2xl font-black bg-indigo-400 bg-clip-text text-transparent tracking-tight"
-                      style={{ fontSize: `${2 - progress * 0.5}rem` }}
-                    >
-                      Assets
-                    </h1>
-                  </div>
+                  <RecentViewedList recentViewed={recentViewed} />
+                </div>
+              )}
+            </div>
+          </div>
 
-                  <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-                    <input
-                      type="text"
-                      placeholder="Search 200+ assets..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="w-full bg-white/10 backdrop-blur-xl pl-12 pr-5 py-3.5 rounded-xl border border-gray-700/80 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/70 focus:border-indigo-500 transition-all font-medium"
-                      style={{
-                        height: isSticky ? "48px" : "56px",
-                        fontSize: isSticky ? "1rem" : "1.1rem",
-                      }}
+          {/* Scrollable Asset List */}
+          <div
+            className="flex-1 overflow-y-auto scrollbar-hide px-3 pb-20"
+            ref={scrollContainerRef}
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            <h2 className="text-lg font-bold text-gray-300 mb-5 opacity-80">Supported Assets</h2>
+            <div className="space-y-3">
+              {loading ? (
+                skeletonCards()
+              ) : filteredAssets.length === 0 ? (
+                <div className="text-center py-16">
+                  <Search className="w-12 h-12 mx-auto mb-3 text-gray-600" />
+                  <p className="text-gray-500">No assets match your search</p>
+                </div>
+              ) : (
+                filteredAssets.map((asset, i) => (
+                  <div key={asset.id} className="animate-fade-in-up" style={{ animationDelay: `${i * 40}ms` }}>
+                    <AssetCard
+                      asset={asset}
+                      onView={handleView}
+                      onToggleFavorite={toggleFavorite}
+                      isFavorite={favorites.includes(asset.id)}
+                      isOffline={isOffline}
                     />
                   </div>
-
-                  {recentViewed.length > 0 && (
-                    <div
-                      className="mt-5 transition-all duration-500 origin-top overflow-hidden"
-                      style={{
-                        opacity: isSticky ? 0 : 1,
-                        transform: `scaleY(${isSticky ? 0.8 : 1})`,
-                        height: isSticky ? "0px" : "auto",
-                        marginTop: isSticky ? "0" : "20px",
-                      }}
-                    >
-                      <RecentViewedList recentViewed={recentViewed} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="h-64" />
-
-            <div className="px-3 pb-20">
-              <h2 className="text-lg font-bold text-gray-300 mb-5 opacity-80">
-                Supported Assets
-              </h2>
-
-              <div className="space-y-3">
-                {loading ? (
-                  skeletonCards()
-                ) : filteredAssets.length === 0 ? (
-                  <div className="text-center py-16">
-                    <Search className="w-12 h-12 mx-auto mb-3 text-gray-600" />
-                    <p className="text-gray-500">No assets match your search</p>
-                  </div>
-                ) : (
-                  filteredAssets.map((asset, i) => (
-                    <div
-                      key={asset.id}
-                      className="animate-fade-in-up"
-                      style={{ animationDelay: `${i * 40}ms` }}
-                    >
-                      <AssetCard
-                        asset={asset}
-                        onView={handleView}
-                        onToggleFavorite={toggleFavorite}
-                        isFavorite={favorites.includes(asset.id)}
-                        isOffline={isOffline}
-                      />
-                    </div>
-                  ))
-                )}
-              </div>
+                ))
+              )}
             </div>
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-      `}</style>
     </>
   );
 }
