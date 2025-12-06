@@ -278,7 +278,7 @@ export default function Dashboard() {
           <div className="flex gap-2 mt-5">
             <button onClick={() => openModal("deposit")} className="group flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-2xl text-sm font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition haptic-feedback">
               <ArrowDownLeft className="w-4 h-4 group-hover:translate-y-0.5 transition" />
-              Deposit
+              Deposit (P2P)
             </button>
             <Link to="/p2p/marketplace" className="group flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-2xl text-sm font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition haptic-feedback">
               <ArrowUpRight className="w-4 h-4 group-hover:-translate-y-0.5 transition" />
@@ -362,56 +362,53 @@ export default function Dashboard() {
       </div>
 
         {/* UNIVERSAL MODAL */}
-        {showModal && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <div className="relative bg-indigo-600/40 backdrop-blur-xl p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-sm sm:max-w-md border border-indigo-600/30">
-              <button onClick={closeModal} className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-300 hover:text-white haptic-feedback">
-                <X className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
-              <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">
-                {modalType === "deposit" ? "Deposit Funds" : "Withdraw Funds"}
-              </h2>
-              <p className="text-sm sm:text-base text-gray-300 mb-4 sm:mb-6">
-                Choose how you’d like to {modalType === "deposit" ? "add" : "withdraw"} money.
-              </p>
-              <div className="space-y-3">
-                <Link to={modalType === "deposit" ? "/deposit/" : "/withdraw/"} onClick={closeModal} className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 hover:bg-indigo-600/20 hover:border-indigo-500/50 transition-all duration-300">
-                  <div className="flex items-center gap-3">
-                    <Building2 className="w-6 h-6 text-indigo-400" />
-                    <div>
-                      <p className="font-medium text-white">Bank Transfer</p>
-                      <p className="text-xs text-gray-400">Instant via your bank</p>
+          {showModal && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+              <div className="relative bg-indigo-600/40 backdrop-blur-xl p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-sm sm:max-w-md border border-indigo-600/30">
+                <button onClick={closeModal} className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-300 hover:text-white haptic-feedback">
+            <X className="w-5 h-5 sm:w-6 sm:h-6" />
+                </button>
+                <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">
+            {modalType === "deposit" ? "Deposit Funds" : "Withdraw Funds"}
+                </h2>
+                <p className="text-sm sm:text-base text-gray-300 mb-4 sm:mb-6">
+            Choose how you’d like to {modalType === "deposit" ? "add" : "withdraw"} money.
+                </p>
+                <div className="space-y-3">
+                  <Link to="/p2p/marketplace" onClick={closeModal} className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 hover:bg-indigo-600/20 hover:border-indigo-500/50 transition-all duration-300">
+                    <div className="flex items-center gap-3">
+                      <Repeat2 className="w-6 h-6 text-indigo-400" />
+                      <div>
+                        <p className="font-medium text-white">P2P Marketplace</p>
+                        <p className="text-xs text-gray-400">Trade directly with users</p>
+                      </div>
                     </div>
-                  </div>
-                  <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
-                </Link>
-                <Link to="/p2p/marketplace" onClick={closeModal} className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 hover:bg-indigo-600/20 hover:border-indigo-500/50 transition-all duration-300">
-                  <div className="flex items-center gap-3">
-                    <Repeat2 className="w-6 h-6 text-indigo-400" />
-                    <div>
-                      <p className="font-medium text-white">P2P Marketplace</p>
-                      <p className="text-xs text-gray-400">Trade directly with users</p>
-                    </div>
-                  </div>
-                  <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
-                </Link>
-                <Link to="/p2p/marketplace" onClick={closeModal} className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 hover:bg-indigo-600/20 hover:border-indigo-500/50 transition-all duration-300">
-                  <div className="flex items-center gap-3">
-                    <Repeat2 className="w-6 h-6 text-indigo-400" />
-                    <div>
-                      <p className="font-medium text-white">Cards Deposit</p>
-                      <p className="text-xs text-gray-400">Instant Card Deposit</p>
-                    </div>
-                  </div>
-                  <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
-                </Link>
+                    <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
+                  </Link>
+            <div className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 opacity-60 cursor-not-allowed select-none">
+              <div className="flex items-center gap-3">
+                <Building2 className="w-6 h-6 text-indigo-400" />
+                <div>
+                  <p className="font-medium text-white">Bank Transfer (coming soon)</p>
+                  <p className="text-xs text-gray-400">Instant via your bank</p>
+                </div>
+              </div>
+              <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
+            </div>
+            <div className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 opacity-60 cursor-not-allowed select-none">
+              <div className="flex items-center gap-3">
+                <Repeat2 className="w-6 h-6 text-indigo-400" />
+                <div>
+                  <p className="font-medium text-white">Cards Deposit (coming soon)</p>
+                  <p className="text-xs text-gray-400">Instant Card Deposit</p>
+                </div>
+              </div>
+              <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
+            </div>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-
-
-      {/* Quick Actions */}
+          )}
       <div className="px-2 sm:px-4 pb-6">
         <div className="grid grid-cols-3 gap-4">
           {[ 
