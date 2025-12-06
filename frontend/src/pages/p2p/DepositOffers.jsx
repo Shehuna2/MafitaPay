@@ -122,12 +122,11 @@ export default function DepositOffers() {
                 <p
                   className="font-semibold text-lg truncate max-w-[150px] sm:max-w-none"
                   data-tooltip-id={`merchant-name-${offer.id}`}
-                  data-tooltip-content={offer.merchant_email}
+                  data-tooltip-content={`${offer.merchant_profile?.full_name}`}
                 >
-                  {offer.merchant_profile.full_name || offer.merchant_email}
+                  {offer.merchant_profile?.full_name}
                 </p>
 
-                {/* Show merchant badge to everyone, not just the merchant */}
                 <div className="bg-indigo-600/90 text-white text-xs font-semibold px-2 py-1 rounded-full flex items-center gap-1 shadow-md">
                   <User className="w-3 h-3" /> Merchant
                 </div>
@@ -373,7 +372,7 @@ export default function DepositOffers() {
               X
             </button>
             <h3 className="text-xl font-semibold mb-3 text-indigo-400">
-              Deposit with {selectedOffer.merchant_profile.full_name || selectedOffer.merchant_email}
+              {selectedOffer.merchant_profile?.full_name}
             </h3>
             <p className="text-sm text-gray-400 mb-2">
               Rate: ₦{selectedOffer.price_per_unit.toLocaleString()} | Min: ₦

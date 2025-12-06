@@ -132,14 +132,16 @@ export default function WithdrawOffers() {
                 <p
                   className="font-semibold text-lg truncate max-w-[150px] sm:max-w-none"
                   data-tooltip-id={`merchant-name-${offer.id}`}
-                  data-tooltip-content={offer.merchant_email}
+                  data-tooltip-content={`${offer.merchant_profile?.first_name} ${offer.merchant_profile?.last_name}`}
                 >
-                  {offer.merchant_profile?.full_name || offer.merchant_email}
+                  {offer.merchant_profile?.first_name} {offer.merchant_profile?.last_name}
                 </p>
+
                 <div className="bg-indigo-600/90 text-white text-xs font-semibold px-2 py-1 rounded-full flex items-center gap-1 shadow-md">
                   <User className="w-3 h-3" /> Merchant
                 </div>
               </div>
+
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <p className="text-sm text-gray-400">
                   Rate: ₦{Number(offer.price_per_unit || 0).toLocaleString()}
@@ -359,7 +361,7 @@ export default function WithdrawOffers() {
                 X
               </button>
               <h3 className="text-xl font-semibold mb-3 text-indigo-400">
-                Withdraw with {selectedOffer.merchant_profile?.full_name || selectedOffer.merchant_email}
+                {selectedOffer.merchant_profile?.full_name}
               </h3>
               <p className="text-sm text-gray-400 mb-2">
                 Rate: ₦{Number(selectedOffer.price_per_unit || 0).toLocaleString()} | Min: ₦

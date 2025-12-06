@@ -213,13 +213,13 @@ export default function BaseOrderDetails({ type }) {
         if (isManual) {
           toast.error(
             err.response?.data?.detail ||
-              err.response?.data?.error ||
-              "Failed to load order"
+            err.response?.data?.error ||
+            "Failed to load order"
           );
         }
         console.error("fetchOrder error", err.message);
       } finally {
-        if (isManual) setLoading(false);
+        setLoading(false);
       }
     },
     [orderId, basePath, type]
@@ -251,13 +251,14 @@ export default function BaseOrderDetails({ type }) {
 
       ws.onopen = () => console.debug("WebSocket connected:", wsUrlWithToken);
 
-      ws.onmessage = (event) => {
+      ws.onmessage = async (event) => {
         const data = JSON.parse(event.data);
         if (data.type === "order_update") {
           console.debug("WebSocket order update:", data.data);
           setOrder(data.data);
           setTimeLeft(calculateTimeLeft(data.data.created_at));
-          const user = getStoredUser();
+          // Use cached user (never spam profile API)
+          const user = await getCachedUser(false);
           const detected = detectRole(data.data, user, type, type === "withdraw" ? "seller" : "buyer");
           setRole(detected);
           toast.dismiss();

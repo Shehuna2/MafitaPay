@@ -4,12 +4,23 @@ from .models import Deposit_P2P_Offer, DepositOrder, Withdraw_P2P_Offer, Withdra
 from accounts.models import UserProfile
 from wallet.models import Wallet
 
+
 class MerchantProfileSerializer(serializers.ModelSerializer):
     total_trades = serializers.IntegerField(read_only=True)
     success_rate = serializers.FloatField(read_only=True)
+    full_name = serializers.SerializerMethodField()
+
     class Meta:
         model = UserProfile
-        fields = ["first_name", "last_name", "bank_name", "account_no", "phone_number", "total_trades", "success_rate"]
+        fields = [
+            "first_name", "last_name", "full_name",
+            "bank_name", "account_no", "phone_number",
+            "total_trades", "success_rate"
+        ]
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
+
 
 class DepositOfferSerializer(serializers.ModelSerializer):
     merchant_email = serializers.EmailField(source="merchant.email", read_only=True)
