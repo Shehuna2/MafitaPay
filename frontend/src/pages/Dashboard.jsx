@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   Wallet, Phone, Globe, List, Repeat, Repeat2, Tv, Zap, Book, Users, Fuel,
   RefreshCw, ArrowUpRight, ArrowDownLeft, Eye, EyeOff, X,
-  Building2, ArrowRightLeft
+  Building2, ArrowRightLeft, LucideCreditCard
 } from "lucide-react";
 import client from "../api/client";
 
@@ -278,7 +278,7 @@ export default function Dashboard() {
           <div className="flex gap-2 mt-5">
             <button onClick={() => openModal("deposit")} className="group flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-2xl text-sm font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition haptic-feedback">
               <ArrowDownLeft className="w-4 h-4 group-hover:translate-y-0.5 transition" />
-              Deposit (P2P)
+              Deposit
             </button>
             <Link to="/p2p/marketplace" className="group flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-2xl text-sm font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition haptic-feedback">
               <ArrowUpRight className="w-4 h-4 group-hover:-translate-y-0.5 transition" />
@@ -397,7 +397,7 @@ export default function Dashboard() {
             </div>
             <div className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 opacity-60 cursor-not-allowed select-none">
               <div className="flex items-center gap-3">
-                <Repeat2 className="w-6 h-6 text-indigo-400" />
+                <LucideCreditCard className="w-6 h-6 text-indigo-400" />
                 <div>
                   <p className="font-medium text-white">Cards Deposit (coming soon)</p>
                   <p className="text-xs text-gray-400">Instant Card Deposit</p>
