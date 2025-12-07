@@ -463,7 +463,7 @@ export default function BaseOrderDetails({ type }) {
 
   const canCancel =
     status === "pending" &&
-    ((type === "withdraw" && (role === "seller" || role === "merchant")) ||
+    ((type === "withdraw" && (role === "merchant")) ||
       (type === "deposit" && role === "buyer"));
 
   return (

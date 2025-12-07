@@ -27,6 +27,9 @@ export default function MerchantOrders() {
   const [user, setUser] = useState(null);
   const [showReleaseModal, setShowReleaseModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState(null);
+
 
   // Audio for new order notification
   const notificationSound = new Audio("/assets/sounds/notification.mp3");
@@ -40,6 +43,8 @@ export default function MerchantOrders() {
       return null;
     }
   };
+
+
 
   // Load user on mount
   useEffect(() => {
@@ -101,6 +106,32 @@ export default function MerchantOrders() {
     return () => clearInterval(interval);
   }, [typeFilter]);
 
+  useEffect(() => {
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${protocol}://${window.location.host}/ws/merchant-orders/`);
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "order_update" || data.type === "order_list_update") {
+          fetchOrders(false);
+        }
+      } catch (err) {
+        console.error("WS parse error:", err);
+      }
+    };
+
+    ws.onclose = () => {
+      setTimeout(() => {
+        console.log("WS reconnecting...");
+      }, 3000);
+    };
+
+    return () => ws.close();
+  }, []);
+
+
   const handleFilter = (type) => {
     setTypeFilter(type);
     if (type === "all") setFiltered(orders);
@@ -130,6 +161,33 @@ export default function MerchantOrders() {
       setProcessingId(null);
       setShowReleaseModal(false);
       setSelectedOrder(null);
+    }
+  };
+
+  const confirmCancel = (order) => {
+    setCancelTarget(order);
+    setShowCancelModal(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelTarget) return;
+    const { id, type } = cancelTarget;
+    setProcessingId(id);
+    try {
+      const url =
+        type === "withdraw"
+          ? `p2p/withdraw-orders/${id}/cancel/`
+          : `p2p/orders/${id}/cancel/`;
+
+      await client.post(url);
+      toast.info("Order cancelled.");
+      await fetchOrders(true);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Failed to cancel order.");
+    } finally {
+      setProcessingId(null);
+      setShowCancelModal(false);
+      setCancelTarget(null);
     }
   };
 
@@ -311,9 +369,9 @@ export default function MerchantOrders() {
                       {processingId === o.id ? "..." : "Release"}
                     </button>
                   )}
-                  {o.status === "pending" && (
+                  {isWithdraw && o.status === "pending" && (
                     <button
-                      onClick={() => cancelOrder(o)}
+                      onClick={() => confirmCancel(o)}
                       disabled={processingId === o.id}
                       className="bg-red-600 hover:bg-red-500 px-3 py-1 rounded-lg text-sm flex items-center gap-1 disabled:opacity-60"
                     >
@@ -361,6 +419,41 @@ export default function MerchantOrders() {
           </Dialog.Panel>
         </div>
       </Dialog>
+      <Dialog
+        open={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        className="relative z-50"
+      >
+        <div className="fixed inset-0 bg-black/70" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-gray-700 shadow-lg">
+            <Dialog.Title className="text-lg font-semibold text-white mb-4">
+              Cancel Order
+            </Dialog.Title>
+            <Dialog.Description className="text-gray-300 mb-6">
+              Are you sure you want to cancel withdraw order #
+              {cancelTarget?.id}? This action cannot be undone.
+            </Dialog.Description>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg"
+              >
+                Keep Order
+              </button>
+              <button
+                onClick={handleConfirmCancel}
+                disabled={processingId}
+                className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg disabled:opacity-60"
+              >
+                {processingId ? "..." : "Cancel Order"}
+              </button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+
     </div>
   );
 }
