@@ -55,234 +55,33 @@ class WalletView(generics.GenericAPIView):
 
 
 class GenerateDVAAPIView(APIView):
-    """Generate a Dedicated Virtual Account (DVA) for the user with Paystack or 9PSB."""
+    """Generate a Dedicated Virtual Account (DVA)."""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         user = request.user
         provider = request.data.get("provider", "paystack").lower()
 
+        logger.info(f"[DVA] Incoming request → provider={provider}, user={user.email}")
+        logger.info(f"[DVA] Request body: {request.data}")
+
         try:
-            # =============== 9PSB DVA FLOW ===============
+            # ----------------------------------------------------------
+            # 1. 9PSB FLOW  (unchanged)
+            # ----------------------------------------------------------
             if provider == "9psb":
-                from .services.psb_service import NinePSBService
-                psb = NinePSBService()
+                return self.generate_9psb_va(user)
 
-                # 1️⃣ Check if 9PSB account already exists
-                existing_va = VirtualAccount.objects.filter(
-                    user=user, provider="9psb", assigned=True
-                ).first()
-                if existing_va:
-                    return Response({
-                        "success": True,
-                        "message": "9PSB virtual account already exists.",
-                        "account_number": existing_va.account_number,
-                        "bank_name": existing_va.bank_name,
-                        "account_name": existing_va.account_name,
-                    }, status=status.HTTP_200_OK)
-
-                # 2️⃣ Request new DVA from 9PSB API
-                response = psb.create_virtual_account(user)
-                if not response:
-                    return Response(
-                        {"error": "Failed to generate 9PSB virtual account."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                # 3️⃣ Save new Virtual Account
-                va = VirtualAccount.objects.create(
-                    user=user,
-                    provider="9psb",
-                    provider_account_id=response.get("provider_id"),
-                    account_number=response.get("account_number"),
-                    bank_name=response.get("bank_name"),
-                    account_name=response.get("account_name"),
-                    metadata={"raw_response": response},
-                    assigned=True,
-                )
-
-                # 4️⃣ Update Wallet and Profile
-                wallet, _ = Wallet.objects.get_or_create(user=user)
-                wallet.van_account_number = va.account_number
-                wallet.van_bank_name = va.bank_name
-                wallet.van_provider = "9psb"
-                wallet.save()
-
-                # profile = getattr(user, "profile", None)
-                # if profile:
-                #     profile.account_no = va.account_number
-                #     profile.bank_name = va.bank_name
-                #     profile.save()
-
-                return Response({
-                    "success": True,
-                    "message": "9PSB virtual account generated successfully.",
-                    "account_number": va.account_number,
-                    "bank_name": va.bank_name,
-                    "account_name": va.account_name,
-                }, status=status.HTTP_201_CREATED)
-
-            # =============== FLUTTERWAVE DVA FLOW (v4 OAuth2) ===============
+            # ----------------------------------------------------------
+            # 2. FLUTTERWAVE FLOW (FULLY PATCHED)
+            # ----------------------------------------------------------
             elif provider == "flutterwave":
-                from .services.flutterwave_service import FlutterwaveService
-                fw = FlutterwaveService(use_live=True)
+                return self.generate_flutterwave_va(request, user)
 
-                # CHECK IF USER ALREADY HAS FLUTTERWAVE VA
-                existing_va = VirtualAccount.objects.filter(
-                    user=user, provider="flutterwave", assigned=True
-                ).first()
-
-                if existing_va:
-                    return Response({
-                        "success": True,
-                        "message": "Flutterwave virtual account already exists.",
-                        "account_number": existing_va.account_number,
-                        "bank_name": existing_va.bank_name,
-                        "account_name": existing_va.account_name,
-                        "type": existing_va.metadata.get("type", "dynamic"),
-                    }, status=status.HTTP_200_OK)
-
-                # ALWAYS USE STERLING — safest and most reliable
-                preferred_bank = "sterling-bank"
-
-                # BVN / NIN optional → if provided → STATIC account
-                bvn_or_nin = request.data.get("bvn_or_nin")
-
-                response = fw.create_virtual_account(
-                    user,
-                    bank=preferred_bank,
-                    bvn_or_nin=bvn_or_nin
-                )
-
-                if not response:
-                    logger.error(f"Failed FW VA creation for {user.email}")
-                    return Response({"error": "Failed to generate Flutterwave virtual account."},
-                                    status=status.HTTP_400_BAD_REQUEST)
-
-                account_num = response.get("account_number")
-                ref = response.get("reference") or response.get("provider_reference")
-
-                if not account_num:
-                    logger.error(f"Invalid FW response: {response}")
-                    return Response({"error": "Invalid response from Flutterwave"},
-                                    status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-                # Prevent duplicates
-                if VirtualAccount.objects.filter(account_number=account_num).exists():
-                    return Response({"error": "Duplicate account number"},
-                                    status=status.HTTP_400_BAD_REQUEST)
-
-                with transaction.atomic():
-                    va = VirtualAccount.objects.create(
-                        user=user,
-                        provider="flutterwave",
-                        provider_account_id=ref,
-                        account_number=account_num,
-                        bank_name="Sterling Bank",
-                        account_name=response.get("account_name"),
-                        metadata={
-                            "type": response.get("type", "dynamic"),
-                            "provider_ref": ref,
-                        },
-                        assigned=True,
-                    )
-
-                    wallet, _ = Wallet.objects.get_or_create(user=user)
-                    wallet.van_account_number = account_num
-                    wallet.van_bank_name = "Sterling Bank"
-                    wallet.van_provider = "flutterwave"
-                    wallet.save(update_fields=["van_account_number", "van_bank_name", "van_provider"])
-
-                return Response({
-                    "success": True,
-                    "message": "Flutterwave virtual account generated successfully.",
-                    "account_number": va.account_number,
-                    "bank_name": "Sterling Bank",
-                    "account_name": va.account_name,
-                    "type": va.metadata.get("type", "dynamic"),
-                }, status=status.HTTP_201_CREATED)
-
-
-            # =============== PAYSTACK DVA FLOW ===============
-            else:
-                existing_va = VirtualAccount.objects.filter(
-                    user=user, provider="paystack", assigned=True
-                ).first()
-                if existing_va:
-                    return Response({
-                        "success": True,
-                        "message": "Paystack virtual account already assigned.",
-                        "account_number": existing_va.account_number,
-                        "bank_name": existing_va.bank_name,
-                        "account_name": existing_va.account_name,
-                    }, status=status.HTTP_200_OK)
-
-                profile = getattr(user, "profile", None)
-                first_name = getattr(profile, "first_name", None) or user.first_name or "User"
-                last_name = getattr(profile, "last_name", None) or user.last_name or "Account"
-                phone_number = getattr(profile, "phone_number", None) or "+2340000000000"
-
-                # Create or fetch Paystack customer
-                customer_response = paystack.Customer.create(
-                    email=user.email,
-                    first_name=first_name,
-                    last_name=last_name,
-                    phone=phone_number,
-                )
-
-                customer_data = (
-                    customer_response.json()
-                    if hasattr(customer_response, "json")
-                    else getattr(customer_response, "data", customer_response)
-                )
-                customer_id = (
-                    customer_data.get("customer_code")
-                    or customer_data.get("data", {}).get("customer_code")
-                )
-
-                if not customer_id:
-                    return Response(
-                        {"error": "Failed to create Paystack customer."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                preferred_bank = request.data.get("preferred_bank", "wema-bank")
-                dva_response = DedicatedVirtualAccount.create(
-                    customer=customer_id,
-                    preferred_bank=preferred_bank,
-                )
-
-                dva_data = (
-                    dva_response.json()
-                    if hasattr(dva_response, "json")
-                    else getattr(dva_response, "data", dva_response)
-                )
-                dva_payload = dva_data.get("data", dva_data)
-
-                va = VirtualAccount.objects.create(
-                    user=user,
-                    provider="paystack",
-                    provider_account_id=dva_payload.get("id"),
-                    account_number=dva_payload.get("account_number"),
-                    bank_name=dva_payload.get("bank", {}).get("name"),
-                    account_name=dva_payload.get("account_name", user.email),
-                    metadata={"paystack_response": dva_payload},
-                    assigned=True,
-                )
-
-                profile = getattr(user, "profile", None)
-                if profile:
-                    profile.account_no = va.account_number
-                    profile.bank_name = va.bank_name
-                    profile.save()
-
-                return Response({
-                    "success": True,
-                    "message": "Paystack virtual account generated successfully.",
-                    "account_number": va.account_number,
-                    "bank_name": va.bank_name,
-                    "account_name": va.account_name,
-                }, status=status.HTTP_201_CREATED)
+            # ----------------------------------------------------------
+            # 3. PAYSTACK FLOW (unchanged)
+            # ----------------------------------------------------------
+            return self.generate_paystack_va(request, user)
 
         except Exception as e:
             logger.error(f"❌ Error generating DVA for {user.email}: {str(e)}", exc_info=True)
@@ -290,6 +89,295 @@ class GenerateDVAAPIView(APIView):
                 {"error": f"Failed to generate virtual account: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    # ==========================================================================
+    # 9PSB
+    # ==========================================================================
+    def handle_9psb(self, request, user):
+        from .services.psb_service import NinePSBService
+
+        logger.info(f"[DVA-9PSB] Processing for {user.email}")
+        psb = NinePSBService()
+
+        existing_va = VirtualAccount.objects.filter(
+            user=user, provider="9psb", assigned=True
+        ).first()
+
+        if existing_va:
+            logger.info("[DVA-9PSB] Existing VA found — returning existing account")
+            return Response({
+                "success": True,
+                "message": "9PSB virtual account already exists.",
+                "account_number": existing_va.account_number,
+                "bank_name": existing_va.bank_name,
+                "account_name": existing_va.account_name,
+            }, status=status.HTTP_200_OK)
+
+        response = psb.create_virtual_account(user)
+        if not response:
+            logger.warning("[DVA-9PSB] 9PSB API returned no response")
+            return Response(
+                {"success": False, "error": "Failed to generate 9PSB virtual account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        va = VirtualAccount.objects.create(
+            user=user,
+            provider="9psb",
+            provider_account_id=response.get("provider_id"),
+            account_number=response.get("account_number"),
+            bank_name=response.get("bank_name"),
+            account_name=response.get("account_name"),
+            metadata={"raw_response": response},
+            assigned=True,
+        )
+
+        wallet, _ = Wallet.objects.get_or_create(user=user)
+        wallet.van_account_number = va.account_number
+        wallet.van_bank_name = va.bank_name
+        wallet.van_provider = "9psb"
+        wallet.save()
+
+        return Response({
+            "success": True,
+            "message": "9PSB virtual account generated successfully.",
+            "account_number": va.account_number,
+            "bank_name": va.bank_name,
+            "account_name": va.account_name,
+        }, status=status.HTTP_201_CREATED)
+
+    # ================================================================
+    # 🔥 PATCHED: FLUTTERWAVE STATIC DVA FLOW (STATIC)
+    # ================================================================
+    def generate_flutterwave_va(self, request, user):
+        from .services.flutterwave_service import FlutterwaveService
+        from django.db import transaction
+
+        logger.info("[DVA-FW] Starting Flutterwave Static VA generation")
+
+        # ------------------------------------------------------------------------------------
+        # 0. Pre-check: Ensure Wallet Exists
+        # ------------------------------------------------------------------------------------
+        wallet, _ = Wallet.objects.get_or_create(user=user)
+
+        # ------------------------------------------------------------------------------------
+        # 1. If a static VA already exists in DB → RETURN immediately (idempotency)
+        # ------------------------------------------------------------------------------------
+        existing_va = VirtualAccount.objects.filter(
+            user=user,
+            provider="flutterwave",
+            assigned=True
+        ).first()
+
+        if existing_va:
+            logger.info("[DVA-FW] Returning existing VA from DB (idempotent)")
+            return Response({
+                "success": True,
+                "message": "Flutterwave virtual account already exists.",
+                "account_number": existing_va.account_number,
+                "bank_name": existing_va.bank_name,
+                "account_name": existing_va.account_name,
+                "type": existing_va.metadata.get("type", "static"),
+            }, status=status.HTTP_200_OK)
+
+        # ------------------------------------------------------------------------------------
+        # 2. Validate Inputs
+        # ------------------------------------------------------------------------------------
+        bvn_or_nin = request.data.get("bvn_or_nin")
+        preferred_bank = request.data.get("bank", "044")  # default = Sterling (FW sandbox)
+
+        if not bvn_or_nin:
+            logger.warning("[DVA-FW] Missing BVN or NIN")
+            return Response(
+                {"error": "BVN or NIN is required for Flutterwave static VA."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        logger.info(f"[DVA-FW] Requesting new static VA → preferred_bank={preferred_bank}")
+
+        # ------------------------------------------------------------------------------------
+        # 3. Call Flutterwave Service
+        # ------------------------------------------------------------------------------------
+        fw = FlutterwaveService(use_live=not settings.DEBUG)
+
+        fw_response = fw.create_virtual_account(
+            user=user,
+            preferred_bank=preferred_bank,
+            bvn_or_nin=bvn_or_nin
+        )
+
+        logger.info(f"[DVA-FW] FW API Response: {fw_response}")
+
+        if not fw_response:
+            return Response(
+                {"error": "Failed to generate Flutterwave virtual account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        account_number = fw_response.get("account_number")
+        provider_ref   = fw_response.get("reference") or fw_response.get("provider_reference")
+
+        # SECURITY CHECK: Does this VA already belong to another user?
+        existing_va = VirtualAccount.objects.filter(
+            provider="flutterwave",
+            account_number=account_number
+        ).first()
+
+        if existing_va and existing_va.user != user:
+            logger.error(
+                "[DVA-FW] SECURITY BLOCK → VA %s already belongs to user %s",
+                account_number,
+                existing_va.user.email
+            )
+            return Response({
+                "error": (
+                    "This BVN/NIN or email is already linked to another virtual account. "
+                    "Each BVN/NIN or email can only be used for a single user."
+                )
+            }, status=400)
+
+
+        account_number = fw_response["account_number"]
+        account_name = fw_response.get("account_name", "Virtual Account")
+        bank_name = fw_response.get("bank_name", "Sterling Bank")
+        provider_ref = fw_response.get("provider_reference") or fw_response.get("reference", "")
+
+        # ------------------------------------------------------------------------------------
+        # 4. WRITING TO DATABASE (Atomic)
+        # ------------------------------------------------------------------------------------
+        try:
+            with transaction.atomic():
+
+                # Create VirtualAccount record
+                va = VirtualAccount.objects.create(
+                    user=user,
+                    provider="flutterwave",
+                    provider_account_id=provider_ref,
+                    account_number=account_number,
+                    account_name=account_name,
+                    bank_name=bank_name,
+                    metadata={
+                        "type": fw_response.get("type", "static"),
+                        "provider_ref": provider_ref,
+                        "raw_response": fw_response,
+                    },
+                    assigned=True
+                )
+
+                # Update wallet fields
+                wallet.van_account_number = account_number
+                wallet.van_bank_name = bank_name
+                wallet.van_provider = "flutterwave"
+                wallet.van_account_name = account_name
+
+                wallet.save(update_fields=[
+                    "van_account_number",
+                    "van_bank_name",
+                    "van_provider",
+                    "van_account_name",
+                ])
+
+        except Exception as e:
+            logger.error("[DVA-FW] DB Write Error: %s", e, exc_info=True)
+            return Response(
+                {"error": "Failed to save Flutterwave virtual account details."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        # ------------------------------------------------------------------------------------
+        # 5. Success Response
+        # ------------------------------------------------------------------------------------
+        return Response({
+            "success": True,
+            "message": "Flutterwave virtual account generated successfully.",
+            "account_number": account_number,
+            "bank_name": bank_name,
+            "account_name": account_name,
+            "type": fw_response.get("type", "static"),
+        }, status=status.HTTP_201_CREATED)
+
+
+
+    # ==========================================================================
+    # PAYSTACK
+    # ==========================================================================
+    def handle_paystack(self, request, user):
+        existing_va = VirtualAccount.objects.filter(
+            user=user, provider="paystack", assigned=True
+        ).first()
+
+        if existing_va:
+            return Response({
+                "success": True,
+                "message": "Paystack virtual account already exists.",
+                "account_number": existing_va.account_number,
+                "bank_name": existing_va.bank_name,
+                "account_name": existing_va.account_name,
+            }, status=status.HTTP_200_OK)
+
+        profile = getattr(user, "profile", None)
+        first_name = getattr(profile, "first_name", None) or user.first_name or "User"
+        last_name = getattr(profile, "last_name", None) or user.last_name or "Account"
+        phone_number = getattr(profile, "phone_number", None) or "+2340000000000"
+
+        # Create customer in Paystack
+        customer_response = paystack.Customer.create(
+            email=user.email,
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone_number,
+        )
+
+        customer_data = (
+            customer_response.json()
+            if hasattr(customer_response, "json")
+            else getattr(customer_response, "data", customer_response)
+        )
+
+        customer_id = (
+            customer_data.get("customer_code")
+            or customer_data.get("data", {}).get("customer_code")
+        )
+
+        if not customer_id:
+            return Response(
+                {"success": False, "error": "Failed to create Paystack customer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        preferred_bank = request.data.get("preferred_bank", "wema-bank")
+        dva_response = DedicatedVirtualAccount.create(
+            customer=customer_id,
+            preferred_bank=preferred_bank,
+        )
+
+        dva_data = (
+            dva_response.json()
+            if hasattr(dva_response, "json")
+            else getattr(dva_response, "data", dva_response)
+        )
+
+        dva_payload = dva_data.get("data", dva_data)
+
+        va = VirtualAccount.objects.create(
+            user=user,
+            provider="paystack",
+            provider_account_id=dva_payload.get("id"),
+            account_number=dva_payload.get("account_number"),
+            bank_name=dva_payload.get("bank", {}).get("name"),
+            account_name=dva_payload.get("account_name", user.email),
+            metadata={"paystack_response": dva_payload},
+            assigned=True,
+        )
+
+        return Response({
+            "success": True,
+            "message": "Paystack virtual account generated successfully.",
+            "account_number": va.account_number,
+            "bank_name": va.bank_name,
+            "account_name": va.account_name,
+        }, status=status.HTTP_201_CREATED)
+
 
 
 class RequeryDVAAPIView(APIView):

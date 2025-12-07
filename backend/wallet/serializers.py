@@ -31,6 +31,9 @@ class VirtualAccountSerializer(serializers.ModelSerializer):
         model = VirtualAccount
         fields = ["id", "account_number", "bank_name", "provider"]
 
+    def get_type(self, obj):
+        return "static"
+
     def get_bank_name(self, obj):
         # Try DB field first
         if obj.bank_name:
