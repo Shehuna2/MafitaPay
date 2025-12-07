@@ -1,150 +1,104 @@
 // src/pages/Deposit.jsx
 import React, { useState, useEffect } from "react";
 import client from "../../api/client";
-import { Loader2, Copy, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
+import { Loader2, RefreshCcw, Copy, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 export default function Deposit() {
-  const [provider, setProvider] = useState("flutterwave");
-  const [dva, setDva] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [bvnOrNin, setBvnOrNin] = useState("");
-  const [copied, setCopied] = useState(false);
-  const [showHausa, setShowHausa] = useState(false);
-  const [bvnError, setBvnError] = useState(""); 
-  const [generateError, setGenerateError] = useState(""); // NEW INLINE ERROR
+  // Initialize with null values
+  const [dvaDetails, setDvaDetails] = useState({
+    account_number: null,
+    bank_name: null,
+    account_name: null,
+    provider: null,
+    type: null
+  });
 
-  // ===============================================================
-  // Fetch existing Static VA
-  // ===============================================================
+  const [loading, setLoading] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [provider, setProvider] = useState("flutterwave");
+  const [copied, setCopied] = useState(false);
+
+
+
+  const [bvnOrNin, setBvnOrNin] = useState("");
+  const [showBvnField, setShowBvnField] = useState(false);
+
   useEffect(() => {
-    const loadVA = async () => {
+    const fetchWallet = async () => {
       setLoading(true);
       try {
-        const res = await client.get(`/wallet/?provider=${provider}`);
-        if (res.data.van_account_number) {
-          setDva({
-            account_number: res.data.van_account_number,
-            account_name: res.data.van_account_name,
-            bank_name: res.data.van_bank_name,
-            type: "static",
+        const response = await client.get(`/wallet/?provider=${provider}`); 
+        if (response.data.van_account_number) {
+          setDvaDetails({
+            account_number: response.data.van_account_number,
+            bank_name: response.data.van_bank_name,
+            account_name: response.data.van_account_name,
+            provider: response.data.van_provider || provider,
+            type: response.data.type || "static"
           });
         } else {
-          setDva(null);
+          setDvaDetails({
+            account_number: null,
+            bank_name: null,
+            account_name: null,
+            provider: null,
+            type: null
+          });
         }
       } catch (err) {
-        console.error("Fetch wallet failed:", err);
-        toast.error("Failed to load your virtual account.");
+        console.error("Failed to fetch wallet:", err);
       } finally {
         setLoading(false);
       }
     };
-
-    loadVA();
+    fetchWallet();
   }, [provider]);
 
-  // ===============================================================
-  // Inline BVN/NIN validation
-  // ===============================================================
-  const validateBvnOrNin = async (value) => {
-    if (!value || value.length < 11) {
-      setBvnError("");
-      return;
-    }
-
-    try {
-      const res = await client.post("/wallet/dva/check-bvn/", {
-        provider,
-        bvn_or_nin: value,
-      });
-
-      if (res.data.exists) {
-        setBvnError("❌ This BVN/NIN is already linked to another account.");
-      } else {
-        setBvnError("");
-      }
-    } catch (err) {
-      console.error("BVN/NIN check failed:", err);
-      setBvnError("");
-    }
-  };
-
-  // ===============================================================
-  // Generate Static VA
-  // ===============================================================
-  const generateDVA = async () => {
-    setGenerateError(""); // clear old errors
-
-    if (!bvnOrNin || bvnOrNin.length < 11) {
-      setGenerateError("Enter a valid BVN or NIN to continue.");
-      return;
-    }
-
-    if (bvnError) {
-      setGenerateError(bvnError);
-      return;
-    }
-
+  const fetchDVA = async () => {
     setLoading(true);
     try {
-      const res = await client.post("/wallet/dva/generate/", {
+      const payload = {
         provider,
-        bvn_or_nin: bvnOrNin,
-      });
+      };
 
-      if (res.data.success) {
-        setDva({
-          account_number: res.data.account_number,
-          account_name: res.data.account_name,
-          bank_name: res.data.bank_name,
-          type: res.data.type,
+      if (provider === "flutterwave" && bvnOrNin) {
+        payload.bvn_or_nin = bvnOrNin;
+      }
+
+      const response = await client.post("/wallet/dva/generate/", payload);
+
+      if (response.data.success) {
+        setDvaDetails({
+          account_number: response.data.account_number,
+          bank_name: response.data.bank_name,
+          account_name: response.data.account_name,
+          provider,
+          type: response.data.type || "dynamic"
         });
 
+        toast.success(`Virtual account generated!`);
         setBvnOrNin("");
-        setBvnError("");
-        setGenerateError("");
+      } else {
+        toast.error(response.data.message || "Failed to generate account");
       }
-    } catch (error) {
-      console.error("GEN DVA ERROR:", error);
-
-      let backendError =
-        error?.response?.data?.error ||
-        error?.response?.data?.message ||
-        error?.response?.data?.detail ||
-        error?.message ||
-        "Unable to generate virtual account.";
-
-      // Friendly error mapping
-      if (backendError.includes("already belongs")) {
-        backendError =
-          "This virtual account is already assigned to another user. Contact support.";
-      }
-
-      if (
-        backendError.toLowerCase().includes("bvn") ||
-        backendError.toLowerCase().includes("nin")
-      ) {
-        backendError = "Invalid or already registered BVN/NIN.";
-      }
-
-      setGenerateError(backendError);
+    } catch (err) {
+      console.error(err);
+      toast.error("Error generating virtual account");
     } finally {
       setLoading(false);
     }
   };
 
-  // ===============================================================
-  // Copy to clipboard
-  // ===============================================================
-  const copy = (text) => {
+
+  const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
+
+    setTimeout(() => setCopied(false), 1500);
   };
 
-  // ===============================================================
-  // UI
-  // ===============================================================
+
   return (
     <>
       <style>{`
@@ -153,205 +107,231 @@ export default function Deposit() {
           100% { background-position: 200% 0; }
         }
         .shimmer {
-          background: linear-gradient(90deg, #ffffff05, #ffffff15, #ffffff05);
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
           background-size: 200% 100%;
-          animation: shimmer 1.8s infinite linear;
+          animation: shimmer 1.8s infinite;
         }
         @keyframes fade-in-up {
-          from { opacity: 0; transform: translateY(6px); }
+          from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        .fade-in-up { animation: fade-in-up .35s ease-out; }
+        .animate-fade-in-up { animation: fade-in-up 0.4s ease-out; }
       `}</style>
 
-      {/* LOADING OVERLAY */}
-      {loading && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="p-6 bg-gray-800/90 rounded-2xl border border-gray-700/50 text-center fade-in-up">
-            <div className="w-14 h-14 mx-auto mb-4 bg-indigo-600/20 rounded-full flex items-center justify-center">
-              <Loader2 className="w-7 h-7 text-indigo-400 animate-spin" />
-            </div>
-            <p className="text-indigo-300 font-medium">Loading virtual account…</p>
-            <div className="mt-3 h-2 rounded-full bg-gray-700/50 overflow-hidden">
-              <div className="h-full shimmer bg-indigo-600/60"></div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MAIN PAGE */}
-      <div className="min-h-screen bg-gray-900 text-white px-4 py-6">
-        <button
-          onClick={() => window.history.back()}
-          className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 text-sm mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back
-        </button>
-
-        <h1 className="text-xl font-bold text-indigo-400 mb-6">
-          Deposit via Bank Transfer
-        </h1>
-
-        <div className="bg-gray-800/70 p-5 rounded-2xl border border-gray-700/40 fade-in-up">
-          {/* PROVIDER */}
-          <div className="mb-4">
-            <label className="text-xs text-gray-400">Payment Provider</label>
-            <select
-              value={provider}
-              onChange={(e) => {
-                setProvider(e.target.value);
-                setDva(null);
-                setBvnOrNin("");
-                setBvnError("");
-                setGenerateError(""); // clear on change
-              }}
-              className="w-full mt-1 p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm"
-            >
-              <option value="flutterwave">Flutterwave</option>
-              <option value="paystack" disabled>
-                Paystack (Unavailable)
-              </option>
-              <option value="9psb" disabled>
-                9PSB (Coming Soon)
-              </option>
-            </select>
-          </div>
-
-          {/* BVN FIELD */}
-          {provider === "flutterwave" && !dva && (
-            <div className="mb-4 fade-in-up">
-              <label className="text-xs text-gray-400">BVN or NIN</label>
-              <input
-                className={`w-full mt-1 p-2.5 rounded-lg text-sm border ${
-                  bvnError ? "border-red-500" : "border-gray-700"
-                } bg-gray-800`}
-                placeholder="Enter BVN or NIN"
-                maxLength={11}
-                value={bvnOrNin}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, "").slice(0, 11);
-                  setBvnOrNin(val);
-                  setBvnError("");
-                  setGenerateError("");
-                }}
-                onBlur={() => validateBvnOrNin(bvnOrNin)}
-              />
-              {bvnError && <p className="text-xs text-red-500 mt-1">{bvnError}</p>}
-            </div>
-          )}
-
-          {/* GENERATE BUTTON */}
-          {!dva && (
-            <>
-              <button
-                onClick={generateDVA}
-                className={`w-full py-3 mt-4 rounded-xl text-sm font-semibold transition-all ${
-                  bvnError
-                    ? "bg-gray-500 cursor-not-allowed"
-                    : "bg-indigo-600 hover:bg-indigo-500"
-                }`}
-              >
-                Generate Virtual Account
-              </button>
-
-              {/* INLINE ERROR MESSAGE */}
-              {generateError && (
-                <p className="text-xs text-red-500 mt-2 text-center fade-in-up">
-                  {generateError}
+      <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
+        {loading && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-gray-800/90 p-8 rounded-3xl shadow-2xl border border-gray-700/50 max-w-md w-full mx-4">
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-full bg-indigo-600/20 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
+                  </div>
+                  <div className="absolute inset-0 rounded-full bg-indigo-600/30 animate-ping"></div>
+                </div>
+                <p className="text-lg font-medium text-indigo-300">
+                  Loading your virtual account...
                 </p>
-              )}
-            </>
-          )}
-
-          {/* ACCOUNT CARD */}
-          {dva && (
-            <div className="mt-6 space-y-5 fade-in-up">
-              <div className="bg-gray-900/40 p-4 rounded-xl border border-gray-700/40 space-y-3">
-                <Row label="Bank" value={dva.bank_name} />
-                <Row
-                  label="Account Number"
-                  value={
-                    <div className="flex gap-2 items-center relative">
-                      <span
-                        className={`font-bold ${
-                          copied ? "text-green-400 scale-110" : "text-indigo-300"
-                        } transition-all`}
-                      >
-                        {dva.account_number}
-                      </span>
-                      <button
-                        onClick={() => copy(dva.account_number)}
-                        className="text-indigo-400 hover:text-indigo-300"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
-                      {copied && (
-                        <span className="absolute -top-5 right-0 text-green-400 text-xs fade-in-up">
-                          Copied!
-                        </span>
-                      )}
-                    </div>
-                  }
-                />
-                <Row label="Account Name" value={dva.account_name} />
+                <div className="w-full h-2 bg-gray-700/50 rounded-full overflow-hidden mt-2">
+                  <div className="h-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-600 shimmer"></div>
+                </div>
               </div>
+            </div>
+          </div>
+        )}
 
-              <div className="bg-gray-900/40 p-4 rounded-xl border border-gray-700/40 text-sm text-gray-300 leading-relaxed">
-                <p>
-                  Banks may display{" "}
-                  <strong className="text-indigo-300">
-                    Mafita Digital Solutions FLW
-                  </strong>{" "}
-                  as the account owner. This is normal for Flutterwave virtual
-                  accounts — but{" "}
-                  <span className="text-green-300 font-semibold">
-                    this account is yours alone.
-                  </span>
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 relative z-10">
+          <div className="flex items-center gap-2 mb-5">
+            <button
+              onClick={() => window.history.back()}
+              className="group flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 transition-all duration-200"
+            >
+              <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+              Back
+            </button>
+            <h1 className="text-xl sm:text-2xl font-bold text-indigo-400">
+              Deposit via Bank Transfer
+            </h1>
+          </div>
+
+          <div className="bg-gray-800/80 rounded-2xl p-4 sm:p-5 shadow-2xl border border-gray-700/50 animate-fade-in-up">
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                Payment Provider
+              </label>
+              <select
+                value={provider}
+                onChange={(e) => {
+                  setProvider(e.target.value);
+                  setShowBvnField(false);
+                  setBvnOrNin("");
+                }}
+                disabled={loading}
+                className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200 cursor-pointer disabled:opacity-60"
+              >
+                <option value="flutterwave">Flutterwave</option>
+                <option value="paystack" disabled>Paystack (Not available)</option>
+                <option value="9psb" disabled>9PSB Bank (Coming Soon)</option>
+                <option value="monnify" disabled>Monnify (Coming Soon)</option>
+              </select>
+            </div>
+
+            {provider === "flutterwave" && showBvnField && (
+              <div className="mb-5 animate-fade-in-up">
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                  Enter BVN or NIN (for reusable static account)
+                </label>
+                <input
+                  type="text"
+                  placeholder={process.env.NODE_ENV === "development" ? "12345678901 (sandbox)" : "Enter your BVN"}
+                  value={bvnOrNin}
+                  onChange={(e) => setBvnOrNin(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                  maxLength={11}
+                  className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition"
+                />
+              </div>
+            )}
+
+            {!dvaDetails.account_number && !loading && (
+              <div className="text-center py-8">
+                <p className="text-sm text-gray-400 mb-5 max-w-md mx-auto">
+                  Generate a virtual account to fund your wallet with{" "}
+                  <span className="font-bold text-indigo-300">{provider.toUpperCase()}</span>.
                 </p>
                 <button
-                  onClick={() => setShowHausa((x) => !x)}
-                  className="mt-2 flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
+                  onClick={fetchDVA}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-7 py-3 rounded-xl font-bold text-sm transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center gap-2.5 mx-auto"
                 >
-                  {showHausa ? (
-                    <ChevronUp className="w-3 h-3" />
-                  ) : (
-                    <ChevronDown className="w-3 h-3" />
-                  )}
-                  Hausa version?
+                  {provider === "flutterwave" && showBvnField
+                    ? bvnOrNin
+                      ? "Confirm & Generate Static Account"
+                      : "Skip for Temporary Account"
+                    : "Generate Virtual Account"}
                 </button>
-                {showHausa && (
-                  <p className="mt-2 text-xs text-gray-400 fade-in-up leading-relaxed">
-                    Sunan{" "}
-                    <strong className="text-indigo-300">
-                      Mafita Digital Solutions FLW
-                    </strong>{" "}
-                    da zaka gani a yayin turo kuɗi, sunan kamfaninmu ne. Amma
-                    duk kuɗin da aka tura zuwa{" "}
-                    <strong className="text-green-300">{dva.account_number}</strong>{" "}
-                    naka ne kai tsaye. Wannan asusun naka ne kaɗai, Yallabai.
-                  </p>
+              </div>
+            )}
+
+            {dvaDetails.account_number && (
+            <div className="bg-gray-800/60 p-5 rounded-xl space-y-6 border border-gray-700/50 animate-fade-in-up">
+
+              {/* ACCOUNT DETAILS */}
+              <div className="space-y-5">
+
+                {/* TYPE */}
+                {dvaDetails.type && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-400">Account Type</span>
+                    <span className="text-indigo-400 hover:text-indigo-300 transition-all font-bold">
+                      {dvaDetails.type.toUpperCase()}
+                      {dvaDetails.type === "static" && " (Reusable)"}
+                    </span>
+                  </div>
                 )}
+
+                {/* BANK */}
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Bank</span>
+                  <span className="text-indigo-400 hover:text-indigo-300 transition-all font-bold">
+                    {dvaDetails.bank_name || "Mock Bank"}
+                  </span>
+                </div>
+
+                {/* ACCOUNT NUMBER */}
+                <div className="flex justify-between items-center relative">
+                  <span className="text-xs text-gray-400">Account Number</span>
+
+                  <div className="flex items-center gap-2 relative">
+                    
+                    {/* Account Number With Glow Animation */}
+                    <span
+                      className={`font-bold text-lg transition-all duration-300 ${
+                        copied ? "text-green-400 scale-110" : "text-indigo-300"
+                      }`}
+                    >
+                      {dvaDetails.account_number}
+                    </span>
+
+                    {/* Copy Button */}
+                    <button
+                      onClick={() => copyToClipboard(dvaDetails.account_number)}
+                      className="text-indigo-400 hover:text-indigo-300 transition"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+
+                    {/* Cool Floating Copied Label */}
+                    {copied && (
+                      <span className="absolute -top-6 right-0 text-xs text-green-400 animate-fade-in-up">
+                        Copied!
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* ACCOUNT NAME */}
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Account Name</span>
+                  <span className="text-indigo-400 hover:text-indigo-300 transition-all font-bold">
+                    Mafita Digital Solutions FLW
+                  </span>
+                </div>
               </div>
 
-              <p className="text-xs text-gray-500">
-                Fee: 1% (max ₦300). Funds settle instantly.
-              </p>
+              {/* TRUST HELPER BLOCK */}
+              <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-700/40">
+                <div className="flex items-start gap-3">
+                  <div className="text-indigo-400 mt-0.5">ℹ️</div>
+                  <div className="flex-1 text-sm text-gray-300 leading-relaxed">
+
+                    {/* MAIN TRUST MESSAGE */}
+                    <p>
+                      Banks may show <strong className="text-indigo-300">"Mafita Digital Solutions FLW"</strong>{" "}
+                      as the account owner. Don't worry, Flutterwave issues virtual
+                      accounts under our business name, but this {" "}
+                      <strong className="text-green-300">{dvaDetails.account_number}</strong>{" "}
+                      is yours, and you alone, <strong className="text-green-300">{""} Sir.</strong>
+                    </p>
+
+                    <button
+                      onClick={() => setShowAdvanced(!showAdvanced)}
+                      className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-all"
+                    >
+                      {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      Hausa version?
+                    </button>
+
+                    {/* COLLAPSIBLE EXPLANATION */}
+                    {showAdvanced && (
+                      <div className="mt-3 text-xs text-gray-400 animate-fade-in-up leading-relaxed">
+                        <p>
+                          Sunan <strong className="text-indigo-300">"Mafita Digital Solutions FLW"</strong>{" "}
+                          da zaka gani yayi turo kudi asusunka, sunan kamfaninmu ne wanda muka rijistar flutterwave dashi. 
+                          Wannan shi ne dalilin da ya sa bankuna ke nuna sunan kamfaninmu maimakon sunanka na mutum.
+
+                          Kar ka damu, duk wani kuɗin da aka tura zuwa _
+                          <strong className="text-green-300">{dvaDetails.account_number}</strong> _
+                           zai shigo kai tsaye cikin asusun ka. Wannan asusun mu keɓance shi ne domin kai kaɗai, 
+                           <strong className="text-green-300">{""} Yallabai.</strong>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* FEES */}
+              <div className="pt-2 space-y-5 border-t border-gray-700/50">
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Transfers reflect instantly.  
+                  <span className="text-yellow-400 ml-1">1% (max ₦300)</span> fee per deposit.
+                </p>
+              </div>
             </div>
           )}
+
+          </div>
         </div>
       </div>
     </>
-  );
-}
-
-// ===============================================================
-// Row component
-// ===============================================================
-function Row({ label, value }) {
-  return (
-    <div className="flex justify-between items-center">
-      <span className="text-xs text-gray-400">{label}</span>
-      <span className="font-semibold text-indigo-300 text-sm">{value}</span>
-    </div>
   );
 }
