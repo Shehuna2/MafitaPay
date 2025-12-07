@@ -546,7 +546,7 @@ class CancelWithdrawOrderAPIView(APIView):
         with transaction.atomic():
             amount = Decimal(order.amount_requested)
             seller_wallet = Wallet.objects.select_for_update().get(user=order.seller)
-            if not seller_wallet.release_funds(amount):  # Refund escrow
+            if not seller_wallet.refund_funds(amount):  # Refund escrow
                 return Response({"error": "Failed to refund locked funds."}, status=500)
 
             order.status = "cancelled"
