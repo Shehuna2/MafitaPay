@@ -203,7 +203,7 @@ export default function Deposit() {
             </div>
 
             {/* BVN / NIN FIELD (ALWAYS SHOW FOR FLUTTERWAVE) */}
-            {provider === "flutterwave" && showBvnField && (
+            {provider === "flutterwave" && showBvnField && !dvaDetails.account_number &&(
               <div className="mb-5 animate-fade-in-up">
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">
                   Enter BVN (11 digits) or NIN (11 digits)

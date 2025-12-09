@@ -253,7 +253,7 @@ export default function Dashboard() {
       {/* HERO WALLET CARD */}
       <div className="relative mx-2 mt-4 sm:mt-6 mb-6 sm:mb-10">
         <div className="relative bg-indigo-600/30 backdrop-blur-2xl p-5 sm:p-8 rounded-3xl shadow-wallet border border-indigo-600/20 transform transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl">
-          
+
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <h2 className="flex items-center gap-2 text-lg sm:text-2xl font-bold text-white">
@@ -288,10 +288,10 @@ export default function Dashboard() {
 
           {/* Virtual Accounts */}
           <div className="my-5 border-t border-white/10"></div>
-            <div className="space-y-2">
-              {wallet?.virtual_accounts?.length > 0 ? (
-                <>
-                  {wallet.virtual_accounts.slice(0, 3).map((va, i) => (
+          <div className="space-y-2">
+            {wallet?.virtual_accounts?.length > 0 ? (
+              <>
+                {wallet.virtual_accounts.slice(0, 3).map((va, i) => (
                   <div
                     key={va.id}
                     className="relative flex items-center justify-between text-xs bg-white/5 backdrop-blur-sm p-2.5 rounded-xl border border-indigo-500/20 animate-slide-up cursor-pointer"
@@ -309,9 +309,8 @@ export default function Dashboard() {
                     {/* ACCOUNT INFO */}
                     <div className="flex flex-col">
                       <span
-                        className={`font-mono font-bold tracking-wider transition-all duration-300 ${
-                          copiedId === va.id ? "text-green-400 scale-110" : "text-white"
-                        }`}
+                        className={`font-mono font-bold tracking-wider transition-all duration-300 ${copiedId === va.id ? "text-green-400 scale-110" : "text-white"
+                          }`}
                       >
                         {va.account_number}
                       </span>
@@ -327,10 +326,9 @@ export default function Dashboard() {
                         setTimeout(() => setCopiedId(null), 1500);
                       }}
                       className={`copy-btn text-xs font-medium py-1 px-2 rounded-lg transition-all duration-300 haptic-feedback 
-                        ${
-                          copiedId === va.id
-                            ? "bg-green-600 text-white scale-105 shadow-lg"
-                            : "bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/40"
+                        ${copiedId === va.id
+                          ? "bg-green-600 text-white scale-105 shadow-lg"
+                          : "bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/40"
                         }`}
                     >
                       {copiedId === va.id ? "Copied!" : "Copy"}
@@ -347,71 +345,77 @@ export default function Dashboard() {
                 ))}
 
 
-                  {/* VIEW ALL LINK */}
-                  {wallet.virtual_accounts.length > 3 && (
-                    <Link to="/deposit" className="text-xs text-indigo-400 hover:text-white underline inline-block mt-1">
-                      View all ({wallet.virtual_accounts.length})
-                    </Link>
-                  )}
-                </>
-              ) : (
-                <p className="text-xs text-gray-500">No virtual accounts assigned</p>
-              )}
-            </div>
+                {/* VIEW ALL LINK */}
+                {wallet.virtual_accounts.length > 3 && (
+                  <Link to="/deposit" className="text-xs text-indigo-400 hover:text-white underline inline-block mt-1">
+                    View all ({wallet.virtual_accounts.length})
+                  </Link>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-gray-500">No virtual accounts assigned</p>
+            )}
+          </div>
         </div>
       </div>
 
-        {/* UNIVERSAL MODAL */}
-          {showModal && (
-            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-              <div className="relative bg-indigo-600/40 backdrop-blur-xl p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-sm sm:max-w-md border border-indigo-600/30">
-                <button onClick={closeModal} className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-300 hover:text-white haptic-feedback">
-            <X className="w-5 h-5 sm:w-6 sm:h-6" />
-                </button>
-                <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">
-            {modalType === "deposit" ? "Deposit Funds" : "Withdraw Funds"}
-                </h2>
-                <p className="text-sm sm:text-base text-gray-300 mb-4 sm:mb-6">
-            Choose how you’d like to {modalType === "deposit" ? "add" : "withdraw"} money.
-                </p>
-                <div className="space-y-3">
-                  <Link to="/p2p/marketplace" onClick={closeModal} className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 hover:bg-indigo-600/20 hover:border-indigo-500/50 transition-all duration-300">
-                    <div className="flex items-center gap-3">
-                      <Repeat2 className="w-6 h-6 text-indigo-400" />
-                      <div>
-                        <p className="font-medium text-white">P2P Marketplace</p>
-                        <p className="text-xs text-gray-400">Trade directly with users</p>
-                      </div>
-                    </div>
-                    <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
-                  </Link>
-            <div className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 opacity-60 cursor-not-allowed select-none">
-              <div className="flex items-center gap-3">
-                <Building2 className="w-6 h-6 text-indigo-400" />
-                <div>
-                  <p className="font-medium text-white">Bank Transfer (coming soon)</p>
-                  <p className="text-xs text-gray-400">Instant via your bank</p>
+      {/* UNIVERSAL MODAL */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="relative bg-indigo-600/40 backdrop-blur-xl p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-sm sm:max-w-md border border-indigo-600/30">
+            <button onClick={closeModal} className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-300 hover:text-white haptic-feedback">
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
+            <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-white">
+              {modalType === "deposit" ? "Deposit Funds" : "Withdraw Funds"}
+            </h2>
+            <p className="text-sm sm:text-base text-gray-300 mb-4 sm:mb-6">
+              Choose how you’d like to {modalType === "deposit" ? "add" : "withdraw"} money.
+            </p>
+            <div className="space-y-3">
+              <Link
+                to="/deposit"
+                onClick={closeModal}
+                className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 hover:bg-indigo-600/20 hover:border-indigo-500/50 transition-all duration-300 cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <Building2 className="w-6 h-6 text-indigo-400" />
+                  <div>
+                    <p className="font-medium text-white">Bank Transfer</p>
+                    <p className="text-xs text-gray-400">Instant via your bank</p>
+                  </div>
                 </div>
-              </div>
-              <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
-            </div>
-            <div className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 opacity-60 cursor-not-allowed select-none">
-              <div className="flex items-center gap-3">
-                <LucideCreditCard className="w-6 h-6 text-indigo-400" />
-                <div>
-                  <p className="font-medium text-white">Cards Deposit (coming soon)</p>
-                  <p className="text-xs text-gray-400">Instant Card Deposit</p>
+                <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
+              </Link>
+
+              <Link to="/p2p/marketplace" onClick={closeModal} className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 hover:bg-indigo-600/20 hover:border-indigo-500/50 transition-all duration-300">
+                <div className="flex items-center gap-3">
+                  <Repeat2 className="w-6 h-6 text-indigo-400" />
+                  <div>
+                    <p className="font-medium text-white">P2P Marketplace</p>
+                    <p className="text-xs text-gray-400">Trade directly with users</p>
+                  </div>
                 </div>
-              </div>
-              <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
-            </div>
+                <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
+              </Link>
+
+              <div className="group flex items-center justify-between w-full p-4 bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 opacity-60 cursor-not-allowed select-none">
+                <div className="flex items-center gap-3">
+                  <LucideCreditCard className="w-6 h-6 text-indigo-400" />
+                  <div>
+                    <p className="font-medium text-white">Cards Deposit (coming soon)</p>
+                    <p className="text-xs text-gray-400">Instant Card Deposit</p>
+                  </div>
                 </div>
+                <ArrowRightLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-300 transition" />
               </div>
             </div>
-          )}
+          </div>
+        </div>
+      )}
       <div className="px-2 sm:px-4 pb-6">
         <div className="grid grid-cols-3 gap-4">
-          {[ 
+          {[
             { to: "/buy-airtime", label: "Airtime", icon: <Phone className="w-6 h-6" /> },
             { to: "/buy-data", label: "Data", icon: <Globe className="w-6 h-6" /> },
             { to: "/assets", label: "Gas fee", icon: <Fuel className="w-6 h-6" /> },
