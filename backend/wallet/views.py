@@ -13,7 +13,7 @@ import paystack
 from paystack import DedicatedVirtualAccount
 from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit
 from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer
-from wallet.services.flutterwave_service import FlutterwaveService
+
 
 
 from django.contrib.auth import get_user_model
@@ -150,27 +150,19 @@ class GenerateDVAAPIView(APIView):
     # 🔥 PATCHED: FLUTTERWAVE STATIC DVA FLOW (STATIC)
     # ================================================================
     def generate_flutterwave_va(self, request, user):
-        from .services.flutterwave_service import FlutterwaveService
+        from wallet.services.flutterwave_service import FlutterwaveService
         from django.db import transaction
 
-        logger.info("[DVA-FW] Starting Flutterwave Static VA generation")
+        logger.info("[DVA-FW] Start: Flutterwave Static VA")
 
-        # ------------------------------------------------------------------------------------
-        # 0. Pre-check: Ensure Wallet Exists
-        # ------------------------------------------------------------------------------------
         wallet, _ = Wallet.objects.get_or_create(user=user)
 
-        # ------------------------------------------------------------------------------------
-        # 1. If a static VA already exists in DB → RETURN immediately (idempotency)
-        # ------------------------------------------------------------------------------------
+        # 1. If already exists → return
         existing_va = VirtualAccount.objects.filter(
-            user=user,
-            provider="flutterwave",
-            assigned=True
+            user=user, provider="flutterwave", assigned=True
         ).first()
 
         if existing_va:
-            logger.info("[DVA-FW] Returning existing VA from DB (idempotent)")
             return Response({
                 "success": True,
                 "message": "Flutterwave virtual account already exists.",
@@ -178,77 +170,52 @@ class GenerateDVAAPIView(APIView):
                 "bank_name": existing_va.bank_name,
                 "account_name": existing_va.account_name,
                 "type": existing_va.metadata.get("type", "static"),
-            }, status=status.HTTP_200_OK)
+            })
 
-        # ------------------------------------------------------------------------------------
-        # 2. Validate Inputs
-        # ------------------------------------------------------------------------------------
+        # 2. Validate input
         bvn_or_nin = request.data.get("bvn_or_nin")
-        preferred_bank = request.data.get("bank", "044")  # default = Sterling (FW sandbox)
+        preferred_bank = request.data.get("bank", "044")  # Default Sterling
 
         if not bvn_or_nin:
-            logger.warning("[DVA-FW] Missing BVN or NIN")
-            return Response(
-                {"error": "BVN or NIN is required for Flutterwave static VA."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({
+                "error": "BVN or NIN is required for Flutterwave static VA."
+            }, status=400)
 
-        logger.info(f"[DVA-FW] Requesting new static VA → preferred_bank={preferred_bank}")
-
-        # ------------------------------------------------------------------------------------
-        # 3. Call Flutterwave Service
-        # ------------------------------------------------------------------------------------
+        # 3. Call Flutterwave
         fw = FlutterwaveService(use_live=not settings.DEBUG)
 
-        fw_response = fw.create_virtual_account(
+        fw_response = fw.create_static_virtual_account(
             user=user,
             preferred_bank=preferred_bank,
             bvn_or_nin=bvn_or_nin
         )
 
-        logger.info(f"[DVA-FW] FW API Response: {fw_response}")
-
-        if not fw_response:
-            return Response(
-                {"error": "Failed to generate Flutterwave virtual account."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        account_number = fw_response.get("account_number")
-        provider_ref   = fw_response.get("reference") or fw_response.get("provider_reference")
-
-        # SECURITY CHECK: Does this VA already belong to another user?
-        existing_va = VirtualAccount.objects.filter(
-            provider="flutterwave",
-            account_number=account_number
-        ).first()
-
-        if existing_va and existing_va.user != user:
-            logger.error(
-                "[DVA-FW] SECURITY BLOCK → VA %s already belongs to user %s",
-                account_number,
-                existing_va.user.email
-            )
+        if not fw_response or fw_response.get("error"):
             return Response({
-                "error": (
-                    "This BVN/NIN or email is already linked to another virtual account. "
-                    "Each BVN/NIN or email can only be used for a single user."
-                )
+                "error": fw_response.get("error", "Failed to create VA")
             }, status=400)
-
 
         account_number = fw_response["account_number"]
         account_name = fw_response.get("account_name", "Virtual Account")
-        bank_name = fw_response.get("bank_name", "Sterling Bank")
-        provider_ref = fw_response.get("provider_reference") or fw_response.get("reference", "")
+        bank_name = fw_response.get("bank_name", "Unknown Bank")
+        provider_ref = fw_response.get("provider_reference")
 
-        # ------------------------------------------------------------------------------------
-        # 4. WRITING TO DATABASE (Atomic)
-        # ------------------------------------------------------------------------------------
+        # 4. SECURITY CHECK
+        conflict = VirtualAccount.objects.filter(
+            provider="flutterwave",
+            account_number=account_number
+        ).exclude(user=user).first()
+
+        if conflict:
+            return Response({
+                "error": (
+                    "This BVN/NIN or email is already linked to another virtual account."
+                )
+            }, status=400)
+
+        # 5. Save database records
         try:
             with transaction.atomic():
-
-                # Create VirtualAccount record
                 va = VirtualAccount.objects.create(
                     user=user,
                     provider="flutterwave",
@@ -257,45 +224,32 @@ class GenerateDVAAPIView(APIView):
                     account_name=account_name,
                     bank_name=bank_name,
                     metadata={
-                        "type": fw_response.get("type", "static"),
-                        "provider_ref": provider_ref,
                         "raw_response": fw_response,
+                        "type": fw_response.get("type", "static"),
                     },
                     assigned=True
                 )
 
-                # Update wallet fields
                 wallet.van_account_number = account_number
                 wallet.van_bank_name = bank_name
-                wallet.van_provider = "flutterwave"
                 wallet.van_account_name = account_name
-
-                wallet.save(update_fields=[
-                    "van_account_number",
-                    "van_bank_name",
-                    "van_provider",
-                    "van_account_name",
-                ])
+                wallet.van_provider = "flutterwave"
+                wallet.save()
 
         except Exception as e:
-            logger.error("[DVA-FW] DB Write Error: %s", e, exc_info=True)
-            return Response(
-                {"error": "Failed to save Flutterwave virtual account details."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            logger.error("DB error saving FW VA: %s", e, exc_info=True)
+            return Response({
+                "error": "Failed to save virtual account details."
+            }, status=500)
 
-        # ------------------------------------------------------------------------------------
-        # 5. Success Response
-        # ------------------------------------------------------------------------------------
         return Response({
             "success": True,
             "message": "Flutterwave virtual account generated successfully.",
             "account_number": account_number,
             "bank_name": bank_name,
             "account_name": account_name,
-            "type": fw_response.get("type", "static"),
-        }, status=status.HTTP_201_CREATED)
-
+            "type": fw_response.get("type", "static")
+        }, status=201)
 
 
     # ==========================================================================

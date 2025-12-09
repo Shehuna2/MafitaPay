@@ -1,13 +1,15 @@
 # wallet/services/flutterwave_service.py
 
+import base64
+import hashlib
+import hmac
 import logging
-import uuid
 import re
 import time
-import base64
+import uuid
+from typing import Optional, Dict, Any
+
 import requests
-import hmac
-import hashlib
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
@@ -15,47 +17,60 @@ logger = logging.getLogger(__name__)
 
 
 class FlutterwaveService:
-    """
-    Flutterwave v4 helper:
-      - OAuth token caching
-      - create_or_get_customer(user, bvn_or_nin)
-      - create_virtual_account(user, bank, bvn_or_nin)
-      - verify_webhook_signature(raw_body, signature)
-    """
+    """Flutterwave v4 client with static VA + bank fallback logic."""
 
-    def __init__(self, use_live=False):
+    timeout = 60  # Crucial: avoid hanging requests
+
+    def __init__(self, use_live: bool = False):
         if use_live:
-            self.client_id = getattr(settings, "FLW_LIVE_CLIENT_ID", None)
-            self.client_secret = getattr(settings, "FLW_LIVE_CLIENT_SECRET", None)
-            self.encryption_key = getattr(settings, "FLW_LIVE_ENCRYPTION_KEY", None)
-            self.hash_secret = getattr(settings, "FLW_LIVE_HASH_SECRET", None)
-            base_url = getattr(settings, "FLW_LIVE_BASE_URL", "https://f4bexperience.flutterwave.com")
+            self.client_id = getattr(settings, "FLW_LIVE_CLIENT_ID")
+            self.client_secret = getattr(settings, "FLW_LIVE_CLIENT_SECRET")
+            self.encryption_key = getattr(settings, "FLW_LIVE_ENCRYPTION_KEY")
+            self.hash_secret = getattr(settings, "FLW_LIVE_HASH_SECRET")
+            self.base_url = getattr(
+                settings,
+                "FLW_LIVE_BASE_URL",
+                "https://f4bexperience.flutterwave.com",
+            )
         else:
-            self.client_id = getattr(settings, "FLW_TEST_CLIENT_ID", None)
-            self.client_secret = getattr(settings, "FLW_TEST_CLIENT_SECRET", None)
-            self.encryption_key = getattr(settings, "FLW_TEST_ENCRYPTION_KEY", None)
-            self.hash_secret = getattr(settings, "FLW_TEST_HASH_SECRET", None)
-            base_url = getattr(settings, "FLW_TEST_BASE_URL", "https://developersandbox-api.flutterwave.com")
+            self.client_id = getattr(settings, "FLW_TEST_CLIENT_ID")
+            self.client_secret = getattr(settings, "FLW_TEST_CLIENT_SECRET")
+            self.encryption_key = getattr(settings, "FLW_TEST_ENCRYPTION_KEY")
+            self.hash_secret = getattr(settings, "FLW_TEST_HASH_SECRET")
+            self.base_url = getattr(
+                settings,
+                "FLW_TEST_BASE_URL",
+                "https://developersandbox-api.flutterwave.com",
+            )
 
         if not self.client_id or not self.client_secret:
-            raise ImproperlyConfigured("Flutterwave credentials missing. Check FLW_* env vars.")
+            raise ImproperlyConfigured("Missing Flutterwave credentials.")
 
-        self.base_url = str(base_url).strip().rstrip("/")
-        logger.info("FlutterwaveService initialized → %s → %s", "LIVE" if use_live else "SANDBOX", self.base_url)
+        self.base_url = str(self.base_url).rstrip("/")
 
-        self.access_token = None
-        self.token_expiry_ts = 0
+        self.access_token: Optional[str] = None
+        self.token_expiry_ts: float = 0
 
-    def _token_expired(self):
+        logger.info(
+            "FlutterwaveService initialized (%s) → %s",
+            "LIVE" if use_live else "SANDBOX",
+            self.base_url,
+        )
+
+    # ---------------------------------------------------------
+    # TOKEN HANDLING
+    # ---------------------------------------------------------
+    def _token_expired(self) -> bool:
         return not self.access_token or time.time() > (self.token_expiry_ts - 10)
 
-    def get_access_token(self):
-        """Fetch OAuth2 token and cache until expiry."""
+    def get_access_token(self) -> Optional[str]:
         if not self._token_expired():
             return self.access_token
 
-        url = "https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token"
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        url = (
+            "https://idp.flutterwave.com/realms/flutterwave/"
+            "protocol/openid-connect/token"
+        )
         data = {
             "client_id": self.client_id,
             "client_secret": self.client_secret,
@@ -63,198 +78,197 @@ class FlutterwaveService:
         }
 
         try:
-            resp = requests.post(url, headers=headers, data=data, timeout=30)
+            resp = requests.post(
+                url,
+                data=data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=30,
+            )
             resp.raise_for_status()
-            token_data = resp.json()
-            token = token_data.get("access_token")
-            expires_in = int(token_data.get("expires_in", 3600))
+            tok = resp.json()
+            token = tok.get("access_token")
             if not token:
-                logger.error("No access_token in token response")
                 return None
+
             self.access_token = token
-            self.token_expiry_ts = time.time() + expires_in
-            logger.info("Obtained new Flutterwave v4 access token (cached)")
-            return self.access_token
-        except Exception as e:
-            logger.error("Failed to fetch Flutterwave access token: %s", e, exc_info=True)
+            self.token_expiry_ts = time.time() + int(tok.get("expires_in", 3600))
+            return token
+        except Exception:
             self.access_token = None
             self.token_expiry_ts = 0
+            logger.exception("Failed to request OAuth token.")
             return None
 
-    # ---------------------------
-    # Customer helpers
-    # ---------------------------
+    # ---------------------------------------------------------
+    # CUSTOMER
+    # ---------------------------------------------------------
     def _get_profile(self, user):
         return getattr(user, "profile", None)
 
-    def create_or_get_customer(self, user, bvn_or_nin=None):
-        """
-        Ensure a Flutterwave v4 customer exists for this user.
-        If a customer_id is stored on user.profile.flutterwave_customer_id, return it.
-        Otherwise, create via POST /customers and persist id back to profile when possible.
-        Returns customer_id or None.
-        """
+    def create_or_get_customer(self, user, bvn_or_nin: Optional[str] = None) -> Optional[str]:
         profile = self._get_profile(user)
-        existing = None
-        if profile:
-            existing = getattr(profile, "flutterwave_customer_id", None)
-            if existing:
-                return existing
+        if profile and getattr(profile, "flutterwave_customer_id", None):
+            return profile.flutterwave_customer_id
 
         token = self.get_access_token()
         if not token:
-            logger.error("Cannot create/get customer: missing access token")
             return None
 
-        endpoint = f"{self.base_url}/customers"  # Docs: /customers (no /v4)
+        endpoint = f"{self.base_url}/customers"
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-        first_name = (profile.first_name.strip() if profile and getattr(profile, "first_name", None) else user.email.split("@")[0])[:50]
-        last_name = (profile.last_name.strip() if profile and getattr(profile, "last_name", None) else "User")[:50]
-        phone = getattr(profile, "phone_number", None) or "+2340000000000"
+        first_name = (
+            profile.first_name.strip()
+            if profile and getattr(profile, "first_name", None)
+            else user.email.split("@")[0]
+        )[:50]
+        last_name = (
+            profile.last_name.strip()
+            if profile and getattr(profile, "last_name", None)
+            else "User"
+        )[:50]
 
         payload = {
-            "first_name": first_name,  # Docs: first_name, last_name, phone_number
+            "first_name": first_name,
             "last_name": last_name,
             "email": user.email,
-            "phone_number": phone,
+            "phone_number": getattr(profile, "phone_number", "+2340000000000"),
         }
 
         if bvn_or_nin:
-            clean_id = re.sub(r"\D", "", str(bvn_or_nin))
-            payload["bvn"] = clean_id
+            payload["bvn"] = re.sub(r"\D", "", str(bvn_or_nin))
 
         try:
-            logger.debug("Creating customer payload: %s", payload)
-            resp = requests.post(endpoint, json=payload, headers=headers, timeout=30)
-            # Accept 200 or 201
-            if resp.status_code not in (200, 201):
-                logger.error("Customer creation HTTP %s: %s", resp.status_code, resp.text)
+            r = requests.post(endpoint, json=payload, headers=headers, timeout=30)
+            if r.status_code not in (200, 201):
                 return None
 
-            data = resp.json()
-            # v4 typically returns data.id
-            cust = data.get("data") or data
-            customer_id = cust.get("id") or cust.get("customer_id") or cust.get("customer", {}).get("id")
+            data = r.json()
+            d = data.get("data") or data
+            customer_id = (
+                d.get("id")
+                or d.get("customer_id")
+                or d.get("customer", {}).get("id")
+            )
             if not customer_id:
-                logger.error("Customer creation returned no id: %s", data)
                 return None
 
-            # persist to profile if possible
-            try:
-                if profile:
-                    setattr(profile, "flutterwave_customer_id", customer_id)
+            if profile:
+                try:
+                    profile.flutterwave_customer_id = customer_id
                     profile.save(update_fields=["flutterwave_customer_id"])
-            except Exception:
-                # non-fatal if profile can't be saved
-                logger.exception("Failed to persist flutterwave_customer_id to profile")
+                except Exception:
+                    logger.exception("Profile save error (non-fatal).")
 
-            logger.info("Created Flutterwave customer %s for %s", customer_id, user.email)
             return customer_id
-        except Exception as e:
-            logger.error("Error creating Flutterwave customer: %s", e, exc_info=True)
+
+        except Exception:
+            logger.exception("Customer creation failed.")
             return None
 
-    # ---------------------------
-    # Virtual account (v4)
-    # ---------------------------
-    def create_virtual_account(self, user, bank="WEMA_BANK", bvn_or_nin=None):
+    # ---------------------------------------------------------
+    # STATIC VA WITH WEMA ↔ STERLING FALLBACK
+    # ---------------------------------------------------------
+    def create_static_virtual_account(
+        self,
+        user,
+        bvn_or_nin: str,
+        preferred_bank: str = "WEMA_BANK",
+    ) -> Optional[Dict[str, Any]]:
+
         token = self.get_access_token()
         if not token:
-            logger.error("Cannot create VA: missing access token")
             return None
 
         customer_id = self.create_or_get_customer(user, bvn_or_nin=bvn_or_nin)
         if not customer_id:
-            logger.error("No Flutterwave customer_id available; aborting VA creation")
             return None
+
+        clean_id = re.sub(r"\D", "", str(bvn_or_nin))
+        is_bvn = len(clean_id) == 11
+
+        reference = f"va{uuid.uuid4().hex[:12]}"
+
+        payload = {
+            "customer_id": customer_id,
+            "account_type": "static",
+            "reference": reference,
+            "currency": "NGN",
+            "amount": 0,
+            "is_permanent": True,
+            "metadata": {
+                "preferred_bank": preferred_bank,
+                "narration": f"{user.id}-wallet-funding",
+            },
+        }
+
+        # BVN at root level
+        if is_bvn:
+            payload["bvn"] = clean_id
+        else:
+            payload["nin"] = clean_id
+
+        # Compute bank fallback order
+        pb = preferred_bank.upper()
+        if pb in ("WEMA_BANK", "WEMA"):
+            bank_order = ["WEMA_BANK", "STERLING_BANK"]
+        elif pb in ("STERLING_BANK", "STERLING"):
+            bank_order = ["STERLING_BANK", "WEMA_BANK"]
+        else:
+            bank_order = [pb, "WEMA_BANK", "STERLING_BANK"]
 
         endpoint = f"{self.base_url}/virtual-accounts"
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-        account_type = "static" if (bvn_or_nin and str(bvn_or_nin).strip()) else "dynamic"
-        reference = f"va{uuid.uuid4().hex[:12]}"
-        clean_bank = str(bank or "").upper().replace("-", "_")
+        last_error = None
 
-        payload = {
-            "customer_id": customer_id,
-            "account_type": account_type,
-            "reference": reference,
-            "currency": "NGN",
-            "amount": 0 if account_type == "static" else 1,
-            "is_permanent": True if account_type == "static" else False,
-        }
+        for bank in bank_order:
+            payload["metadata"]["preferred_bank"] = bank
 
-        # BVN must be at ROOT level for NGN static accounts
-        if account_type == "static":
-            clean_id = re.sub(r"\D", "", str(bvn_or_nin))
-            if len(clean_id) == 11:
-                payload["bvn"] = clean_id
-            else:
-                payload["nin"] = clean_id  # fallback for NIN
+            try:
+                resp = requests.post(endpoint, json=payload, headers=headers, timeout=self.timeout)
 
-        # Optional metadata (narration, preferred_bank)
-        payload["metadata"] = {
-            "preferred_bank": clean_bank,
-            "narration": f"{user.id}-wallet-funding",
-        }
+                if resp.status_code in (200, 201):
+                    data = resp.json()
+                    va = data.get("data") or data
+                    account_number = va.get("account_number")
 
-        try:
-            logger.debug("Creating v4 VA payload: %s", payload)
-            resp = requests.post(endpoint, json=payload, headers=headers, timeout=60)
+                    if account_number:
+                        return {
+                            "provider": "flutterwave",
+                            "account_number": account_number,
+                            "bank_name": va.get("bank_name") or va.get("bank", {}).get("name"),
+                            "account_name": va.get("account_name"),
+                            "reference": va.get("reference") or reference,
+                            "type": "static",
+                            "raw_response": data,
+                            "customer_id": customer_id,
+                        }
 
-            if resp.status_code not in (200, 201):
-                logger.error("VA creation HTTP %s: %s", resp.status_code, resp.text)
-                return None
+                last_error = f"{resp.status_code}: {resp.text}"
 
-            data = resp.json()
-            if data.get("status") != "success":
-                logger.error("VA creation failed: %s", data)
-                return None
+            except Exception as exc:
+                last_error = str(exc)
+                continue
 
-            va_data = data.get("data", {})
+        logger.error("All bank attempts failed. Last error: %s", last_error)
+        return None
 
-            account_number = va_data.get("account_number")
-            if not account_number:
-                logger.error("No account_number in response: %s", data)
-                return None
-
-            logger.info("STATIC VA created: %s | Name: %s", account_number, va_data.get("account_name", "Pending"))
-
-            return {
-                "provider": "flutterwave",
-                "account_number": account_number,
-                "bank_name": va_data.get("bank_name", "Wema Bank"),
-                "account_name": va_data.get("account_name"),
-                "reference": va_data.get("reference") or reference,
-                "type": account_type,
-                "raw_response": data,
-                "customer_id": customer_id,
-            }
-
-        except Exception as e:
-            logger.error("Error creating virtual account: %s", e, exc_info=True)
-            return None
-    # ---------------------------
-    # Webhook verification
-    # ---------------------------
-    def verify_webhook_signature(self, raw_body: bytes, incoming_signature: str) -> bool:
-        """
-        Compute HMAC-SHA256 and compare base64 digest per Flutterwave docs.
-        """
+    # ---------------------------------------------------------
+    # WEBHOOK VERIFICATION
+    # ---------------------------------------------------------
+    def verify_webhook_signature(self, raw_body: bytes, signature: str) -> bool:
         if not self.hash_secret:
-            logger.warning("No Flutterwave hash secret configured; refusing to verify webhook.")
             return False
+
         try:
-            dig = hmac.new(self.hash_secret.encode(), raw_body, hashlib.sha256).digest()
-            expected_b64 = base64.b64encode(dig).decode()
-            return hmac.compare_digest(expected_b64, incoming_signature)
+            dig = hmac.new(
+                self.hash_secret.encode(),
+                raw_body,
+                hashlib.sha256,
+            ).digest()
+            expected = base64.b64encode(dig).decode()
+            return hmac.compare_digest(expected, signature)
         except Exception:
-            logger.exception("Failed while verifying Flutterwave webhook signature")
+            logger.exception("Webhook signature verification failed.")
             return False
-
-
-# Example usage:
-# fw = FlutterwaveService(use_live=True)
-# va = fw.create_virtual_account(user, bank="WEMA_BANK", bvn_or_nin="22438891463")
-# print(va)
