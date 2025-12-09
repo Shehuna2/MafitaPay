@@ -5,7 +5,6 @@ import { Loader2, RefreshCcw, Copy, ChevronDown, ChevronUp, ArrowLeft } from "lu
 import { toast } from "react-hot-toast";
 
 export default function Deposit() {
-  // Initialize with null values
   const [dvaDetails, setDvaDetails] = useState({
     account_number: null,
     bank_name: null,
@@ -19,16 +18,31 @@ export default function Deposit() {
   const [provider, setProvider] = useState("flutterwave");
   const [copied, setCopied] = useState(false);
 
-
-
+  // BVN or NIN
   const [bvnOrNin, setBvnOrNin] = useState("");
   const [showBvnField, setShowBvnField] = useState(false);
 
+  // ----------------------------------------------------
+  // SHOW BVN/NIN FIELD WHENEVER PROVIDER = FLUTTERWAVE
+  // ----------------------------------------------------
+  useEffect(() => {
+    if (provider === "flutterwave") {
+      setShowBvnField(true);
+    } else {
+      setShowBvnField(false);
+      setBvnOrNin("");
+    }
+  }, [provider]);
+
+  // ----------------------------------------------------
+  // FETCH WALLET EXISTING VA
+  // ----------------------------------------------------
   useEffect(() => {
     const fetchWallet = async () => {
       setLoading(true);
       try {
-        const response = await client.get(`/wallet/?provider=${provider}`); 
+        const response = await client.get(`/wallet/?provider=${provider}`);
+
         if (response.data.van_account_number) {
           setDvaDetails({
             account_number: response.data.van_account_number,
@@ -38,6 +52,7 @@ export default function Deposit() {
             type: response.data.type || "static"
           });
         } else {
+          // reset if no saved VA
           setDvaDetails({
             account_number: null,
             bank_name: null,
@@ -52,17 +67,25 @@ export default function Deposit() {
         setLoading(false);
       }
     };
+
     fetchWallet();
   }, [provider]);
 
+  // ----------------------------------------------------
+  // GENERATE DVA
+  // ----------------------------------------------------
   const fetchDVA = async () => {
     setLoading(true);
-    try {
-      const payload = {
-        provider,
-      };
 
-      if (provider === "flutterwave" && bvnOrNin) {
+    try {
+      const payload = { provider };
+
+      if (provider === "flutterwave") {
+        if (!bvnOrNin || bvnOrNin.length < 11) {
+          toast.error("Enter a valid BVN (11 digits) or NIN (16 digits)");
+          setLoading(false);
+          return;
+        }
         payload.bvn_or_nin = bvnOrNin;
       }
 
@@ -74,13 +97,13 @@ export default function Deposit() {
           bank_name: response.data.bank_name,
           account_name: response.data.account_name,
           provider,
-          type: response.data.type || "dynamic"
+          type: response.data.type
         });
 
-        toast.success(`Virtual account generated!`);
+        toast.success("Virtual account generated successfully!");
         setBvnOrNin("");
       } else {
-        toast.error(response.data.message || "Failed to generate account");
+        toast.error(response.data.message || "Failed to generate virtual account");
       }
     } catch (err) {
       console.error(err);
@@ -90,15 +113,18 @@ export default function Deposit() {
     }
   };
 
-
+  // ----------------------------------------------------
+  // COPY
+  // ----------------------------------------------------
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
-
     setTimeout(() => setCopied(false), 1500);
   };
 
-
+  // ----------------------------------------------------
+  // RENDER
+  // ----------------------------------------------------
   return (
     <>
       <style>{`
@@ -119,6 +145,8 @@ export default function Deposit() {
       `}</style>
 
       <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden">
+
+        {/* LOADING OVERLAY */}
         {loading && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-gray-800/90 p-8 rounded-3xl shadow-2xl border border-gray-700/50 max-w-md w-full mx-4">
@@ -155,19 +183,17 @@ export default function Deposit() {
           </div>
 
           <div className="bg-gray-800/80 rounded-2xl p-4 sm:p-5 shadow-2xl border border-gray-700/50 animate-fade-in-up">
+
+            {/* PROVIDER SELECT */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-400 mb-1.5">
                 Payment Provider
               </label>
               <select
                 value={provider}
-                onChange={(e) => {
-                  setProvider(e.target.value);
-                  setShowBvnField(false);
-                  setBvnOrNin("");
-                }}
+                onChange={(e) => setProvider(e.target.value)}
                 disabled={loading}
-                className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200 cursor-pointer disabled:opacity-60"
+                className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200"
               >
                 <option value="flutterwave">Flutterwave</option>
                 <option value="paystack" disabled>Paystack (Not available)</option>
@@ -176,54 +202,52 @@ export default function Deposit() {
               </select>
             </div>
 
+            {/* BVN / NIN FIELD (ALWAYS SHOW FOR FLUTTERWAVE) */}
             {provider === "flutterwave" && showBvnField && (
               <div className="mb-5 animate-fade-in-up">
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  Enter BVN or NIN (for reusable static account)
+                  Enter BVN (11 digits) or NIN (11 digits)
                 </label>
                 <input
                   type="text"
-                  placeholder={process.env.NODE_ENV === "development" ? "12345678901 (sandbox)" : "Enter your BVN"}
+                  placeholder="Enter BVN or NIN"
                   value={bvnOrNin}
-                  onChange={(e) => setBvnOrNin(e.target.value.replace(/\D/g, '').slice(0, 11))}
-                  maxLength={11}
+                  onChange={(e) =>
+                    setBvnOrNin(e.target.value.replace(/\D/g, "").slice(0, 16))
+                  }
                   className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition"
                 />
               </div>
             )}
 
+            {/* GENERATE BUTTON */}
             {!dvaDetails.account_number && !loading && (
               <div className="text-center py-8">
                 <p className="text-sm text-gray-400 mb-5 max-w-md mx-auto">
                   Generate a virtual account to fund your wallet with{" "}
                   <span className="font-bold text-indigo-300">{provider.toUpperCase()}</span>.
                 </p>
+
                 <button
                   onClick={fetchDVA}
                   className="bg-indigo-600 hover:bg-indigo-500 text-white px-7 py-3 rounded-xl font-bold text-sm transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center gap-2.5 mx-auto"
                 >
-                  {provider === "flutterwave" && showBvnField
-                    ? bvnOrNin
-                      ? "Confirm & Generate Static Account"
-                      : "Skip for Temporary Account"
-                    : "Generate Virtual Account"}
+                  Generate Virtual Account
                 </button>
               </div>
             )}
 
+            {/* SHOW RESULT */}
             {dvaDetails.account_number && (
-            <div className="bg-gray-800/60 p-5 rounded-xl space-y-6 border border-gray-700/50 animate-fade-in-up">
-
-              {/* ACCOUNT DETAILS */}
-              <div className="space-y-5">
+              <div className="bg-gray-800/60 p-5 rounded-xl space-y-6 border border-gray-700/50 animate-fade-in-up">
 
                 {/* TYPE */}
                 {dvaDetails.type && (
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-gray-400">Account Type</span>
-                    <span className="text-indigo-400 hover:text-indigo-300 transition-all font-bold">
+                    <span className="text-indigo-400 font-bold">
                       {dvaDetails.type.toUpperCase()}
-                      {dvaDetails.type === "static" && " (Reusable)"}
+                      {dvaDetails.type === "static" && " (Permanent)"}
                     </span>
                   </div>
                 )}
@@ -231,7 +255,7 @@ export default function Deposit() {
                 {/* BANK */}
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Bank</span>
-                  <span className="text-indigo-400 hover:text-indigo-300 transition-all font-bold">
+                  <span className="text-indigo-400 font-bold">
                     {dvaDetails.bank_name || "Mock Bank"}
                   </span>
                 </div>
@@ -241,17 +265,14 @@ export default function Deposit() {
                   <span className="text-xs text-gray-400">Account Number</span>
 
                   <div className="flex items-center gap-2 relative">
-                    
-                    {/* Account Number With Glow Animation */}
                     <span
-                      className={`font-bold text-lg transition-all duration-300 ${
+                      className={`font-bold text-lg transition-all ${
                         copied ? "text-green-400 scale-110" : "text-indigo-300"
                       }`}
                     >
                       {dvaDetails.account_number}
                     </span>
 
-                    {/* Copy Button */}
                     <button
                       onClick={() => copyToClipboard(dvaDetails.account_number)}
                       className="text-indigo-400 hover:text-indigo-300 transition"
@@ -259,7 +280,6 @@ export default function Deposit() {
                       <Copy className="w-4 h-4" />
                     </button>
 
-                    {/* Cool Floating Copied Label */}
                     {copied && (
                       <span className="absolute -top-6 right-0 text-xs text-green-400 animate-fade-in-up">
                         Copied!
@@ -271,63 +291,56 @@ export default function Deposit() {
                 {/* ACCOUNT NAME */}
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Account Name</span>
-                  <span className="text-indigo-400 hover:text-indigo-300 transition-all font-bold">
+                  <span className="text-indigo-400 font-bold">
                     Mafita Digital Solutions FLW
                   </span>
                 </div>
-              </div>
 
-              {/* TRUST HELPER BLOCK */}
-              <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-700/40">
-                <div className="flex items-start gap-3">
-                  <div className="text-indigo-400 mt-0.5">ℹ️</div>
-                  <div className="flex-1 text-sm text-gray-300 leading-relaxed">
+                {/* TRUST MESSAGE */}
+                <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-700/40">
+                  <div className="flex items-start gap-3">
+                    <div className="text-indigo-400 mt-0.5">ℹ️</div>
+                    <div className="flex-1 text-sm text-gray-300 leading-relaxed">
+                      <p>
+                        Banks may show{" "}
+                        <strong className="text-indigo-300">"Mafita Digital Solutions FLW"</strong>{" "}
+                        as the account owner. This is normal — Flutterwave issues virtual
+                        accounts under our business name, but{" "}
+                        <strong className="text-green-300">{dvaDetails.account_number}</strong>{" "}
+                        belongs to you alone.
+                      </p>
 
-                    {/* MAIN TRUST MESSAGE */}
-                    <p>
-                      Banks may show <strong className="text-indigo-300">"Mafita Digital Solutions FLW"</strong>{" "}
-                      as the account owner. Don't worry, Flutterwave issues virtual
-                      accounts under our business name, but this {" "}
-                      <strong className="text-green-300">{dvaDetails.account_number}</strong>{" "}
-                      is yours, and you alone, <strong className="text-green-300">{""} Sir.</strong>
-                    </p>
+                      <button
+                        onClick={() => setShowAdvanced(!showAdvanced)}
+                        className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                      >
+                        {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        Hausa version?
+                      </button>
 
-                    <button
-                      onClick={() => setShowAdvanced(!showAdvanced)}
-                      className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-all"
-                    >
-                      {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                      Hausa version?
-                    </button>
-
-                    {/* COLLAPSIBLE EXPLANATION */}
-                    {showAdvanced && (
-                      <div className="mt-3 text-xs text-gray-400 animate-fade-in-up leading-relaxed">
-                        <p>
-                          Sunan <strong className="text-indigo-300">"Mafita Digital Solutions FLW"</strong>{" "}
-                          da zaka gani yayi turo kudi asusunka, sunan kamfaninmu ne wanda muka rijistar flutterwave dashi. 
-                          Wannan shi ne dalilin da ya sa bankuna ke nuna sunan kamfaninmu maimakon sunanka na mutum.
-
-                          Kar ka damu, duk wani kuɗin da aka tura zuwa _
-                          <strong className="text-green-300">{dvaDetails.account_number}</strong> _
-                           zai shigo kai tsaye cikin asusun ka. Wannan asusun mu keɓance shi ne domin kai kaɗai, 
-                           <strong className="text-green-300">{""} Yallabai.</strong>
-                        </p>
-                      </div>
-                    )}
+                      {showAdvanced && (
+                        <div className="mt-3 text-xs text-gray-400 animate-fade-in-up leading-relaxed">
+                          <p>
+                            Sunan <strong className="text-indigo-300">"Mafita Digital Solutions FLW"</strong> 
+                            da zaka gani lokacin turo kudi, sunan kamfaninmu ne wanda
+                            muka rijista da Flutterwave. Amma duk kudin da aka turo zuwa
+                            <strong className="text-green-300"> {dvaDetails.account_number}</strong> naka ne kai tsaye.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* FEES */}
-              <div className="pt-2 space-y-5 border-t border-gray-700/50">
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Transfers reflect instantly.  
-                  <span className="text-yellow-400 ml-1">1% (max ₦300)</span> fee per deposit.
-                </p>
+                {/* FEES */}
+                <div className="pt-2 space-y-5 border-t border-gray-700/50">
+                  <p className="text-xs text-gray-400">
+                    Transfers reflect instantly. <span className="text-yellow-400 ml-1">1% (max ₦300)</span> fee.
+                  </p>
+                </div>
+
               </div>
-            </div>
-          )}
+            )}
 
           </div>
         </div>
