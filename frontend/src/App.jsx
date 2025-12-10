@@ -10,6 +10,7 @@ import { useAuth } from "./context/AuthContext";
 import Home from "./pages/Home";
 import About from "./pages/About";
 import Referral from "./pages/Referral";
+import Rewards from "./pages/Rewards";
 import Dashboard from "./pages/Dashboard";
 import Deposit from "./pages/wallet/Deposit";
 import WalletTransactions from "./pages/WalletTransactions";
@@ -96,6 +97,7 @@ function App() {
                 </PrivateRoute>
               }
             />
+
 
             <Route
               path="/dashboard"
@@ -232,6 +234,15 @@ function App() {
               element={
                 <Layout>
                   <Referral />
+                </Layout>
+              }
+            />
+
+            <Route
+              path="/rewards"
+              element={
+                <Layout>
+                  <Rewards />
                 </Layout>
               }
             />

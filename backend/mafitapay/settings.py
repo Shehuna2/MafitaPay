@@ -146,8 +146,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt",
-    "cloudinary",
-    "cloudinary_storage",
+    "rewards",
     "accounts",
     "referrals",
     "wallet",
@@ -251,6 +250,7 @@ LOGGING = {
         "p2p": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
         "gasfee": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
         "bills": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
+        "rewards": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
     },
 }
 
@@ -315,11 +315,11 @@ FLW_LIVE_ENCRYPTION_KEY = os.getenv("FLW_LIVE_ENCRYPTION_KEY")
 FLW_LIVE_HASH_SECRET = os.getenv("FLW_LIVE_HASH_SECRET")
 FLW_LIVE_BASE_URL = os.getenv("FLW_LIVE_BASE_URL", "https://f4bexperience.flutterwave.com")
 
-# FLW_TEST_CLIENT_ID = os.getenv("FLW_TEST_CLIENT_ID")
-# FLW_TEST_CLIENT_SECRET = os.getenv("FLW_TEST_CLIENT_SECRET")
-# FLW_TEST_ENCRYPTION_KEY = os.getenv("FLW_TEST_ENCRYPTION_KEY")
-# FLW_TEST_HASH_SECRET = os.getenv("FLW_TEST_HASH_SECRET")
-# FLW_TEST_BASE_URL = os.getenv("FLW_TEST_BASE_URL", "https://developersandbox-api.flutterwave.com")
+FLW_TEST_CLIENT_ID = os.getenv("FLW_TEST_CLIENT_ID")
+FLW_TEST_CLIENT_SECRET = os.getenv("FLW_TEST_CLIENT_SECRET")
+FLW_TEST_ENCRYPTION_KEY = os.getenv("FLW_TEST_ENCRYPTION_KEY")
+FLW_TEST_HASH_SECRET = os.getenv("FLW_TEST_HASH_SECRET")
+FLW_TEST_BASE_URL = os.getenv("FLW_TEST_BASE_URL", "https://developersandbox-api.flutterwave.com")
 
 
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
@@ -341,10 +341,6 @@ VTPASS_SECRET_KEY = os.getenv("VTPASS_SECRET_KEY", "")
 # VTPASS_SANDBOX_URL = os.getenv("VTPASS_SANDBOX_URL", "")
 VTPASS_LIVE_URL = os.getenv("VTPASS_LIVE_URL", "")
 
-
-REFERRER_BONUS = os.getenv("REFERRER_BONUS", "200.00")
-NEW_USER_BONUS = os.getenv("NEW_USER_BONUS", "100.00")
-NON_REFERRED_BONUS = os.getenv("NON_REFERRED_BONUS", "0.00")
 
 TON_SEQNO_CHECK_INTERVAL = int(os.getenv("TON_SEQNO_CHECK_INTERVAL", "10"))
 TON_SEQNO_MAX_ATTEMPTS = int(os.getenv("TON_SEQNO_MAX_ATTEMPTS", "5"))

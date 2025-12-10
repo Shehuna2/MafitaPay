@@ -5,11 +5,13 @@ from .models import Wallet, WalletTransaction, VirtualAccount
 class WalletAdmin(admin.ModelAdmin):
     list_display = ("user", "balance")
     actions = ["add_funds"]
-
+    
     def add_funds(self, request, queryset):
         for wallet in queryset:
             wallet.deposit(5000)  # Add NGN 5000 for testing
         self.message_user(request, "Added NGN 5000 to selected wallets.")
+
+
 
     add_funds.short_description = "Add NGN 5000 to selected wallets"
 

@@ -155,14 +155,7 @@ export default function MerchantDepositOrders() {
                     <CheckCircle className="w-4 h-4" /> Confirm Release
                   </button>
                 )}
-                {order.status === "pending" && (
-                  <button
-                    onClick={() => handleCancelOrder(order.id)}
-                    className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm flex items-center gap-1"
-                  >
-                    <XCircle className="w-4 h-4" /> Cancel
-                  </button>
-                )}
+
                 <button
                   onClick={() => navigate(`/p2p/order/${order.id}`)}
                   className="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg text-sm flex items-center gap-1"

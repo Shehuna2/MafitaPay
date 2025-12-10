@@ -2,7 +2,7 @@ import { Link, useLocation, Outlet } from "react-router-dom";
 import {
   Home,
   Settings,
-  Wallet,
+  Gift,
   Banknote,
   Users,
   Repeat2,
@@ -55,6 +55,26 @@ export default function Layout({ children }) {
       console.error("Profile refresh failed:", error.response?.data || error.message);
     }
   }
+
+  const [hasNewBonus, setHasNewBonus] = useState(false);
+
+  async function checkForNewBonuses() {
+    try {
+      const res = await client.get("/rewards/");
+      const unlocked = res.data.filter((b) => b.status === "unlocked");
+      const lastSeen = JSON.parse(localStorage.getItem("last_seen_rewards") || "[]");
+
+      const newOnes = unlocked.filter((u) => !lastSeen.includes(u.id));
+      setHasNewBonus(newOnes.length > 0);
+    } catch {}
+  }
+
+  useEffect(() => {
+    checkForNewBonuses();
+    const interval = setInterval(checkForNewBonuses, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
 
   useEffect(() => {
     const lastFetch = parseInt(localStorage.getItem("last_user_fetch") || "0");
@@ -114,6 +134,7 @@ export default function Layout({ children }) {
       { to: "/assets", label: "Gas Fee", icon: <SiEthereum className="w-6 h-6 text-gray-400" /> },
       { to: "/sell-crypto", label: "Sell", icon: <Banknote className="w-6 h-6" /> },
       { to: "/referral", label: "Referral", icon: <Users className="w-6 h-6" /> },
+      { to: "/rewards", label: "Rewards", icon: <Gift className="w-6 h-6" /> },
       { to: "/accounts/profile", label: "Settings", icon: <Settings className="w-6 h-6" /> },
       {
         to: "/admin/sell-orders",
@@ -228,7 +249,12 @@ export default function Layout({ children }) {
                       : "text-gray-400 hover:text-white"
                   }`}
                 >
-                  {item.icon}
+                  <div className="relative">
+                    {item.icon}
+                    {item.label === "Rewards" && hasNewBonus && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 w-3 h-3 rounded-full"></span>
+                    )}
+                  </div>
                   <span>{item.label}</span>
                 </Link>
               ))}

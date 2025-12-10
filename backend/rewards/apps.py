@@ -1,0 +1,10 @@
+from django.apps import AppConfig
+
+
+class RewardsConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'rewards'
+
+    def ready(self):
+        import rewards.signals  # Ensure signals are loaded
+        import rewards.referral  # Ensure referral logic is loaded

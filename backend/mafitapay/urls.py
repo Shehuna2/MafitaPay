@@ -15,10 +15,11 @@ urlpatterns = [
     path('', include('gasfee.urls')),
     path('', include('bills.urls')),
     path('', include('wallet.urls')),
-    path('api/', include('accounts.urls')), 
+    path('api/', include('accounts.urls')),
     path('api/', include('wallet.urls')),
     path('api/', include('p2p.urls')),
     path('api/', include('bills.urls')),
+    path('api/', include('rewards.urls')),
     path('debug-urls/', debug_urls),  
 ]
 

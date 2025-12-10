@@ -137,7 +137,7 @@ class Dispute(models.Model):
         # send_mail(
         #     "Dispute Resolution",
         #     f"Your dispute for Order #{self.order.id} has been resolved {decision_text}.\nAdmin Comment: {self.admin_comment}",
-        #     "noreply@zunhub.com",
+        #     "noreply@mafitapay.com",
         #     [self.order.buyer.email, self.order.merchant.email],
         #     fail_silently=True,
         # )

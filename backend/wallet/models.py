@@ -36,6 +36,7 @@ class Wallet(models.Model):
     flutterwave_customer_id = models.CharField(max_length=50, null=True, blank=True)
 
     van_account_number = models.CharField(max_length=20, blank=True, null=True, unique=True)
+    van_account_name = models.CharField(max_length=128, blank=True, null=True)
     van_bank_name = models.CharField(max_length=50, blank=True, null=True)
     van_provider = models.CharField(max_length=30, blank=True, null=True)
 
@@ -170,6 +171,41 @@ class Wallet(models.Model):
 
     def available_balance(self):
         return self.balance - self.locked_balance
+    # inside wallet/models.py (class Wallet)
+
+    def credit_bonus(self, amount, reference="", metadata=None):
+        """
+        Credits bonus to locked_balance (non-withdrawable by default).
+        """
+        from decimal import Decimal
+        from django.db import transaction
+        from .models import WalletTransaction
+
+        try:
+            amount = Decimal(str(amount))
+            if amount <= 0:
+                return False
+            with transaction.atomic():
+                w = Wallet.objects.select_for_update().get(id=self.id)
+                before_locked = w.locked_balance
+                w.locked_balance = (w.locked_balance or Decimal("0.00")) + amount
+                w.save(update_fields=["locked_balance"])
+                WalletTransaction.objects.create(
+                    user=self.user,
+                    wallet=w,
+                    tx_type="credit",
+                    category="bonus",
+                    amount=amount,
+                    balance_before=getattr(w, "balance", 0),
+                    balance_after=getattr(w, "balance", 0),
+                    reference=reference,
+                    status="success",
+                    metadata=metadata or {},
+                )
+            return True
+        except Exception as e:
+            logger.exception("credit_bonus failed: %s", e)
+            return False
 
     def __str__(self):
         return f"{self.user.email} - Balance: ₦{self.balance}, Locked: ₦{self.locked_balance}"
@@ -191,6 +227,12 @@ class VirtualAccount(models.Model):
         indexes = [
             models.Index(fields=["provider", "provider_account_id"]),
             models.Index(fields=["account_number"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "account_number"],
+                name="unique_provider_account_number"
+            )
         ]
 
     def __str__(self):
@@ -246,7 +288,6 @@ class WalletTransaction(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.category} - {self.amount} ({self.status})"
-
 
 class Notification(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
