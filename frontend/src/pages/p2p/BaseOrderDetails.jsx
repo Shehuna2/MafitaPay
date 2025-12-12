@@ -137,7 +137,7 @@ export default function BaseOrderDetails({ type }) {
         : order.sell_offer_detail?.merchant_profile?.phone_number;
     }
     if (!phoneNumber) return null;
-    const formatted = phoneNumber.startsWith("+") ? phoneNumber : `+234${phoneNumber.replace(/^0/, "")}`;
+    const formatted = phoneNumber.startsWith("+") ? phoneNumber : `${phoneNumber.replace(/^0/, "")}`;
     const pretext = encodeURIComponent(`Hi, I'm contacting you about P2P ${type} order #${order.id}.`);
     return `https://wa.me/${formatted}?text=${pretext}`;
   };
