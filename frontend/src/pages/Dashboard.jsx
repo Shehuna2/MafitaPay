@@ -46,7 +46,7 @@ export default function Dashboard() {
   const eventCards = [
     { title: "Crypto Summit 2025", details: "Join the biggest blockchain event in Lagos", date: "12/6" },
     { title: "Zero-Fee Week", details: "Trade any asset with 0% fees", date: "15/6" },
-    { title: "Referral Bonus", details: "Invite a friend – earn ₦500 each", date: "20/6" },
+    { title: "Referral Bonus", details: "Invite a friend – earn ₦200 each", date: "20/6" },
   ];
 
   const fetchWallet = useCallback(async () => {
