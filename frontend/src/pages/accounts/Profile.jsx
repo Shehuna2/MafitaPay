@@ -31,10 +31,25 @@ export default function Profile() {
     bank_name: "",
   });
 
+  const normalizeProfile = (data) => {
+    // Build a normalized profile object that always has full_name
+    const first = data.first_name || data.profile?.first_name || "";
+    const last = data.last_name || data.profile?.last_name || "";
+    const apiFull = (data.full_name || "").trim();
+    const computedFull = `${first} ${last}`.trim();
+    const full_name = apiFull || computedFull || "";
+
+    return {
+      ...data,
+      full_name,
+    };
+  };
+
   const fetchProfile = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await client.get("profile-api/");
+      const { data: raw } = await client.get("profile-api/");
+      const data = normalizeProfile(raw || {});
       setProfile(data);
 
       // EXACT same field names as your original — guaranteed no breakage
@@ -62,7 +77,7 @@ export default function Profile() {
     const hasChanges = Object.keys(formData).some(key => {
       const current = formData[key];
       const original = key === "date_of_birth"
-        ? (profile[key]?.split("T")[0] || "")
+        ? (profile[key]?.split?.("T")?.[0] || "")
         : (profile[key] || "");
       return String(current) !== String(original);
     });
@@ -92,9 +107,21 @@ export default function Profile() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      setProfile(response.data);
+      const normalized = normalizeProfile(response.data || {});
+      setProfile(normalized);
       toast.success("Profile updated successfully!");
       setIsEdited(false);
+
+      // Sync localstorage + global user if needed
+      try {
+        const stored = JSON.parse(localStorage.getItem("user") || "{}");
+        const merged = { ...stored, ...normalized };
+        localStorage.setItem("user", JSON.stringify(merged));
+        // notify other tabs
+        window.dispatchEvent(new Event("userUpdated"));
+      } catch (e) {
+        // ignore localStorage sync errors
+      }
     } catch (err) {
       const msg = err.response?.data?.detail ||
         (err.response?.data && Object.values(err.response.data)[0]) ||

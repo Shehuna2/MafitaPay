@@ -67,9 +67,44 @@ export default function WithdrawOffers() {
     return () => window.removeEventListener("keydown", handleEsc);
   }, []);
 
+  // Determine if user has any receiving/payment account saved.
+  // Be permissive with property names because backend shape may vary.
+  // Replace the existing hasReceivingAccount useMemo with this:
+
+  const hasReceivingAccount = useMemo(() => {
+    if (!user) return false;
+
+    // Frontend stores profile fields from /profile-api/ at the top level (localStorage 'user')
+    // Check the exact fields used in the repo's backend model and serializers.
+    if (user.account_no) return true;
+    if (user.bank_name) return true;
+    if (user.flutterwave_customer_id) return true;
+
+    // Some code paths may include a nested profile object — be tolerant:
+    if (user.profile) {
+      if (user.profile.account_no) return true;
+      if (user.profile.bank_name) return true;
+      if (user.profile.flutterwave_customer_id) return true;
+    }
+
+    return false;
+  }, [user]);
+
   const handleCreateOrder = async () => {
     if (!selectedOffer) {
       toast.error("No offer selected!", { position: "top-right", autoClose: 3000 });
+      return;
+    }
+
+    // Block order creation if user has no receiving account saved.
+    if (!hasReceivingAccount) {
+      toast.error("Please add a receiving account before creating an order.", {
+        position: "top-right",
+        autoClose: 4000,
+      });
+      // Navigate user to settings/accounts page so they can add an account.
+      // Update this route if your app uses a different path for account settings.
+      navigate("/accounts/profile");
       return;
     }
 
@@ -381,6 +416,28 @@ export default function WithdrawOffers() {
                   {((selectedOffer.merchant_profile?.success_rate || 0) * 1).toFixed(2)}%
                 </span>
               </p>
+
+              {/* Warn user if they have no receiving account and give CTA */}
+              {!hasReceivingAccount && (
+                <div className="mb-4 p-3 bg-yellow-900/60 border border-yellow-700 rounded text-yellow-100 text-sm">
+                  You don't have a receiving account saved. Please add one before creating an order.
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      onClick={() => navigate("/accounts/profile")}
+                      className="bg-yellow-700 hover:bg-yellow-600 text-black py-1 px-3 rounded text-sm font-medium"
+                    >
+                      Add Account
+                    </button>
+                    <button
+                      onClick={() => setSelectedOffer(null)}
+                      className="bg-gray-800 hover:bg-gray-700 text-white py-1 px-3 rounded text-sm"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <input
                 type="number"
                 placeholder="Enter amount (₦)"
@@ -394,7 +451,7 @@ export default function WithdrawOffers() {
               <button
                 onClick={handleCreateOrder}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 py-2 rounded-lg transition font-medium"
-                disabled={placingOrder}
+                disabled={placingOrder || !hasReceivingAccount}
               >
                 {placingOrder ? "Processing..." : "Confirm Withdraw"}
               </button>
