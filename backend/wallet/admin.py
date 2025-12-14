@@ -19,7 +19,7 @@ admin.site.register(Wallet, WalletAdmin)
 
 @admin.register(WalletTransaction)
 class WalletTransactionAdmin(admin.ModelAdmin):
-    list_display = ("request_id", "tx_type", "amount", "category", "status", "created_at")
+    list_display = ("user", "request_id", "tx_type", "amount", "category", "status", "created_at")
     list_filter  = ("tx_type", "status", "created_at")
     search_fields = ("order__id", "order__user__username")
     ordering     = ("-created_at",)
