@@ -135,6 +135,7 @@ if not DEBUG:
 # --------------------------------------------------
 INSTALLED_APPS = [
     "daphne",
+    "rewards.apps.RewardsConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -146,7 +147,6 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt",
-    "rewards",
     "accounts",
     "referrals",
     "wallet",
