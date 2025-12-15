@@ -2,10 +2,12 @@
 from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import IsAdminUser
 from django.shortcuts import get_object_or_404
 from .models import Bonus, BonusType
 from .serializers import BonusSerializer, BonusTypeSerializer
 from .services import BonusService
+
 
 class BonusListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -14,7 +16,7 @@ class BonusListView(generics.ListAPIView):
     def get_queryset(self):
         return Bonus.objects.filter(user=self.request.user)
 
-from rest_framework.permissions import IsAdminUser
+
 class AdminBonusCreateView(generics.CreateAPIView):
     permission_classes = [IsAdminUser]
     serializer_class = BonusSerializer
