@@ -269,6 +269,7 @@ class WalletTransaction(models.Model):
         ("data", "Data"),
         ("gasfee", "Gas Fee"),
         ("crypto", "Crypto"),
+        ("bonus", "Bonus"),
         ("other", "Other"),
     ]
     
