@@ -129,3 +129,75 @@ class BonusService:
             BonusService.apply_bonus_to_wallet(bonus)
 
         return bonus
+
+    @staticmethod
+    def claim_bonus(bonus: Bonus):
+        """
+        Claims an unlocked bonus by moving amount from locked_balance to available balance.
+        Marks bonus as "used" and creates a WalletTransaction.
+        Returns True on success, False on failure.
+        """
+        if not bonus:
+            return False
+
+        # Validate bonus status
+        if bonus.status != "unlocked":
+            return False
+
+        amount = Decimal(bonus.amount)
+
+        with transaction.atomic():
+            # Idempotency check: verify bonus hasn't been claimed already
+            bonus_locked = Bonus.objects.select_for_update().get(id=bonus.id)
+            if bonus_locked.status != "unlocked":
+                return False
+
+            # Check if already claimed via transaction
+            already_claimed = WalletTransaction.objects.filter(
+                metadata__bonus_id=str(bonus.id),
+                category="bonus",
+                tx_type="credit",
+                metadata__action="claim",
+                status="success",
+            ).exists()
+
+            if already_claimed:
+                return False
+
+            # Get wallet with lock
+            wallet = Wallet.objects.select_for_update().get(user=bonus.user)
+
+            # Validate sufficient locked balance
+            if wallet.locked_balance < amount:
+                return False
+
+            # Move funds from locked_balance to balance
+            balance_before = wallet.balance
+            wallet.locked_balance -= amount
+            wallet.balance += amount
+            wallet.save(update_fields=["locked_balance", "balance"])
+
+            # Create transaction record
+            WalletTransaction.objects.create(
+                user=bonus.user,
+                wallet=wallet,
+                tx_type="credit",
+                category="bonus",
+                amount=amount,
+                balance_before=balance_before,
+                balance_after=wallet.balance,
+                reference=f"bonus-claim-{bonus.bonus_type.name}-{bonus.id}",
+                status="success",
+                metadata={
+                    "bonus_id": str(bonus.id),
+                    "bonus_type": bonus.bonus_type.name,
+                    "action": "claim",
+                    **(bonus.metadata or {}),
+                },
+            )
+
+            # Update bonus status
+            bonus_locked.status = "used"
+            bonus_locked.save(update_fields=["status", "updated_at"])
+
+        return True
