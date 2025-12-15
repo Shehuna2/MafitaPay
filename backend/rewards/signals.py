@@ -1,63 +1,114 @@
-# rewards/signals.py
-from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.db.models.signals import post_save
 from django.conf import settings
-from django.utils import timezone
-from .referral import ReferralService
-from .models import Bonus, BonusType
-from .services import BonusService
-from wallet.models import WalletTransaction
-from django.contrib.auth import get_user_model
+import logging
+from accounts.models import User
+from wallet.models import Deposit, WalletTransaction
+from rewards.triggers import RewardTriggerEngine
+from rewards.unlockers import try_unlock_welcome_bonus
 
-User = get_user_model()
 
-# 1) Create a locked welcome bonus when user is created (only if a welcome BonusType exists & active)
+logger = logging.getLogger(__name__)
+
+
+logger.warning("🔥 rewards.signals LOADED 🔥")
+
 @receiver(post_save, sender=User)
-def create_welcome_bonus_on_signup(sender, instance, created, **kwargs):
-    if not created:
-        return
+def reward_on_registration(sender, instance, created, **kwargs):
+    """
+    Create any bonuses that should be created at registration (e.g. welcome locked bonus template).
+    NOTE: actual unlocking/credit happens via deposit/transaction triggers.
+    """
+    if created:
+        try:
+            RewardTriggerEngine.fire("registration", instance)
+        except Exception:
+            logger.exception("Error firing registration reward trigger for user %s", instance.id)
+
+
+@receiver(post_save, sender=Deposit)
+def reward_on_deposit(sender, instance, created, **kwargs):
+    """
+    Fire deposit-related reward triggers.
+    We check for Deposit.status == "credited".
+    """
     try:
-        bt = BonusType.objects.filter(name="welcome", is_active=True).first()
-        if not bt:
-            return
-        # Create locked bonus using admin-defined default_amount; admin can override later
-        BonusService.create_bonus(user=instance, bonus_type=bt, amount=bt.default_amount, description="Welcome bonus (locked)", locked=True)
-    except Exception as e:
-        # avoid breaking user creation flow
-        import logging
-        logging.getLogger(__name__).exception("Failed to create welcome bonus: %s", e)
+        # Only act on successful credit events
+        if instance.status == "credited":
+            RewardTriggerEngine.fire("deposit_made", instance.user, amount=instance.amount)
+
+            # Welcome bonus unlock check
+            try_unlock_welcome_bonus(instance.user)
+            
+            # Also check referral completion (deposit could complete referral condition)
+            try:
+                from rewards.signals import check_referral_completion  # local import to avoid cycles
+            except Exception:
+                # fallback if same module
+                check_referral_completion = globals().get("check_referral_completion")
+            if callable(check_referral_completion):
+                check_referral_completion(instance.user)
+            
+
+    except Exception:
+        logger.exception("Error handling deposit reward signal for deposit %s", getattr(instance, "id", None))
 
 
-# 2) Unlock welcome bonus when user has at least one successful deposit and at least one successful non-deposit transaction
 @receiver(post_save, sender=WalletTransaction)
-def unlock_bonus_on_deposit_and_tx(sender, instance, created, **kwargs):
+def reward_on_wallet_transaction(sender, instance, created, **kwargs):
+    """
+    Fire transaction-based reward triggers.
+    Uses WalletTransaction model rather than a generic Transaction model.
+    """
     try:
         if not created:
             return
-        if instance.status != "success":
+        # Fire generic transaction category triggers (cashback, promo, etc.)
+        RewardTriggerEngine.fire(
+            "transaction_category_match",
+            instance.user,
+            category=instance.category,
+            amount=instance.amount,
+            tx=instance
+        )
+
+        # After any wallet transaction, the referee may have satisfied their referral condition.
+                # Referral completion
+        try:
+            check_referral_completion = globals().get("check_referral_completion")
+            if callable(check_referral_completion):
+                check_referral_completion(instance.user)
+        except Exception:
+            logger.exception("Error checking referral completion for user %s", instance.user_id)
+
+        # Welcome bonus unlock check
+        try_unlock_welcome_bonus(instance.user)
+
+    except Exception:
+        logger.exception("Error handling wallet transaction reward signal for tx %s", getattr(instance, "id", None))
+
+
+def check_referral_completion(user):
+    """
+    Check if a referred user has now met the deposit + transaction criteria.
+    If yes, fire the referral award for their referrer.
+    """
+    try:
+        if not getattr(user, "referred_by", None):
             return
 
-        user = instance.user
+        # Check for at least one successful deposit
+        has_deposit = WalletTransaction.objects.filter(user=user, status="success", category="deposit").exists()
+        if not has_deposit:
+            return
 
-        # check conditions: at least one successful deposit transaction and at least one successful non-deposit transaction
-        has_deposit = WalletTransaction.objects.filter(user=user, category="deposit", status="success").exists()
+        # Check for at least one successful non-deposit wallet transaction
         has_tx = WalletTransaction.objects.filter(user=user).exclude(category="deposit").filter(status="success").exists()
+        if not has_tx:
+            return
 
-        if has_deposit and has_tx:
-
-            # safety: prevent repeated evaluation
-            instance.metadata = {**(instance.metadata or {}), "triggered_reward_check": True}
-            instance.save(update_fields=["metadata"])
-
-            # unlock locked welcome bonuses (as before)
-            locked_welcome = Bonus.objects.filter(user=user, bonus_type__name="welcome", status="locked")
-            for b in locked_welcome:
-                BonusService.unlock_bonus(b)
-
-            # ----- NEW: evaluate referral awarding for this user (Option B) -----
-            # This will create Bonus objects (locked/unlocked according to BonusType default rules)
-            ReferralService.award_if_eligible(user)
-
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).exception("Error in bonus unlock signal: %s", e)
+        # Fire referral awarding for referrer (we pass referee to allow metadata)
+        referrer = user.referred_by
+        RewardTriggerEngine.fire("referee_deposit_and_tx", referrer, referee=user)
+    except Exception:
+        logger.exception("Error in check_referral_completion for user %s", getattr(user, "id", None))

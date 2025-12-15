@@ -13,6 +13,8 @@ class BonusType(models.Model):
         ("welcome", "Welcome"),
         ("referral", "Referral"),
         ("promo", "Promo"),
+        ("loyalty", "Loyalty"),
+        ("seasonal", "Seasonal"),
         ("manual", "Manual"),
         ("cashback", "Cashback"),
         ("deposit", "Deposit Bonus"),
