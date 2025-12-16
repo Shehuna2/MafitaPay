@@ -22,13 +22,13 @@ const formatCurrency = (amount) =>
 const statusStyles = (status = "") => {
   switch (status.toLowerCase()) {
     case "unlocked":
-      return "bg-emerald-500/15 text-emerald-400";
+      return "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-400/30";
     case "used":
-      return "bg-indigo-500/15 text-indigo-400";
+      return "bg-indigo-500/15 text-indigo-400 ring-1 ring-indigo-400/30";
     case "locked":
-      return "bg-amber-500/15 text-amber-400";
+      return "bg-amber-500/15 text-amber-400 ring-1 ring-amber-400/30";
     case "expired":
-      return "bg-rose-500/15 text-rose-400";
+      return "bg-rose-500/15 text-rose-400 ring-1 ring-rose-400/30";
     default:
       return "bg-white/10 text-gray-300";
   }
@@ -69,7 +69,7 @@ export default function Rewards() {
     );
   }, [bonuses, filter]);
 
-  /* ------------ smart grouping ------------ */
+  /* ------------ grouping ------------ */
   const groupedBonuses = useMemo(() => {
     const unlocked = [];
     const locked = [];
@@ -89,7 +89,7 @@ export default function Rewards() {
     ].filter((g) => g.data.length);
   }, [filteredBonuses]);
 
-  /* ------------ claim logic ------------ */
+  /* ------------ claim ------------ */
   const claimBonus = async () => {
     if (!activeBonus) return;
     setClaiming(true);
@@ -122,27 +122,27 @@ export default function Rewards() {
         <Confetti width={window.innerWidth} height={window.innerHeight} />
       )}
 
-      <div className="min-h-screen bg-[#0B0B0F] text-white pb-28">
+      <div className="min-h-screen bg-gradient-to-br from-[#0A0A0F] via-[#0B0B14] to-black text-white pb-32">
         {/* ---------------- header ---------------- */}
-        <header className="sticky top-0 z-30 bg-black/70 backdrop-blur-xl border-b border-white/5">
-          <div className="px-4 pt-4 pb-5 max-w-xl mx-auto">
+        <header className="sticky top-0 z-30 backdrop-blur-xl bg-black/60 border-b border-white/5">
+          <div className="max-w-xl mx-auto px-4 pt-5 pb-6">
             <button
               onClick={() => history.back()}
-              className="flex items-center gap-2 text-sm text-violet-400"
+              className="flex items-center gap-2 text-sm text-violet-400 hover:text-violet-300 transition"
             >
               <ArrowLeft className="w-4 h-4" /> Back
             </button>
 
-            <div className="mt-4 rounded-3xl bg-gradient-to-br from-violet-600/20 to-indigo-600/10 border border-white/10 p-5">
+            <div className="mt-5 rounded-3xl bg-gradient-to-br from-violet-600/25 to-indigo-600/10 border border-white/10 p-5 shadow-xl">
               <div className="flex items-center gap-2">
-                <Crown className="text-amber-400" />
-                <h1 className="text-xl font-bold">Rewards</h1>
+                <Crown className="text-amber-400 w-5 h-5" />
+                <h1 className="text-lg font-bold">Rewards</h1>
               </div>
 
-              <p className="mt-3 text-3xl font-extrabold text-emerald-400">
+              <p className="mt-4 text-3xl font-extrabold text-emerald-400">
                 {formatCurrency(totalValue)}
               </p>
-              <p className="text-xs text-gray-400">Available value</p>
+              <p className="text-xs text-gray-400">Total unlocked value</p>
             </div>
           </div>
 
@@ -152,10 +152,10 @@ export default function Rewards() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-4 py-2 rounded-full text-xs font-medium capitalize ${
+                className={`px-4 py-2 rounded-full text-xs font-semibold capitalize transition-all ${
                   filter === f
-                    ? "bg-violet-600 text-white"
-                    : "bg-white/5 text-gray-300"
+                    ? "bg-violet-600 text-white shadow-lg"
+                    : "bg-white/5 text-gray-300 hover:bg-white/10"
                 }`}
               >
                 {f}
@@ -165,18 +165,18 @@ export default function Rewards() {
         </header>
 
         {/* ---------------- content ---------------- */}
-        <main className="px-4 max-w-xl mx-auto space-y-6 mt-5">
+        <main className="max-w-xl mx-auto px-4 mt-6 space-y-8">
           {loading &&
             [...Array(3)].map((_, i) => (
               <div
                 key={i}
-                className="h-32 rounded-2xl bg-white/5 animate-pulse"
+                className="h-36 rounded-3xl bg-white/5 animate-pulse"
               />
             ))}
 
           {!loading &&
             groupedBonuses.map((group) => (
-              <section key={group.title} className="space-y-3">
+              <section key={group.title} className="space-y-4">
                 <h3 className="text-xs uppercase tracking-widest text-gray-500">
                   {group.title}
                 </h3>
@@ -188,10 +188,10 @@ export default function Rewards() {
                   return (
                     <div
                       key={b.id}
-                      className="relative rounded-2xl bg-white/5 border border-white/10 p-5 active:scale-[0.98] transition"
+                      className="relative rounded-3xl bg-white/5 border border-white/10 p-5 shadow-lg hover:shadow-2xl transition active:scale-[0.98]"
                     >
                       {unlocked && (
-                        <span className="absolute -top-2 -right-2 px-3 py-1 text-xs rounded-full bg-emerald-500 text-black">
+                        <span className="absolute -top-2 -right-2 px-3 py-1 text-xs rounded-full bg-emerald-500 text-black font-semibold">
                           Ready
                         </span>
                       )}
@@ -211,7 +211,7 @@ export default function Rewards() {
                         </span>
                       </div>
 
-                      <p className="text-2xl font-bold text-emerald-400 mt-2">
+                      <p className="text-2xl font-bold text-emerald-400 mt-3">
                         {formatCurrency(b.amount)}
                       </p>
 
@@ -242,9 +242,9 @@ export default function Rewards() {
                       <button
                         onClick={() => unlocked && setActiveBonus(b)}
                         disabled={!unlocked}
-                        className={`mt-4 w-full py-3 rounded-xl font-semibold text-sm ${
+                        className={`mt-5 w-full py-3 rounded-xl font-semibold transition-all ${
                           unlocked
-                            ? "bg-emerald-500 text-black"
+                            ? "bg-emerald-500 text-black hover:bg-emerald-400 shadow-lg"
                             : "bg-white/10 text-gray-400"
                         }`}
                       >
@@ -257,8 +257,8 @@ export default function Rewards() {
             ))}
 
           {!loading && bonuses.length === 0 && (
-            <div className="text-center py-20 text-gray-500">
-              <Gift className="mx-auto mb-3" />
+            <div className="text-center py-24 text-gray-500">
+              <Gift className="mx-auto mb-3 w-8 h-8" />
               No rewards yet
             </div>
           )}
@@ -270,32 +270,32 @@ export default function Rewards() {
         <>
           <div
             onClick={() => setActiveBonus(null)}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
           />
 
-          <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#111] rounded-t-3xl p-6 animate-slideUp">
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#0F0F14] rounded-t-3xl p-6 animate-slideUp border-t border-white/10">
             <div className="mx-auto w-12 h-1 rounded-full bg-white/20 mb-5" />
 
             <div className="text-center">
-              <Sparkles className="mx-auto text-amber-400" />
-              <h2 className="text-xl font-bold mt-2">Claim Reward</h2>
+              <Sparkles className="mx-auto text-amber-400 w-6 h-6" />
+              <h2 className="text-xl font-bold mt-2">Confirm Claim</h2>
 
-              <p className="text-3xl font-extrabold text-emerald-400 mt-3">
+              <p className="text-3xl font-extrabold text-emerald-400 mt-4">
                 {formatCurrency(activeBonus.amount)}
               </p>
 
               <p className="text-sm text-gray-400 mt-2">
-                Funds will be credited instantly to your wallet.
+                Instantly credited to your wallet.
               </p>
             </div>
 
             <button
               onClick={claimBonus}
               disabled={claiming}
-              className={`w-full mt-6 py-4 rounded-xl font-semibold ${
+              className={`w-full mt-6 py-4 rounded-xl font-semibold transition-all ${
                 claiming
                   ? "bg-gray-600 text-gray-300"
-                  : "bg-emerald-500 text-black"
+                  : "bg-emerald-500 text-black hover:bg-emerald-400 shadow-xl"
               }`}
             >
               {claiming ? "Processing…" : "Confirm Claim"}
