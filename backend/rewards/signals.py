@@ -58,11 +58,15 @@ def reward_on_deposit(sender, instance, created, **kwargs):
 def reward_on_wallet_transaction(sender, instance, created, **kwargs):
     """
     Fire transaction-based reward triggers.
-    Uses WalletTransaction model rather than a generic Transaction model.
+
+    NOTE: we trigger on transactions that are in status == 'success' (whether newly created or updated).
+    Previously the handler returned early when not created which missed pending->success transitions.
     """
     try:
-        if not created:
+        # Only proceed when the transaction is successful.
+        if instance.status != "success":
             return
+
         # Fire generic transaction category triggers (cashback, promo, etc.)
         RewardTriggerEngine.fire(
             "transaction_category_match",
@@ -73,7 +77,6 @@ def reward_on_wallet_transaction(sender, instance, created, **kwargs):
         )
 
         # After any wallet transaction, the referee may have satisfied their referral condition.
-                # Referral completion
         try:
             check_referral_completion = globals().get("check_referral_completion")
             if callable(check_referral_completion):
@@ -98,17 +101,30 @@ def check_referral_completion(user):
             return
 
         # Check for at least one successful deposit
-        has_deposit = WalletTransaction.objects.filter(user=user, status="success", category="deposit").exists()
+        has_deposit = WalletTransaction.objects.filter(
+            user=user, status="success", category="deposit"
+        ).exists()
         if not has_deposit:
             return
 
         # Check for at least one successful non-deposit wallet transaction
-        has_tx = WalletTransaction.objects.filter(user=user).exclude(category="deposit").filter(status="success").exists()
+        has_tx = WalletTransaction.objects.filter(user=user)\
+            .exclude(category="deposit")\
+            .filter(status="success")\
+            .exists()
         if not has_tx:
             return
 
-        # Fire referral awarding for referrer (we pass referee to allow metadata)
-        referrer = user.referred_by
-        RewardTriggerEngine.fire("referee_deposit_and_tx", referrer, referee=user)
+        # ✅ All conditions met → fire referral reward
+        RewardTriggerEngine.fire(
+            "referral_completed",
+            user.referred_by,
+            referee=user,
+        )
+
     except Exception:
-        logger.exception("Error in check_referral_completion for user %s", getattr(user, "id", None))
+        logger.exception(
+            "Error checking referral completion for user %s",
+            getattr(user, "id", None)
+        )
+

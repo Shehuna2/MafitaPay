@@ -6,20 +6,60 @@ import {
   Unlock,
   Clock,
   Gift,
-  Sparkles,
-  Filter,
   Award,
-  BadgePercent,
-  Wallet,
   Smartphone,
+  Star,
+  Crown,
 } from "lucide-react";
 import BonusPopup from "../components/BonusPopup";
+import Confetti from "react-confetti";
+
+function formatCurrency(amount) {
+  const n = Number(amount || 0);
+  try {
+    return new Intl.NumberFormat("en-NG", {
+      style: "currency",
+      currency: "NGN",
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    return `₦${n.toLocaleString()}`;
+  }
+}
+
+function formatDate(dt) {
+  if (!dt) return "-";
+  const d = new Date(dt);
+  return d.toLocaleString();
+}
+
+function statusLabel(status) {
+  if (!status) return "unknown";
+  switch (status.toLowerCase()) {
+    case "locked":
+      return "Locked";
+    case "unlocked":
+      return "Unlocked";
+    case "used":
+      return "Used";
+    case "expired":
+      return "Expired";
+    case "reversed":
+      return "Reversed";
+    default:
+      return status;
+  }
+}
 
 export default function Rewards() {
   const [bonuses, setBonuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [popupBonus, setPopupBonus] = useState(null);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [totalRewards, setTotalRewards] = useState(0);
+  const [error, setError] = useState(null);
+  const [claimingIds, setClaimingIds] = useState([]); // track which bonus(es) being claimed
 
   const filterOptions = [
     { key: "all", label: "All" },
@@ -28,223 +68,286 @@ export default function Rewards() {
     { key: "promo", label: "Promo" },
     { key: "cashback", label: "Cashback" },
     { key: "deposit", label: "Deposit" },
-    { key: "airtime_data", label: "Airtime/Data" },
   ];
 
+  const loadBonuses = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await client.get("/rewards/");
+      const payload = res?.data;
+      const list = Array.isArray(payload) ? payload : payload?.results ?? [];
+      const normalized = list.map((b) => ({
+        ...b,
+        amount: Number(b.amount ?? 0),
+      }));
+      setBonuses(normalized);
+
+      const total = normalized.reduce((sum, b) => {
+        const s = (b.status || "").toLowerCase();
+        if (s === "unlocked" || s === "used") {
+          return sum + (Number(b.amount) || 0);
+        }
+        return sum;
+      }, 0);
+      setTotalRewards(total);
+    } catch (err) {
+      console.error("Failed to load rewards", err);
+      setError(err?.response?.data || err?.message || "Failed to load rewards");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchBonuses = async () => {
-      try {
-        const res = await client.get("/rewards/");
-        setBonuses(res.data);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchBonuses();
+    loadBonuses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Detect new unlocked bonuses → show popup
   useEffect(() => {
-    const unlocked = bonuses.filter((b) => b.status === "unlocked");
+    const unlocked = bonuses.filter((b) => (b.status || "").toLowerCase() === "unlocked");
+    const lastSeen = JSON.parse(localStorage.getItem("seen_rewards") || "[]");
+    const unseen = unlocked.find((b) => !lastSeen.includes(b.id));
 
-    const lastSeen = JSON.parse(localStorage.getItem("last_seen_rewards") || "[]");
-    const unseen = unlocked.filter((u) => !lastSeen.includes(u.id));
-
-    if (unseen.length > 0) {
-      setPopupBonus(unseen[0]); // show the first new one
-      localStorage.setItem("last_seen_rewards", JSON.stringify(unlocked.map((b) => b.id)));
+    if (unseen) {
+      setPopupBonus(unseen);
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 4000);
+      localStorage.setItem(
+        "seen_rewards",
+        JSON.stringify(unlocked.map((b) => b.id))
+      );
     }
   }, [bonuses]);
 
   const filteredBonuses = useMemo(() => {
     if (filter === "all") return bonuses;
-    return bonuses.filter((b) => b.bonus_type_name === filter);
+    return bonuses.filter((b) => {
+      const typeName = b.bonus_type_name || (b.bonus_type && b.bonus_type.name) || "";
+      return (typeName || "").toLowerCase() === filter.toLowerCase();
+    });
   }, [bonuses, filter]);
 
-  const statusColor = {
-    locked: "text-yellow-400 bg-yellow-400/10 border-yellow-400/20",
-    unlocked: "text-green-400 bg-green-400/10 border-green-400/20",
-    used: "text-blue-400 bg-blue-400/10 border-blue-400/20",
-    expired: "text-red-400 bg-red-400/10 border-red-400/20",
-    reversed: "text-gray-400 bg-gray-400/10 border-gray-400/20",
-  };
+  const handleClaim = async (bonus) => {
+    if (!bonus || !bonus.id) return;
+    // avoid double clicks
+    if (claimingIds.includes(bonus.id)) return;
+    setClaimingIds((s) => [...s, bonus.id]);
 
-  const ruleIcon = {
-    withdrawal_restricted: <Lock className="w-4 h-4 text-yellow-400" />,
-    bills_only: <Smartphone className="w-4 h-4 text-blue-400" />,
-    airtime_only: <Smartphone className="w-4 h-4 text-purple-400" />,
-  };
-
-  const progressForBonus = (b) => {
-    const rules = b.metadata || {};
-
-    const needsDeposit = rules.require_deposit;
-    const needsTx = rules.require_transaction;
-
-    const progress = [
-      needsDeposit ? (rules.has_deposit ? 1 : 0) : 1,
-      needsTx ? (rules.has_transaction ? 1 : 0) : 1,
-    ];
-
-    const outOf = progress.length;
-    const total = progress.reduce((a, b) => a + b, 0);
-    return Math.floor((total / outOf) * 100);
+    try {
+      // axios client likely uses baseURL '/api' so path is '/rewards/{id}/claim/'
+      const res = await client.post(`/rewards/${bonus.id}/claim/`);
+      // on success refresh list
+      await loadBonuses();
+      // show popup with updated bonus (optional)
+      setPopupBonus(res.data);
+      // small confetti to celebrate claim
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 2500);
+    } catch (err) {
+      console.error("Claim failed", err);
+      const message = err?.response?.data?.detail || err?.message || "Failed to claim bonus";
+      // basic UI feedback: set error (you may replace with a toast)
+      setError(message);
+      // optionally show popup with error
+      alert(message);
+    } finally {
+      setClaimingIds((s) => s.filter((id) => id !== bonus.id));
+    }
   };
 
   return (
     <>
+      {showConfetti && (
+        <Confetti width={window.innerWidth} height={window.innerHeight} />
+      )}
       {popupBonus && (
         <BonusPopup bonus={popupBonus} onClose={() => setPopupBonus(null)} />
       )}
 
-      <div className="min-h-screen bg-gray-900 text-white relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 to-gray-900/5 pointer-events-none" />
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white">
+        {/* Sticky Premium Header */}
+        <div className="sticky top-0 z-30 bg-black/70 backdrop-blur-xl border-b border-white/5">
+          <div className="px-4 pt-4 pb-3 max-w-2xl mx-auto">
+            <button
+              onClick={() => window.history.back()}
+              className="flex items-center gap-2 text-sm text-violet-400 mb-3"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </button>
 
-        {loading && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-gray-800/90 p-8 rounded-3xl shadow-2xl border border-gray-700/50">
-              <Gift className="w-12 h-12 text-indigo-400 animate-pulse mx-auto mb-4" />
-              <p className="text-center text-lg text-indigo-300">Loading rewards...</p>
+            <div className="rounded-2xl bg-gradient-to-br from-violet-600/20 to-indigo-600/10 border border-violet-500/20 p-4">
+              <div className="flex items-center gap-3">
+                <Crown className="w-6 h-6 text-amber-400" />
+                <h1 className="text-xl font-bold">Premium Rewards</h1>
+              </div>
+              <p className="mt-2 text-2xl font-extrabold text-emerald-400">
+                {formatCurrency(totalRewards)}
+              </p>
+              <p className="text-xs text-gray-400">Unlocked value</p>
             </div>
           </div>
-        )}
 
-        <div className="relative z-10 px-4 py-6">
-          {/* Back */}
-          <button
-            onClick={() => window.history.back()}
-            className="group flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 transition mb-4"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            Back
-          </button>
-
-          {/* Header */}
-          <h1 className="text-3xl font-bold text-indigo-400 flex items-center gap-2 mb-6">
-            <Gift className="w-7 h-7" />
-            Rewards
-          </h1>
-
-          {/* Filter Bar */}
-          <div className="flex overflow-x-auto gap-2 pb-3 mb-4 scrollbar-none">
+          {/* Mobile-first filter chips */}
+          <div className="flex gap-2 px-4 pb-3 overflow-x-auto scrollbar-none">
             {filterOptions.map((f) => (
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
-                className={`px-4 py-2 whitespace-nowrap rounded-xl text-sm border transition ${
+                className={`px-4 py-2 rounded-full text-xs font-medium border transition ${
                   filter === f.key
-                    ? "bg-indigo-600 border-indigo-500 text-white"
-                    : "bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700"
+                    ? "bg-violet-600 border-violet-500 text-white"
+                    : "bg-gray-800 border-gray-700 text-gray-300"
                 }`}
               >
                 {f.label}
               </button>
             ))}
+            <button
+              onClick={loadBonuses}
+              className="px-3 py-2 rounded-full text-xs font-medium border bg-gray-800 border-gray-700 text-gray-300 ml-2"
+              title="Refresh"
+            >
+              Refresh
+            </button>
           </div>
+        </div>
 
-          {/* Bonuses List */}
-          {filteredBonuses.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              <Award className="w-16 h-16 mx-auto text-gray-600 mb-3" />
-              <p className="text-sm">No rewards found</p>
+        {/* Content */}
+        <div className="px-4 py-6 max-w-2xl mx-auto space-y-5">
+          {loading ? (
+            <div className="text-center text-gray-400 py-20">
+              <Gift className="w-10 h-10 mx-auto mb-3 animate-pulse" />
+              Loading rewards…
+            </div>
+          ) : error ? (
+            <div className="text-center py-20 text-rose-400">
+              <Award className="w-12 h-12 mx-auto mb-3" />
+              <p>Error loading rewards</p>
+              <pre className="text-xs text-red-300">{String(error)}</pre>
+              <button
+                onClick={loadBonuses}
+                className="mt-3 px-4 py-2 rounded bg-violet-600 text-white text-sm"
+              >
+                Retry
+              </button>
+            </div>
+          ) : filteredBonuses.length === 0 ? (
+            <div className="text-center py-20 text-gray-500">
+              <Award className="w-12 h-12 mx-auto mb-3" />
+              No rewards yet
             </div>
           ) : (
-            <div className="space-y-4">
-              {filteredBonuses.map((b, i) => (
+            filteredBonuses.map((b) => {
+              const typeName =
+                (b.bonus_type_name &&
+                  String(b.bonus_type_name).replace("_", " ")) ||
+                (b.bonus_type && (b.bonus_type.display_name || b.bonus_type.name)) ||
+                "bonus";
+
+              const isClaiming = claimingIds.includes(b.id);
+              const isUnlocked = String(b.status || "").toLowerCase() === "unlocked";
+
+              return (
                 <div
                   key={b.id}
-                  className="bg-gray-800/70 border border-gray-700/40 rounded-xl p-5 backdrop-blur-sm animate-fade-in-up"
-                  style={{ animationDelay: `${i * 40}ms` }}
+                  className="rounded-2xl bg-white/5 backdrop-blur-lg border border-white/10 p-5 shadow-lg active:scale-[0.99] transition"
                 >
-                  {/* Top Section */}
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-xl font-semibold text-indigo-300 capitalize">
-                      {b.bonus_type_name.replace("_", " ")}
+                  <div className="flex justify-between items-start">
+                    <h3 className="text-lg font-semibold capitalize flex gap-2">
+                      <Star className="w-4 h-4 text-amber-400" />
+                      {typeName}
                     </h3>
-
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs border capitalize ${statusColor[b.status]}`}
-                    >
-                      {b.status}
+                    <span className="text-xs px-3 py-1 rounded-full bg-black/40 border border-white/10">
+                      {statusLabel(b.status)}
                     </span>
                   </div>
 
-                  <p className="text-4xl font-bold text-green-400">₦{b.amount}</p>
+                  <p className="text-3xl font-extrabold text-emerald-400 mt-2">
+                    {formatCurrency(b.amount)}
+                  </p>
 
                   {b.description && (
-                    <p className="text-xs text-gray-400 mt-1 mb-3">{b.description}</p>
+                    <p className="text-sm text-gray-400 mt-2">{b.description}</p>
                   )}
 
-                  {/* Rules Section */}
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {b.metadata?.withdrawal_restricted && (
-                      <div className="flex items-center gap-1 text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2 py-1 rounded-md">
-                        <Lock className="w-3 h-3" /> Locked to wallet
-                      </div>
-                    )}
-
-                    {b.metadata?.bills_only && (
-                      <div className="flex items-center gap-1 text-xs text-blue-400 bg-blue-400/10 border border-blue-400/20 px-2 py-1 rounded-md">
-                        <Smartphone className="w-3 h-3" /> Bills Only
-                      </div>
-                    )}
-
-                    {b.metadata?.airtime_only && (
-                      <div className="flex items-center gap-1 text-xs text-purple-400 bg-purple-400/10 border border-purple-400/20 px-2 py-1 rounded-md">
-                        <Smartphone className="w-3 h-3" /> Airtime/Data Only
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Locked Bonus Progress Bar */}
-                  {b.status === "locked" && (
-                    <div className="mb-3">
-                      <p className="text-xs text-gray-400 mb-1">Unlock progress</p>
-
-                      <div className="w-full bg-gray-700 h-2 rounded-full overflow-hidden">
-                        <div
-                          className="bg-indigo-500 h-full transition-all"
-                          style={{
-                            width: `${progressForBonus(b)}%`,
-                          }}
-                        ></div>
-                      </div>
-
-                      <p className="text-xs text-gray-500 mt-1">
-                        {progressForBonus(b)}% complete
-                      </p>
+                  {/* metadata / trigger info */}
+                  {b.metadata && (
+                    <div className="text-xs text-gray-400 mt-2">
+                      {b.metadata.trigger_event && (
+                        <div>
+                          <strong>Trigger:</strong> {b.metadata.trigger_event}
+                        </div>
+                      )}
+                      {b.metadata.trigger_context && (
+                        <div>
+                          <strong>Context:</strong>{" "}
+                          <span className="break-all">
+                            {JSON.stringify(b.metadata.trigger_context)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* Footer */}
-                  <div className="flex items-center justify-between text-xs text-gray-500 mt-3">
+                  <div className="flex justify-between items-center text-xs text-gray-400 mt-4">
                     <span className="flex items-center gap-1">
-                      {b.status === "locked" ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-                      {b.status === "locked" ? "Awaiting requirements" : "Activated"}
+                      {String(b.status || "").toLowerCase() === "locked" ? (
+                        <Lock className="w-3 h-3 text-amber-400" />
+                      ) : (
+                        <Unlock className="w-3 h-3 text-emerald-400" />
+                      )}
+                      {statusLabel(b.status)}
                     </span>
 
-                    {b.expires_at && (
+                    {b.expires_at ? (
                       <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
+                        <Clock className="w-3 h-3 text-rose-400" />
                         Expires {new Date(b.expires_at).toLocaleDateString()}
                       </span>
+                    ) : (
+                      <span className="text-xs text-gray-500">No expiry</span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={() => setPopupBonus(b)}
+                      className="px-3 py-2 rounded bg-violet-600 text-white text-xs"
+                    >
+                      View details
+                    </button>
+
+                    {isUnlocked && (
+                      <button
+                        onClick={() => handleClaim(b)}
+                        disabled={isClaiming}
+                        className={`px-3 py-2 rounded text-xs ${
+                          isClaiming
+                            ? "bg-gray-600 text-gray-200"
+                            : "bg-emerald-500 text-black"
+                        }`}
+                      >
+                        {isClaiming ? "Claiming..." : "Claim"}
+                      </button>
+                    )}
+
+                    {!isUnlocked && (
+                      <button
+                        onClick={() => alert("This reward is not claimable yet")}
+                        className="px-3 py-2 rounded bg-gray-800 text-gray-300 text-xs"
+                      >
+                        {String(b.status || "").toLowerCase() === "used" ? "Claimed" : "Not claimable"}
+                      </button>
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+            })
           )}
         </div>
       </div>
-
-      {/* Animations */}
-      <style>{`
-        @keyframes fade-in-up {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in-up { animation: fade-in-up 0.35s ease-out; }
-      `}</style>
     </>
   );
 }

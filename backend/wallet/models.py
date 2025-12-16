@@ -171,41 +171,13 @@ class Wallet(models.Model):
 
     def available_balance(self):
         return self.balance - self.locked_balance
-    # inside wallet/models.py (class Wallet)
 
-    def credit_bonus(self, amount, reference="", metadata=None):
-        """
-        Credits bonus to locked_balance (non-withdrawable by default).
-        """
-        from decimal import Decimal
-        from django.db import transaction
-        from .models import WalletTransaction
+    def credit_bonus(self, *args, **kwargs):
+        raise RuntimeError(
+            "DO NOT call Wallet.credit_bonus directly. "
+            "Use BonusService instead."
+        )
 
-        try:
-            amount = Decimal(str(amount))
-            if amount <= 0:
-                return False
-            with transaction.atomic():
-                w = Wallet.objects.select_for_update().get(id=self.id)
-                before_locked = w.locked_balance
-                w.locked_balance = (w.locked_balance or Decimal("0.00")) + amount
-                w.save(update_fields=["locked_balance"])
-                WalletTransaction.objects.create(
-                    user=self.user,
-                    wallet=w,
-                    tx_type="credit",
-                    category="bonus",
-                    amount=amount,
-                    balance_before=getattr(w, "balance", 0),
-                    balance_after=getattr(w, "balance", 0),
-                    reference=reference,
-                    status="success",
-                    metadata=metadata or {},
-                )
-            return True
-        except Exception as e:
-            logger.exception("credit_bonus failed: %s", e)
-            return False
 
     def __str__(self):
         return f"{self.user.email} - Balance: ₦{self.balance}, Locked: ₦{self.locked_balance}"
@@ -269,9 +241,12 @@ class WalletTransaction(models.Model):
         ("data", "Data"),
         ("gasfee", "Gas Fee"),
         ("crypto", "Crypto"),
+        ("bonus", "Bonus"),
+        ("payment", "Payment"),
+        ("refund", "Refund"),
+        ("referral", "Referral Bonus"),
         ("other", "Other"),
     ]
-    
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     wallet = models.ForeignKey("Wallet", on_delete=models.CASCADE)

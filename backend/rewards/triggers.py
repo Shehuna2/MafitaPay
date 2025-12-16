@@ -26,6 +26,24 @@ class RewardTriggerEngine:
         or legacy fields.
         """
         try:
+            # SPECIAL CASE: referral awarding delegates to ReferralService
+            # check_referral_completion in signals fires RewardTriggerEngine.fire("referee_deposit_and_tx", referrer, referee=user)
+            if event == "referee_deposit_and_tx":
+                try:
+                    # local import to avoid cycles
+                    from .referral import ReferralService
+                    # Prefer explicit referee kwarg if provided
+                    referee = kwargs.get("referee")
+                    if referee:
+                        ReferralService.award_if_eligible(referee)
+                    else:
+                        # fallback: if caller passed the referee as `user`
+                        ReferralService.award_if_eligible(user)
+                except Exception:
+                    logger.exception("Error running ReferralService for event referee_deposit_and_tx user=%s", getattr(user, "id", None))
+                # Short-circuit the generic bonus-type loop for this event
+                return
+
             # Load all active bonus types (small set; admin controls them)
             bts = BonusType.objects.filter(is_active=True)
 
@@ -82,66 +100,26 @@ class RewardTriggerEngine:
         try:
             # Quick guard: do not award welcome twice (or any bonus twice) if identical signature exists.
             # Build a context for signature (used by RewardEngine)
-            context = {}
+            # (existing implementation continues here — keep as before)
+            context = kwargs.copy() if kwargs else {}
+            # Include event in context so signature differs across events
+            context["event"] = event
 
-            # common context data
-            if kwargs.get("amount") is not None:
-                try:
-                    context["amount"] = str(Decimal(str(kwargs.get("amount"))))
-                except Exception:
-                    context["amount"] = str(kwargs.get("amount"))
+            # Determine amount to credit. Admin may set override in rules (e.g. "amount")
+            amount = rules.get("amount") if isinstance(rules, dict) else None
+            if amount is None:
+                amount = getattr(bonus_type, "default_amount", None)
 
-            if kwargs.get("category"):
-                context["category"] = kwargs.get("category")
-
-            if kwargs.get("deposit_id"):
-                context["deposit_id"] = str(kwargs.get("deposit_id"))
-
-            if kwargs.get("tx_id"):
-                context["tx_id"] = str(kwargs.get("tx_id"))
-
-            # For registration, include user id as context
-            if event == "registration":
-                context["user_id"] = str(getattr(user, "id", None))
-
-            # For referee flows, include referee id if present
-            referee = kwargs.get("referee")
-            if referee:
-                context["referee_id"] = str(getattr(referee, "id", referee))
-
-            # Determine the amount to award:
-            amount = kwargs.get("amount")
-            if amount is None or float(amount) <= 0:
-                # default to bonus_type.default_amount
-                try:
-                    amount = Decimal(str(bonus_type.default_amount or "0.00"))
-                except Exception:
-                    amount = Decimal("0.00")
-
-            # If amount is zero, skip
-            try:
-                amount = Decimal(str(amount))
-            except Exception:
-                logger.warning("RewardTriggerEngine: invalid amount for bonus_type %s: %s", bonus_type.id, amount)
-                return
-
-            if amount <= 0:
-                return
-
-            # Delegate to RewardEngine — it will handle idempotency and referee/referrer logic using rules.
-            try:
-                with transaction.atomic():
-                    RewardEngine.credit(
-                        user=user,
-                        bonus_type=bonus_type,
-                        amount=amount,
-                        metadata={"trigger_source": "RewardTriggerEngine", "event": event},
-                        referee=referee,
-                        rules=rules,
-                        event=event,
-                        context=context,
-                    )
-            except Exception:
-                logger.exception("Failed to credit bonus_type=%s to user=%s", getattr(bonus_type, "id", None), getattr(user, "id", None))
+            # Call RewardEngine.credit which handles idempotency and creation
+            RewardEngine.credit(
+                user,
+                bonus_type=bonus_type,
+                amount=amount,
+                metadata=rules.get("metadata") if isinstance(rules, dict) else {},
+                referee=kwargs.get("referee"),
+                rules=rules,
+                event=event,
+                context=context,
+            )
         except Exception:
-            logger.exception("Error evaluating bonus_type=%s for user=%s", getattr(bonus_type, "id", None), getattr(user, "id", None))
+            logger.exception("Error in _evaluate_and_award for bonus_type=%s user=%s", getattr(bonus_type, "id", None), getattr(user, "id", None))

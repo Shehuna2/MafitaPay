@@ -15,6 +15,7 @@ urlpatterns = [
     path('', include('gasfee.urls')),
     path('', include('bills.urls')),
     path('', include('wallet.urls')),
+    path('', include('rewards.urls')),
     path('api/', include('accounts.urls')),
     path('api/', include('wallet.urls')),
     path('api/', include('p2p.urls')),

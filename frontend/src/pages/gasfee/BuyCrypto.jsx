@@ -289,7 +289,7 @@ export default function BuyCrypto() {
     if (!crypto) return [];
     if (form.currency === "NGN") return [500, 1000, 2000, 5000, 10000, 20000];
     if (form.currency === "USDT") return [0.5, 1.0, 2.0, 5.0, 10.0, 20.0];
-    return [0.1, 0.5, 1.0, 2.0, 5.0, 10.0];
+    return [0.01, 0.05, 0.1, 0.2, 0.5, 1.0];
   };
 
   const validateForm = () => {

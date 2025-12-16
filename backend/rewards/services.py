@@ -4,6 +4,9 @@ from django.utils import timezone
 from django.db import transaction
 from wallet.models import WalletTransaction, Wallet
 from .models import Bonus, BonusType
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BonusService:
@@ -129,3 +132,84 @@ class BonusService:
             BonusService.apply_bonus_to_wallet(bonus)
 
         return bonus
+
+    @staticmethod
+    def claim_bonus(bonus: Bonus):
+        """
+        Move bonus amount from wallet.locked_balance into wallet.balance and
+        mark bonus.status = 'used'. Idempotent & transactional.
+
+        Returns:
+          True if successfully claimed (or already claimed),
+          False if claim cannot be performed (e.g. status not unlocked)
+        """
+        try:
+            # Only unlocked bonuses can be claimed
+            if bonus.status != "unlocked":
+                logger.debug("claim_bonus: bonus not unlocked (id=%s status=%s)", bonus.id, bonus.status)
+                return False
+
+            amount = Decimal(bonus.amount)
+
+            with transaction.atomic():
+                # Idempotency: if a claim tx already exists, treat as already claimed
+                existing_claim = WalletTransaction.objects.filter(
+                    metadata__claimed_bonus_id=str(bonus.id),
+                    category="bonus",
+                    status="success",
+                ).exists()
+                if existing_claim:
+                    # Ensure bonus is marked used
+                    if bonus.status != "used":
+                        bonus.status = "used"
+                        bonus.save(update_fields=["status", "updated_at"])
+                    logger.info("claim_bonus: bonus already claimed (id=%s)", bonus.id)
+                    return True
+
+                wallet = Wallet.objects.select_for_update().get(user=bonus.user)
+
+                # Ensure there are sufficient locked funds (should normally be true)
+                if (wallet.locked_balance or Decimal("0.00")) < amount:
+                    logger.error(
+                        "claim_bonus: insufficient locked_balance for user %s bonus %s: have=%s need=%s",
+                        bonus.user_id, bonus.id, wallet.locked_balance, amount
+                    )
+                    return False
+
+                # Move locked_balance -> balance
+                before_balance = wallet.balance
+                before_locked = wallet.locked_balance
+
+                wallet.locked_balance = (wallet.locked_balance or Decimal("0.00")) - amount
+                wallet.balance = (wallet.balance or Decimal("0.00")) + amount
+                wallet.save(update_fields=["balance", "locked_balance"])
+
+                # Create transaction representing the claim
+                WalletTransaction.objects.create(
+                    user=bonus.user,
+                    wallet=wallet,
+                    tx_type="credit",
+                    category="bonus",
+                    amount=amount,
+                    balance_before=before_balance,
+                    balance_after=wallet.balance,
+                    reference=f"claim-bonus-{bonus.id}",
+                    status="success",
+                    metadata={
+                        "bonus_id": str(bonus.id),
+                        "claimed_bonus_id": str(bonus.id),
+                        "bonus_type": bonus.bonus_type.name,
+                        **(bonus.metadata or {}),
+                    },
+                )
+
+                # Mark bonus used
+                bonus.status = "used"
+                bonus.save(update_fields=["status", "updated_at"])
+
+            logger.info("claim_bonus: claimed bonus %s for user %s", bonus.id, bonus.user_id)
+            return True
+
+        except Exception as exc:
+            logger.exception("claim_bonus failed for bonus %s: %s", getattr(bonus, "id", None), exc)
+            return False

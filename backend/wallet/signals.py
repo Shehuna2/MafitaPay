@@ -12,6 +12,9 @@ def create_transaction_notification(sender, instance, created, **kwargs):
             "airtime": f"Airtime purchase of ₦{instance.amount} processed",
             "data": f"Data purchase of ₦{instance.amount} successful",
             "crypto": f"Crypto transaction of ₦{instance.amount} done",
+            "reward": f"Reward of ₦{instance.amount} granted",
+            "bonus": f"Bonus of ₦{instance.amount} credited",
+            
         }
         message = msg_map.get(instance.category, f"{instance.category.title()} transaction recorded")
         Notification.objects.create(user=instance.user, message=message, transaction=instance)

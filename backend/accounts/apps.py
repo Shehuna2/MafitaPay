@@ -6,5 +6,6 @@ class AccountsConfig(AppConfig):
     name = 'accounts'
 
     def ready(self):
-        import accounts.signals  
+        import accounts.signals
+        import rewards.signals
         import rewards.referral  # Ensure referral logic is loaded

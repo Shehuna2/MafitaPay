@@ -3,13 +3,15 @@ from django.contrib import admin
 from .models import Wallet, WalletTransaction, VirtualAccount
 
 class WalletAdmin(admin.ModelAdmin):
-    list_display = ("user", "balance")
+    list_display = ("user", "balance", "locked_balance")
+    search_fields = ("user__email",)
     actions = ["add_funds"]
     
     def add_funds(self, request, queryset):
         for wallet in queryset:
             wallet.deposit(5000)  # Add NGN 5000 for testing
         self.message_user(request, "Added NGN 5000 to selected wallets.")
+
 
 
 
