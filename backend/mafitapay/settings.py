@@ -254,6 +254,11 @@ LOGGING = {
     },
 }
 
+USE_TZ = True
+TIME_ZONE = "Africa/Lagos"
+
+USE_I18N = True
+USE_L10N = True
 # --------------------------------------------------
 # 14. ALL YOUR API KEYS (unchanged)
 # --------------------------------------------------
