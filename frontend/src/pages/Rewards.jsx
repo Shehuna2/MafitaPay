@@ -42,7 +42,7 @@ export default function Rewards() {
   const [claiming, setClaiming] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
 
-  const filters = ["all", "welcome", "referral", "promo", "cashback", "deposit"];
+  const filters = ["all", "welcome", "referral", "promo", "deposit"];
 
   /* ------------ fetch ------------ */
   const loadBonuses = async () => {
