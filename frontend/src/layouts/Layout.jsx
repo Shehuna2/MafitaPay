@@ -132,7 +132,6 @@ export default function Layout({ children }) {
         ],
       },
       { to: "/assets", label: "Gas Fee", icon: <SiEthereum className="w-6 h-6 text-gray-400" /> },
-      { to: "/sell-crypto", label: "Sell", icon: <Banknote className="w-6 h-6" /> },
       { to: "/referral", label: "Referral", icon: <Users className="w-6 h-6" /> },
       { to: "/rewards", label: "Rewards", icon: <Gift className="w-6 h-6" /> },
       { to: "/accounts/profile", label: "Settings", icon: <Settings className="w-6 h-6" /> },
