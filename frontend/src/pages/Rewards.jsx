@@ -34,7 +34,6 @@ const statusStyles = (status = "") => {
   }
 };
 
-/* ---------------- component ---------------- */
 export default function Rewards() {
   const [bonuses, setBonuses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,12 +44,11 @@ export default function Rewards() {
 
   const filters = ["all", "welcome", "referral", "promo", "cashback", "deposit"];
 
-  /* ------------ fetch rewards ------------ */
+  /* ------------ fetch ------------ */
   const loadBonuses = async () => {
     setLoading(true);
     const res = await client.get("/rewards/");
-    const list = Array.isArray(res.data) ? res.data : res.data?.results ?? [];
-    setBonuses(list);
+    setBonuses(Array.isArray(res.data) ? res.data : res.data?.results ?? []);
     setLoading(false);
   };
 
@@ -63,9 +61,7 @@ export default function Rewards() {
     if (filter === "all") return bonuses;
     return bonuses.filter(
       (b) =>
-        (b.bonus_type_name || "")
-          .toLowerCase()
-          .replace("_", "") === filter
+        (b.bonus_type_name || "").toLowerCase().replace("_", "") === filter
     );
   }, [bonuses, filter]);
 
@@ -89,23 +85,7 @@ export default function Rewards() {
     ].filter((g) => g.data.length);
   }, [filteredBonuses]);
 
-  /* ------------ claim ------------ */
-  const claimBonus = async () => {
-    if (!activeBonus) return;
-    setClaiming(true);
-    try {
-      await client.post(`/rewards/${activeBonus.id}/claim/`);
-      await client.post("/wallet/sync/").catch(() => {});
-      await loadBonuses();
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 2500);
-      setActiveBonus(null);
-    } finally {
-      setClaiming(false);
-    }
-  };
-
-  /* ------------ total ------------ */
+  /* ------------ totals ------------ */
   const totalValue = useMemo(
     () =>
       bonuses
@@ -116,30 +96,50 @@ export default function Rewards() {
     [bonuses]
   );
 
+  /* ------------ claim ------------ */
+  const claimBonus = async () => {
+    if (!activeBonus) return;
+    setClaiming(true);
+    try {
+      await client.post(`/rewards/${activeBonus.id}/claim/`);
+      await client.post("/wallet/sync/").catch(() => {});
+      await loadBonuses();
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 2000);
+      setActiveBonus(null);
+    } finally {
+      setClaiming(false);
+    }
+  };
+
   return (
     <>
       {showConfetti && (
-        <Confetti width={window.innerWidth} height={window.innerHeight} />
+        <Confetti
+          width={Math.min(window.innerWidth, 480)}
+          height={window.innerHeight}
+        />
       )}
 
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0A0F] via-[#0B0B14] to-black text-white pb-32">
+      <div className="min-h-screen text-white pb-32 overflow-x-hidden">
         {/* ---------------- header ---------------- */}
-        <header className="sticky top-0 z-30 backdrop-blur-xl bg-black/60 border-b border-white/5">
-          <div className="max-w-xl mx-auto px-4 pt-5 pb-6">
+        <header className="sticky top-0 z-30 border-b border-white/5">
+          <div className="px-4 pt-4 pb-5 sm:max-w-xl sm:mx-auto">
             <button
               onClick={() => history.back()}
-              className="flex items-center gap-2 text-sm text-violet-400 hover:text-violet-300 transition"
+              className="flex items-center gap-2 text-sm text-violet-400"
             >
-              <ArrowLeft className="w-4 h-4" /> Back
+              <ArrowLeft className="w-4 h-4" />
+              Back
             </button>
 
-            <div className="mt-5 rounded-3xl bg-gradient-to-br from-violet-600/25 to-indigo-600/10 border border-white/10 p-5 shadow-xl">
+            <div className="mt-4 rounded-2xl bg-white/5 border border-white/10 p-4">
               <div className="flex items-center gap-2">
-                <Crown className="text-amber-400 w-5 h-5" />
-                <h1 className="text-lg font-bold">Rewards</h1>
+                <Crown className="w-4 h-4 text-amber-400" />
+                <h1 className="text-sm font-semibold">Rewards</h1>
               </div>
 
-              <p className="mt-4 text-3xl font-extrabold text-emerald-400">
+              <p className="mt-3 text-2xl sm:text-3xl font-extrabold text-emerald-400">
                 {formatCurrency(totalValue)}
               </p>
               <p className="text-xs text-gray-400">Total unlocked value</p>
@@ -147,30 +147,32 @@ export default function Rewards() {
           </div>
 
           {/* filters */}
-          <div className="flex gap-2 px-4 pb-4 overflow-x-auto scrollbar-none">
-            {filters.map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-4 py-2 rounded-full text-xs font-semibold capitalize transition-all ${
-                  filter === f
-                    ? "bg-violet-600 text-white shadow-lg"
-                    : "bg-white/5 text-gray-300 hover:bg-white/10"
-                }`}
-              >
-                {f}
-              </button>
-            ))}
+          <div className="px-4 pb-3">
+            <div className="flex justify-center gap-2 min-w-max">
+              {filters.map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-3 py-3 rounded-full text-xs font-semibold capitalize whitespace-nowrap ${
+                    filter === f
+                      ? "bg-violet-600 text-white"
+                      : "bg-white/5 text-gray-300"
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
           </div>
         </header>
 
         {/* ---------------- content ---------------- */}
-        <main className="max-w-xl mx-auto px-4 mt-6 space-y-8">
+        <main className="px-4 mt-6 space-y-8 sm:max-w-xl sm:mx-auto">
           {loading &&
             [...Array(3)].map((_, i) => (
               <div
                 key={i}
-                className="h-36 rounded-3xl bg-white/5 animate-pulse"
+                className="h-32 rounded-2xl bg-white/5 animate-pulse"
               />
             ))}
 
@@ -188,22 +190,22 @@ export default function Rewards() {
                   return (
                     <div
                       key={b.id}
-                      className="relative rounded-3xl bg-white/5 border border-white/10 p-5 shadow-lg hover:shadow-2xl transition active:scale-[0.98]"
+                      className="relative rounded-2xl bg-white/5 border border-white/10 p-4 overflow-hidden"
                     >
                       {unlocked && (
-                        <span className="absolute -top-2 -right-2 px-3 py-1 text-xs rounded-full bg-emerald-500 text-black font-semibold">
+                        <span className="absolute top-2 right-2 px-2 py-0.5 text-[10px] rounded-full bg-emerald-500 text-black font-semibold">
                           Ready
                         </span>
                       )}
 
                       <div className="flex justify-between items-start">
-                        <h4 className="font-semibold capitalize flex gap-2">
+                        <h4 className="text-sm font-semibold flex gap-1">
                           <Sparkles className="w-4 h-4 text-amber-400" />
                           {b.bonus_type_name?.replace("_", " ") || "Bonus"}
                         </h4>
 
                         <span
-                          className={`text-xs px-3 py-1 rounded-full ${statusStyles(
+                          className={`text-[10px] px-2 py-0.5 rounded-full ${statusStyles(
                             b.status
                           )}`}
                         >
@@ -211,17 +213,17 @@ export default function Rewards() {
                         </span>
                       </div>
 
-                      <p className="text-2xl font-bold text-emerald-400 mt-3">
+                      <p className="text-xl font-bold text-emerald-400 mt-2">
                         {formatCurrency(b.amount)}
                       </p>
 
                       {b.description && (
-                        <p className="text-sm text-gray-400 mt-2">
+                        <p className="text-xs text-gray-400 mt-1">
                           {b.description}
                         </p>
                       )}
 
-                      <div className="flex justify-between text-xs text-gray-400 mt-4">
+                      <div className="flex justify-between text-[10px] text-gray-400 mt-3">
                         <span className="flex items-center gap-1">
                           {unlocked ? (
                             <Unlock className="w-3 h-3 text-emerald-400" />
@@ -242,9 +244,9 @@ export default function Rewards() {
                       <button
                         onClick={() => unlocked && setActiveBonus(b)}
                         disabled={!unlocked}
-                        className={`mt-5 w-full py-3 rounded-xl font-semibold transition-all ${
+                        className={`mt-4 w-full py-3 rounded-xl text-sm font-semibold ${
                           unlocked
-                            ? "bg-emerald-500 text-black hover:bg-emerald-400 shadow-lg"
+                            ? "bg-emerald-500 text-black"
                             : "bg-white/10 text-gray-400"
                         }`}
                       >
@@ -270,21 +272,21 @@ export default function Rewards() {
         <>
           <div
             onClick={() => setActiveBonus(null)}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
+            className="fixed inset-0 bg-black/70 z-40"
           />
 
-          <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#0F0F14] rounded-t-3xl p-6 animate-slideUp border-t border-white/10">
-            <div className="mx-auto w-12 h-1 rounded-full bg-white/20 mb-5" />
+          <div className="fixed bottom-0 inset-x-0 z-50 bg-[#0F0F14] rounded-t-2xl p-5 pb-8 border-t border-white/10">
+            <div className="mx-auto w-12 h-1 rounded-full bg-white/20 mb-4" />
 
             <div className="text-center">
-              <Sparkles className="mx-auto text-amber-400 w-6 h-6" />
-              <h2 className="text-xl font-bold mt-2">Confirm Claim</h2>
+              <Sparkles className="mx-auto text-amber-400 w-5 h-5" />
+              <h2 className="text-lg font-bold mt-2">Confirm Claim</h2>
 
-              <p className="text-3xl font-extrabold text-emerald-400 mt-4">
+              <p className="text-2xl font-extrabold text-emerald-400 mt-3">
                 {formatCurrency(activeBonus.amount)}
               </p>
 
-              <p className="text-sm text-gray-400 mt-2">
+              <p className="text-xs text-gray-400 mt-1">
                 Instantly credited to your wallet.
               </p>
             </div>
@@ -292,10 +294,10 @@ export default function Rewards() {
             <button
               onClick={claimBonus}
               disabled={claiming}
-              className={`w-full mt-6 py-4 rounded-xl font-semibold transition-all ${
+              className={`w-full mt-5 py-4 rounded-xl font-semibold ${
                 claiming
                   ? "bg-gray-600 text-gray-300"
-                  : "bg-emerald-500 text-black hover:bg-emerald-400 shadow-xl"
+                  : "bg-emerald-500 text-black"
               }`}
             >
               {claiming ? "Processing…" : "Confirm Claim"}
