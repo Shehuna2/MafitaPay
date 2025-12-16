@@ -2,6 +2,9 @@ import re
 import sys
 import logging
 
+
+from django.db.models import Sum
+
 from datetime import timedelta
 from django.conf import settings
 from django.utils import timezone
@@ -25,6 +28,7 @@ from .serializers import (
 from .models import User, UserProfile
 from wallet.models import WalletTransaction, Wallet
 from .tasks import send_verification_email_sync, send_reset_email_sync
+from rewards.models import Bonus
 
 logger = logging.getLogger(__name__)
 
@@ -233,6 +237,7 @@ class PasswordResetConfirmView(APIView):
             return Response({"error": "Invalid reset token."}, status=status.HTTP_400_BAD_REQUEST)
             
 
+
 class ReferralListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -240,11 +245,18 @@ class ReferralListView(APIView):
         referrals = request.user.referrals.all().values("email", "date_joined")
         referral_code = request.user.referral_code
         total_referrals = referrals.count()
-        total_bonus = total_referrals * 200  # adjust if you want dynamic bonuses
+
+        # Compute total bonus properly from rewards app (sum referrer bonuses)
+        # Sum only bonuses awarded to the user as a referrer
+        total_bonus_qs = Bonus.objects.filter(
+            user=request.user,
+            bonus_type__name="referral"
+        ).aggregate(total=Sum("amount"))
+        total_bonus = total_bonus_qs.get("total") or 0
 
         return Response({
             "referral_code": referral_code,
             "total_referrals": total_referrals,
-            "total_bonus": total_bonus,
+            "total_bonus": float(total_bonus),
             "referred_users": list(referrals),
         })
