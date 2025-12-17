@@ -127,13 +127,19 @@ def flutterwave_webhook(request):
         if not bt and data.get("transfer_details"):
             bt = data.get("transfer_details", {})
         
-        # Another common structure in FW v4
+        # Another common structure in FW v4 - build from direct fields
         if not bt:
-            bt = {
-                "originator_name": data.get("sender_name") or data.get("customer_name") or data.get("originator_name"),
-                "originator_bank_name": data.get("sender_bank") or data.get("originator_bank"),
-                "originator_account_number": data.get("sender_account") or data.get("originator_account"),
-            }
+            originator_name = data.get("sender_name") or data.get("customer_name") or data.get("originator_name")
+            originator_bank = data.get("sender_bank") or data.get("originator_bank")
+            originator_account = data.get("sender_account") or data.get("originator_account")
+            
+            # Only create dict if at least one field has a value
+            if originator_name or originator_bank or originator_account:
+                bt = {
+                    "originator_name": originator_name,
+                    "originator_bank_name": originator_bank,
+                    "originator_account_number": originator_account,
+                }
 
         # Fallback: Try to find VA by reference
         if not account_number and data.get("reference"):
