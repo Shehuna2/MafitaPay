@@ -166,3 +166,169 @@ class FlutterwaveWebhookTestCase(TestCase):
                 bt.get("originator_name") or bt.get("originator_bank_name") or bt.get("originator_account_number"),
                 f"Failed to extract any bank transfer info from: {data}"
             )
+
+
+class FlutterwaveVABankNameExtractionTestCase(TestCase):
+    """Test Flutterwave VA bank_name extraction from deeply nested responses"""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            email="banktest@example.com",
+            password="testpass123"
+        )
+        self.wallet = Wallet.objects.create(user=self.user, balance=Decimal("0.00"))
+
+    def test_deeply_nested_bank_name_extraction(self):
+        """Test extraction of bank_name from raw_response.raw_response.data.account_bank_name"""
+        
+        # This mimics the actual metadata structure reported in the issue
+        nested_metadata = {
+            "type": "static",
+            "raw_response": {
+                "type": "static",
+                "provider": "flutterwave",
+                "bank_name": None,
+                "reference": "vad8ef9cd3c879",
+                "customer_id": "cus_zyRRrX9qSZ",
+                "account_name": None,
+                "raw_response": {
+                    "data": {
+                        "id": "van_Fc6W0rQzOF",
+                        "meta": {},
+                        "note": "Please make a bank transfer to Mafita Digital Solutions FLW",
+                        "amount": 0.0,
+                        "status": "active",
+                        "currency": "NGN",
+                        "reference": "vad8ef9cd3c879",
+                        "customer_id": "cus_zyRRrX9qSZ",
+                        "account_type": "static",
+                        "account_number": "8817473385",
+                        "created_datetime": "2025-12-17T06:58:26.658Z",
+                        "account_bank_name": "Sterling BANK",
+                        "account_expiration_datetime": "3025-04-19T06:58:26.646Z"
+                    },
+                    "status": "success",
+                    "message": "Virtual account created"
+                },
+                "account_number": "8817473385"
+            }
+        }
+        
+        # Create a VirtualAccount with this nested structure
+        va = VirtualAccount.objects.create(
+            user=self.user,
+            provider="flutterwave",
+            provider_account_id="vad8ef9cd3c879",
+            account_number="8817473385",
+            bank_name=None,  # Intentionally null as per the bug report
+            account_name=None,
+            metadata=nested_metadata,
+            assigned=True
+        )
+        
+        # Import the serializer to test extraction logic
+        from .serializers import VirtualAccountSerializer
+        
+        serializer = VirtualAccountSerializer(va)
+        extracted_bank_name = serializer.get_bank_name(va)
+        
+        # The serializer should extract "Sterling BANK" from the deeply nested path
+        self.assertEqual(extracted_bank_name, "Sterling BANK")
+        self.assertNotEqual(extracted_bank_name, "Bank")  # Should not fallback
+        self.assertNotEqual(extracted_bank_name, "Mock Bank")
+
+    def test_bank_name_from_various_paths(self):
+        """Test that bank_name can be extracted from various metadata structures"""
+        
+        test_cases = [
+            # Case 1: Direct bank_name
+            ({"bank_name": "Wema Bank"}, "Wema Bank"),
+            
+            # Case 2: In data.account_bank_name
+            ({"data": {"account_bank_name": "Access Bank"}}, "Access Bank"),
+            
+            # Case 3: In raw_response.bank_name
+            ({"raw_response": {"bank_name": "GTBank"}}, "GTBank"),
+            
+            # Case 4: In raw_response.data.account_bank_name
+            ({"raw_response": {"data": {"account_bank_name": "Zenith Bank"}}}, "Zenith Bank"),
+            
+            # Case 5: Deeply nested (as per bug report)
+            ({
+                "raw_response": {
+                    "raw_response": {
+                        "data": {
+                            "account_bank_name": "Sterling BANK"
+                        }
+                    }
+                }
+            }, "Sterling BANK"),
+            
+            # Case 6: Fallback when nothing found
+            ({"some_other_field": "value"}, "Bank"),
+        ]
+        
+        from .serializers import VirtualAccountSerializer
+        
+        for idx, (metadata, expected_bank) in enumerate(test_cases):
+            with self.subTest(case=idx):
+                va = VirtualAccount.objects.create(
+                    user=self.user,
+                    provider="flutterwave",
+                    provider_account_id=f"test_ref_{idx}",
+                    account_number=f"123456789{idx}",
+                    bank_name=None,
+                    metadata=metadata,
+                    assigned=True
+                )
+                
+                serializer = VirtualAccountSerializer(va)
+                result = serializer.get_bank_name(va)
+                
+                self.assertEqual(result, expected_bank, 
+                    f"Failed to extract bank_name from metadata: {metadata}")
+
+    def test_fw_response_extraction_logic(self):
+        """Test the extraction logic that should be in generate_flutterwave_va"""
+        from .utils import extract_bank_name, extract_account_name
+        
+        # Simulate the fw_response structure from the issue
+        fw_response = {
+            "provider": "flutterwave",
+            "account_number": "8817473385",
+            "bank_name": None,
+            "account_name": None,
+            "reference": "vad8ef9cd3c879",
+            "type": "static",
+            "raw_response": {
+                "type": "static",
+                "provider": "flutterwave",
+                "bank_name": None,
+                "reference": "vad8ef9cd3c879",
+                "customer_id": "cus_zyRRrX9qSZ",
+                "account_name": None,
+                "raw_response": {
+                    "data": {
+                        "id": "van_Fc6W0rQzOF",
+                        "account_number": "8817473385",
+                        "account_bank_name": "Sterling BANK",
+                        "account_name": "Mafita Digital Solutions FLW",
+                    },
+                    "status": "success",
+                    "message": "Virtual account created"
+                },
+                "account_number": "8817473385"
+            },
+            "customer_id": "cus_zyRRrX9qSZ"
+        }
+        
+        # Use the actual utility functions from views.py
+        bank_name = extract_bank_name(fw_response, default="Unknown Bank")
+        account_name = extract_account_name(fw_response, default="Virtual Account")
+        
+        # Verify extraction worked correctly
+        self.assertEqual(bank_name, "Sterling BANK")
+        self.assertEqual(account_name, "Mafita Digital Solutions FLW")
+        self.assertNotEqual(bank_name, "Unknown Bank")
+        self.assertNotEqual(account_name, "Virtual Account")
