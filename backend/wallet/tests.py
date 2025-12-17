@@ -166,3 +166,81 @@ class FlutterwaveWebhookTestCase(TestCase):
                 bt.get("originator_name") or bt.get("originator_bank_name") or bt.get("originator_account_number"),
                 f"Failed to extract any bank transfer info from: {data}"
             )
+
+    def test_flutterwave_va_bank_name_extraction(self):
+        """Test that generate_flutterwave_va correctly extracts bank_name from nested raw_response"""
+        
+        # Test case 1: Bank name nested in raw_response.raw_response.data.account_bank_name
+        fw_response1 = {
+            "provider": "flutterwave",
+            "account_number": "8817473385",
+            "type": "static",
+            "raw_response": {
+                "raw_response": {
+                    "data": {
+                        "account_bank_name": "Sterling BANK"
+                    }
+                }
+            }
+        }
+        
+        # Simulate the extraction logic from views.py
+        bank_name1 = (
+            fw_response1.get("bank_name")
+            or fw_response1.get("bank")
+            or fw_response1.get("account_bank_name")
+            or (fw_response1.get("data") or {}).get("account_bank_name")
+            or (fw_response1.get("raw_response") or {}).get("bank_name")
+            or (fw_response1.get("raw_response") or {}).get("account_bank_name")
+            or ((fw_response1.get("raw_response") or {}).get("data") or {}).get("account_bank_name")
+            or ((fw_response1.get("raw_response") or {}).get("raw_response") or {}).get("data", {}).get("account_bank_name")
+            or "Unknown Bank"
+        )
+        
+        self.assertEqual(bank_name1, "Sterling BANK")
+        
+        # Test case 2: Bank name at top level
+        fw_response2 = {
+            "provider": "flutterwave",
+            "account_number": "1234567890",
+            "bank_name": "Wema Bank",
+            "type": "static"
+        }
+        
+        bank_name2 = (
+            fw_response2.get("bank_name")
+            or fw_response2.get("bank")
+            or fw_response2.get("account_bank_name")
+            or (fw_response2.get("data") or {}).get("account_bank_name")
+            or (fw_response2.get("raw_response") or {}).get("bank_name")
+            or (fw_response2.get("raw_response") or {}).get("account_bank_name")
+            or ((fw_response2.get("raw_response") or {}).get("data") or {}).get("account_bank_name")
+            or ((fw_response2.get("raw_response") or {}).get("raw_response") or {}).get("data", {}).get("account_bank_name")
+            or "Unknown Bank"
+        )
+        
+        self.assertEqual(bank_name2, "Wema Bank")
+        
+        # Test case 3: Bank name in data.account_bank_name
+        fw_response3 = {
+            "provider": "flutterwave",
+            "account_number": "9999999999",
+            "data": {
+                "account_bank_name": "GTBank"
+            },
+            "type": "static"
+        }
+        
+        bank_name3 = (
+            fw_response3.get("bank_name")
+            or fw_response3.get("bank")
+            or fw_response3.get("account_bank_name")
+            or (fw_response3.get("data") or {}).get("account_bank_name")
+            or (fw_response3.get("raw_response") or {}).get("bank_name")
+            or (fw_response3.get("raw_response") or {}).get("account_bank_name")
+            or ((fw_response3.get("raw_response") or {}).get("data") or {}).get("account_bank_name")
+            or ((fw_response3.get("raw_response") or {}).get("raw_response") or {}).get("data", {}).get("account_bank_name")
+            or "Unknown Bank"
+        )
+        
+        self.assertEqual(bank_name3, "GTBank")

@@ -196,8 +196,31 @@ class GenerateDVAAPIView(APIView):
             }, status=400)
 
         account_number = fw_response["account_number"]
-        account_name = fw_response.get("account_name", "Virtual Account")
-        bank_name = fw_response.get("bank_name", "Unknown Bank")
+        
+        # Extract account_name robustly from multiple possible paths
+        account_name = (
+            fw_response.get("account_name")
+            or fw_response.get("name")
+            or (fw_response.get("data") or {}).get("account_name")
+            or (fw_response.get("raw_response") or {}).get("account_name")
+            or ((fw_response.get("raw_response") or {}).get("data") or {}).get("account_name")
+            or ((fw_response.get("raw_response") or {}).get("raw_response") or {}).get("data", {}).get("account_name")
+            or "Virtual Account"
+        )
+        
+        # Extract bank_name robustly from multiple possible nested paths
+        bank_name = (
+            fw_response.get("bank_name")
+            or fw_response.get("bank")
+            or fw_response.get("account_bank_name")
+            or (fw_response.get("data") or {}).get("account_bank_name")
+            or (fw_response.get("raw_response") or {}).get("bank_name")
+            or (fw_response.get("raw_response") or {}).get("account_bank_name")
+            or ((fw_response.get("raw_response") or {}).get("data") or {}).get("account_bank_name")
+            or ((fw_response.get("raw_response") or {}).get("raw_response") or {}).get("data", {}).get("account_bank_name")
+            or "Unknown Bank"
+        )
+        
         provider_ref = fw_response.get("provider_reference")
 
         # 4. SECURITY CHECK
