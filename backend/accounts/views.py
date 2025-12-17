@@ -28,7 +28,7 @@ from .serializers import (
 from .models import User, UserProfile
 from wallet.models import WalletTransaction, Wallet
 from .tasks import send_verification_email_sync, send_reset_email_sync
-from rewards.models import Bonus
+from rewards.models import Bonus, BonusType
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +130,24 @@ class VerifyEmailView(APIView):
         user.is_email_verified = True
         user.verification_token = None
         user.save()
+
+        # --- Create locked referral bonus if user was referred ---
+        if getattr(user, "referred_by", None):
+            referral_bonus_type = BonusType.objects.filter(name="referral", is_active=True).first()
+            if referral_bonus_type:
+                referrer = user.referred_by
+                if not Bonus.objects.filter(
+                    user=referrer,
+                    bonus_type=referral_bonus_type,
+                    metadata__referral_for_id=user.id
+                ).exists():
+                    Bonus.objects.create(
+                        user=referrer,
+                        bonus_type=referral_bonus_type,
+                        amount=referral_bonus_type.default_amount,
+                        status="locked",
+                        metadata={"referral_for_id": user.id, "referral_for_email": user.email}
+                    )
 
         # Final redirect (success)
         logger.info(f"[VERIFY EMAIL] Success: {user.email}")
@@ -235,8 +253,6 @@ class PasswordResetConfirmView(APIView):
             return Response({"message": "Password reset successfully."}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({"error": "Invalid reset token."}, status=status.HTTP_400_BAD_REQUEST)
-            
-
 
 class ReferralListView(APIView):
     permission_classes = [IsAuthenticated]

@@ -70,47 +70,32 @@ def try_unlock_welcome_bonus(user):
         return False
 
 
+
 def try_unlock_referral_bonus(user):
-    """
-    Unlock (and apply) referral bonuses for a given user (referrer or referee).
+    # Check if user was referred
+    if not getattr(user, "referred_by", None):
+        return
 
-    Behaviour:
-    - Looks for locked bonuses of type 'referral' belonging to `user`.
-    - Only acts on bonuses whose BonusType.default_rules has unlock_condition == "manual_or_business_logic".
-    - For each matching locked bonus, it will:
-        - call BonusService.unlock_bonus(bonus)
-        - call BonusService.apply_bonus_to_wallet(bonus)
-      apply_bonus_to_wallet is idempotent, so repeated calls are safe.
-    - Returns the number of bonuses unlocked (integer) or False on error.
-    """
-    try:
-        qs = Bonus.objects.select_related("bonus_type").filter(
-            user=user,
-            bonus_type__name="referral",
-            status="locked",
-        )
+    # Check requirements
+    from wallet.models import WalletTransaction
+    has_deposit = WalletTransaction.objects.filter(user=user, category="deposit", status="success").exists()
+    has_tx = WalletTransaction.objects.filter(user=user).exclude(category="deposit").filter(status="success").exists()
+    if not (has_deposit and has_tx):
+        return
 
-        if not qs.exists():
-            return 0
+    # Unlock the bonus for the referrer
+    referral_bonus_type = BonusType.objects.filter(name="referral", is_active=True).first()
+    if not referral_bonus_type:
+        return
 
-        unlocked_count = 0
-        for bonus in qs:
-            rules = bonus.bonus_type.default_rules or {}
-            # We expect manual/business unlock condition
-            if rules.get("unlock_condition") != "manual_or_business_logic":
-                # skip bonuses that are configured differently
-                continue
-
-            with transaction.atomic():
-                unlocked = BonusService.unlock_bonus(bonus)
-                if unlocked:
-                    # apply to wallet locked_balance (idempotent)
-                    BonusService.apply_bonus_to_wallet(bonus)
-                    unlocked_count += 1
-                    logger.info("Referral bonus unlocked and applied for user %s bonus %s", user.id, bonus.id)
-
-        return unlocked_count
-
-    except Exception:
-        logger.exception("Failed to unlock referral bonuses for user %s", getattr(user, "id", None))
-        return False
+    referrer = user.referred_by
+    bonus = Bonus.objects.filter(
+        user=referrer,
+        bonus_type=referral_bonus_type,
+        metadata__referral_for_id=user.id,
+        status="locked"
+    ).first()
+    if bonus:
+        bonus.status = "unlocked"
+        bonus.activated_at = timezone.now()
+        bonus.save(update_fields=["status", "activated_at", "updated_at"])
