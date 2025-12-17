@@ -50,6 +50,10 @@ def extract_bank_name(response_data, default="Unknown Bank"):
     """
     Extract bank_name from a Flutterwave response with various possible nested structures.
     
+    Note: The double 'raw_response' nesting occurs because our service wraps the original
+    Flutterwave API response in another layer when persisting to the database. This means
+    we may encounter patterns like: metadata.raw_response.raw_response.data.account_bank_name
+    
     Args:
         response_data: The response dictionary from Flutterwave
         default: Default value if bank_name is not found
@@ -65,6 +69,7 @@ def extract_bank_name(response_data, default="Unknown Bank"):
         ("raw_response", "bank_name"),
         ("raw_response", "account_bank_name"),
         ("raw_response", "data", "account_bank_name"),
+        # Double nesting: service wraps original API response
         ("raw_response", "raw_response", "data", "account_bank_name"),
     ]
     return extract_nested_value(response_data, paths, default)

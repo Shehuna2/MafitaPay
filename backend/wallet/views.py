@@ -202,6 +202,7 @@ class GenerateDVAAPIView(APIView):
         bank_name = extract_bank_name(fw_response, default="Unknown Bank")
         account_name = extract_account_name(fw_response, default="Virtual Account")
         
+        # Extract provider reference (simple case, no deep nesting needed for this field)
         provider_ref = fw_response.get("provider_reference") or fw_response.get("reference")
 
         # 4. SECURITY CHECK
