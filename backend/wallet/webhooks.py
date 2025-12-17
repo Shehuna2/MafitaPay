@@ -44,28 +44,59 @@ def clean_for_json(obj):
 @csrf_exempt
 def flutterwave_webhook(request):
     """
-    Flutterwave v4 Webhook Handler — secure + idempotent + fixed transaction ID.
+    Flutterwave v4 Webhook Handler — secure, idempotent, and quiet on health checks.
     """
-    try:
-        raw = request.body or b""
-        signature = request.headers.get("verif-hash")  # REQUIRED HEADER
+    # Early detection of health checks / monitoring pings
+    user_agent = request.headers.get("User-Agent", "")
+    remote_ip = request.META.get("REMOTE_ADDR", "unknown")
+    raw = request.body or b""
 
+    is_health_check = (
+        "Render" in user_agent
+        or "Health" in user_agent
+        or "Uptime" in user_agent
+        or "Pingdom" in user_agent
+        or len(raw) == 0  # Empty POSTs common from monitors
+    )
+
+    try:
+        signature = request.headers.get("verif-hash")
+
+        # Health check or probe without signature → respond quietly
+        if not signature and is_health_check:
+            return HttpResponse(status=200)  # Keeps monitors happy
+
+        # Real attempt without signature → log as suspicious
         if not signature:
-            logger.warning("Missing Flutterwave verif-hash header")
+            logger.warning(
+                "Missing verif-hash header → potential probe | IP: %s | UA: %s",
+                remote_ip,
+                user_agent[:200],
+            )
             return Response({"error": "missing signature"}, status=400)
 
+        # Verify signature
         fw_service = FlutterwaveService(use_live=True)
 
-        # Verify authenticity
         if not fw_service.verify_webhook_signature(raw, signature):
-            logger.error("Invalid Flutterwave webhook signature")
+            logger.warning(
+                "Invalid Flutterwave webhook signature | IP: %s | UA: %s",
+                remote_ip,
+                user_agent[:200],
+            )
             return Response({"error": "invalid signature"}, status=401)
 
-        payload = json.loads(raw.decode("utf-8") or "{}")
+        # Valid signature → parse and process
+        try:
+            payload = json.loads(raw.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            logger.warning("Invalid JSON in webhook payload | IP: %s", remote_ip)
+            return Response({"error": "invalid json"}, status=400)
+
         event = payload.get("event") or payload.get("event_type") or payload.get("type")
         data = payload.get("data", {}) or payload
 
-        logger.info("FLW webhook event: %s", event)
+        logger.info("Valid Flutterwave webhook → event: %s | IP: %s", event, remote_ip)
 
         # Allowed events
         if event not in (
@@ -170,7 +201,7 @@ def flutterwave_webhook(request):
         return Response({"status": "success"}, status=200)
 
     except Exception:
-        logger.exception("FATAL ERROR in Flutterwave webhook")
+        logger.exception("FATAL ERROR in Flutterwave webhook | IP: %s", remote_ip)
         return Response({"error": "server error"}, status=500)
 
 
