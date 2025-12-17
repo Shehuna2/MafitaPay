@@ -8,6 +8,7 @@ import base64
 
 from .models import Wallet, VirtualAccount, Deposit
 from .services.flutterwave_service import FlutterwaveService
+from .utils import extract_nested_value
 
 User = get_user_model()
 
@@ -166,3 +167,89 @@ class FlutterwaveWebhookTestCase(TestCase):
                 bt.get("originator_name") or bt.get("originator_bank_name") or bt.get("originator_account_number"),
                 f"Failed to extract any bank transfer info from: {data}"
             )
+
+    def test_flutterwave_va_bank_name_extraction(self):
+        """Test that extract_nested_value correctly extracts bank_name from nested structures"""
+        
+        # Test case 1: Bank name nested in raw_response.raw_response.data.account_bank_name (from user report)
+        fw_response1 = {
+            "provider": "flutterwave",
+            "account_number": "8817473385",
+            "type": "static",
+            "raw_response": {
+                "raw_response": {
+                    "data": {
+                        "account_bank_name": "Sterling BANK"
+                    }
+                }
+            }
+        }
+        
+        bank_name1 = extract_nested_value(
+            fw_response1, 
+            "bank_name", "bank", "account_bank_name",
+            fallback="Unknown Bank"
+        )
+        self.assertEqual(bank_name1, "Sterling BANK")
+        
+        # Test case 2: Bank name at top level
+        fw_response2 = {
+            "provider": "flutterwave",
+            "account_number": "1234567890",
+            "bank_name": "Wema Bank",
+            "type": "static"
+        }
+        
+        bank_name2 = extract_nested_value(
+            fw_response2,
+            "bank_name", "bank", "account_bank_name",
+            fallback="Unknown Bank"
+        )
+        self.assertEqual(bank_name2, "Wema Bank")
+        
+        # Test case 3: Bank name in data.account_bank_name
+        fw_response3 = {
+            "provider": "flutterwave",
+            "account_number": "9999999999",
+            "data": {
+                "account_bank_name": "GTBank"
+            },
+            "type": "static"
+        }
+        
+        bank_name3 = extract_nested_value(
+            fw_response3,
+            "bank_name", "bank", "account_bank_name",
+            fallback="Unknown Bank"
+        )
+        self.assertEqual(bank_name3, "GTBank")
+        
+        # Test case 4: No bank name - should use fallback
+        fw_response4 = {
+            "provider": "flutterwave",
+            "account_number": "0000000000",
+            "type": "static"
+        }
+        
+        bank_name4 = extract_nested_value(
+            fw_response4,
+            "bank_name", "bank", "account_bank_name",
+            fallback="Unknown Bank"
+        )
+        self.assertEqual(bank_name4, "Unknown Bank")
+        
+        # Test case 5: Account name extraction from nested path
+        fw_response5 = {
+            "raw_response": {
+                "data": {
+                    "account_name": "Test User Account"
+                }
+            }
+        }
+        
+        account_name = extract_nested_value(
+            fw_response5,
+            "account_name", "name",
+            fallback="Virtual Account"
+        )
+        self.assertEqual(account_name, "Test User Account")

@@ -1,6 +1,7 @@
 # wallet/serializers.py
 from rest_framework import serializers
 from .models import WalletTransaction, Wallet, Notification, VirtualAccount
+from .utils import extract_nested_value
 
 
 class WalletTransactionSerializer(serializers.ModelSerializer):
@@ -38,10 +39,10 @@ class VirtualAccountSerializer(serializers.ModelSerializer):
         # Try DB field first
         if obj.bank_name:
             return obj.bank_name
-        # Fallback: extract from metadata
+        
+        # Fallback: extract from metadata with multiple nested paths
         metadata = obj.metadata or {}
-        data = metadata.get("data", {}) or {}
-        return data.get("account_bank_name") or "Bank"
+        return extract_nested_value(metadata, "bank_name", "bank", "account_bank_name", fallback="Bank")
 
 
 # ----------------------------------------------------------------------

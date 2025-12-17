@@ -13,6 +13,7 @@ import paystack
 from paystack import DedicatedVirtualAccount
 from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit
 from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer
+from .utils import extract_nested_value
 
 
 
@@ -196,8 +197,21 @@ class GenerateDVAAPIView(APIView):
             }, status=400)
 
         account_number = fw_response["account_number"]
-        account_name = fw_response.get("account_name", "Virtual Account")
-        bank_name = fw_response.get("bank_name", "Unknown Bank")
+        
+        # Extract account_name robustly from multiple possible paths
+        account_name = extract_nested_value(
+            fw_response, 
+            "account_name", "name",
+            fallback="Virtual Account"
+        )
+        
+        # Extract bank_name robustly from multiple possible nested paths
+        bank_name = extract_nested_value(
+            fw_response,
+            "bank_name", "bank", "account_bank_name",
+            fallback="Unknown Bank"
+        )
+        
         provider_ref = fw_response.get("provider_reference")
 
         # 4. SECURITY CHECK
