@@ -30,8 +30,19 @@ class WalletTransactionAdmin(admin.ModelAdmin):
 
 @admin.register(VirtualAccount)
 class VirtualAccountAdmin(admin.ModelAdmin):
-    list_display = ("user", "account_number", "bank_name", "provider", "created_at")
-    search_fields = ("user__username", "account_number")
-    list_filter  = ("created_at", "provider")
+    list_display = ("user", "account_number", "bank_name", "account_name", "provider", "assigned", "created_at")
+    search_fields = ("user__username", "user__email", "account_number", "bank_name")
+    list_filter  = ("provider", "assigned", "created_at")
     ordering     = ("-created_at",)
+    readonly_fields = ("created_at", "metadata")
+    
+    fieldsets = (
+        ("Account Information", {
+            "fields": ("user", "provider", "provider_account_id", "account_number", "bank_name", "account_name")
+        }),
+        ("Status & Metadata", {
+            "fields": ("assigned", "currency", "expires_at", "created_at", "metadata"),
+            "classes": ("collapse",)
+        }),
+    )
 
