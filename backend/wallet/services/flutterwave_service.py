@@ -261,7 +261,7 @@ class FlutterwaveService:
         if not self.hash_secret:
             return False
         if not signature:
-            logger.warning("Webhook signature header missing during verification.")
+            logger.warning("Webhook signature header missing during verification (defensive check).")
             return False
 
         try:

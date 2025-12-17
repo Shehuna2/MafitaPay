@@ -85,11 +85,17 @@ def flutterwave_webhook(request):
 
         # Real attempt without signature → log as suspicious
         if not signature:
+            header_names = [
+                h
+                for h in request.headers.keys()
+                if h.lower()
+                in {"verif-hash", "verif_hash", "svix-signature", "user-agent", "content-type", "host"}
+            ]
             logger.warning(
                 "Missing verif-hash header → potential probe | IP: %s | UA: %s | headers=%s",
                 remote_ip,
                 user_agent[:200],
-                list(request.headers.keys()),
+                header_names,
             )
             return Response({"error": "missing signature"}, status=400)
 
