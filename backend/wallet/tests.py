@@ -20,7 +20,7 @@ class FlutterwaveWebhookTestCase(TestCase):
             email="testuser@example.com",
             password="testpass123"
         )
-        self.wallet = Wallet.objects.create(user=self.user, balance=Decimal("0.00"))
+        self.wallet, _ = Wallet.objects.get_or_create(user=self.user, defaults={'balance': Decimal("0.00")})
         self.va = VirtualAccount.objects.create(
             user=self.user,
             provider="flutterwave",
@@ -46,7 +46,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         }
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_VERIF_HASH="test_signature"
@@ -81,7 +81,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         }
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_VERIF_HASH="test_signature"
@@ -114,7 +114,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         }
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_VERIF_HASH="test_signature"
@@ -145,7 +145,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         }
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_VERIF_HASH="test_signature"
@@ -173,7 +173,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         }
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_VERIF_HASH="test_signature"
@@ -208,7 +208,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         }
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_VERIF_HASH="test_signature"
@@ -246,7 +246,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         }
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_VERIF_HASH="test_signature"
@@ -276,7 +276,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         }
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_VERIF_HASH="test_signature"
@@ -314,7 +314,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         initial_balance = self.wallet.balance
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_VERIF_HASH="test_signature"
@@ -354,7 +354,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         initial_balance = self.wallet.balance
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_VERIF_HASH="test_signature"
@@ -388,7 +388,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         }
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_VERIF_HASH="test_signature"
@@ -416,7 +416,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         }
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_VERIF_HASH="test_signature"
@@ -442,7 +442,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         }
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json",
             HTTP_VERIF_HASH="invalid_signature"
@@ -464,7 +464,7 @@ class FlutterwaveWebhookTestCase(TestCase):
         }
         
         response = self.client.post(
-            "/api/webhooks/flutterwave/",
+            "/api/wallet/flutterwave-webhook/",
             data=json.dumps(payload),
             content_type="application/json"
             # No HTTP_VERIF_HASH
