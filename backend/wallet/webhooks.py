@@ -51,11 +51,9 @@ def flutterwave_webhook(request):
         
         signature = request.headers.get("Flutterwave-Signature")
 
-        if not signature:
-            return Response({"error": "missing signature"}, status=400)
 
-        if not fw_service.verify_webhook_signature(raw, signature):
-            return Response({"error": "invalid signature"}, status=401)
+
+        
 
 
 
@@ -86,8 +84,7 @@ def flutterwave_webhook(request):
             return Response({"error": "hash secret not configured"}, status=500)
 
         # Verify authenticity
-        if not fw_service.verify_webhook_signature(raw, signature, timestamp):
-
+        if not fw_service.verify_webhook_signature(raw, signature):
             logger.error(
                 "Invalid Flutterwave webhook signature. "
                 "Signature: %s..., Body length: %d, Environment: %s",
