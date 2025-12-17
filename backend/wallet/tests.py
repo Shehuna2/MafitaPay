@@ -166,3 +166,117 @@ class FlutterwaveWebhookTestCase(TestCase):
                 bt.get("originator_name") or bt.get("originator_bank_name") or bt.get("originator_account_number"),
                 f"Failed to extract any bank transfer info from: {data}"
             )
+
+
+class FlutterwaveVABankNameExtractionTestCase(TestCase):
+    """Test that Flutterwave VA generation extracts bank_name from nested paths"""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            email="test@example.com",
+            password="testpass123"
+        )
+        self.client.login(email="test@example.com", password="testpass123")
+        
+    def test_nested_bank_name_extraction_in_serializer(self):
+        """Test that VirtualAccountSerializer can extract bank_name from deeply nested metadata"""
+        
+        # Create a VA with nested bank_name (simulating the problem scenario)
+        nested_metadata = {
+            "type": "static",
+            "raw_response": {
+                "type": "static",
+                "provider": "flutterwave",
+                "bank_name": None,
+                "reference": "vad8ef9cd3c879",
+                "customer_id": "cus_zyRRrX9qSZ",
+                "account_name": None,
+                "raw_response": {
+                    "data": {
+                        "id": "van_Fc6W0rQzOF",
+                        "meta": {},
+                        "note": "Please make a bank transfer to Mafita Digital Solutions FLW",
+                        "amount": 0.0,
+                        "status": "active",
+                        "currency": "NGN",
+                        "reference": "vad8ef9cd3c879",
+                        "customer_id": "cus_zyRRrX9qSZ",
+                        "account_type": "static",
+                        "account_number": "8817473385",
+                        "created_datetime": "2025-12-17T06:58:26.658Z",
+                        "account_bank_name": "Sterling BANK",
+                        "account_expiration_datetime": "3025-04-19T06:58:26.646Z"
+                    },
+                    "status": "success",
+                    "message": "Virtual account created"
+                },
+                "account_number": "8817473385"
+            }
+        }
+        
+        va = VirtualAccount.objects.create(
+            user=self.user,
+            provider="flutterwave",
+            provider_account_id="test_ref_456",
+            account_number="8817473385",
+            bank_name=None,  # Intentionally null to simulate the problem
+            account_name="Test Account",
+            metadata=nested_metadata,
+            assigned=True
+        )
+        
+        # Import the serializer
+        from wallet.serializers import VirtualAccountSerializer
+        
+        # Serialize the VA
+        serializer = VirtualAccountSerializer(va)
+        
+        # The serializer should extract "Sterling BANK" from the deeply nested path
+        self.assertEqual(serializer.data['bank_name'], "Sterling BANK")
+        
+    def test_bank_name_extraction_fallback_order(self):
+        """Test that bank_name extraction tries multiple paths in order"""
+        
+        # Test case 1: bank_name in direct field (highest priority)
+        va1 = VirtualAccount.objects.create(
+            user=self.user,
+            provider="flutterwave",
+            provider_account_id="ref1",
+            account_number="1111111111",
+            bank_name="Direct Bank Name",
+            metadata={"raw_response": {"data": {"account_bank_name": "Nested Bank"}}},
+            assigned=True
+        )
+        
+        from wallet.serializers import VirtualAccountSerializer
+        serializer1 = VirtualAccountSerializer(va1)
+        self.assertEqual(serializer1.data['bank_name'], "Direct Bank Name")
+        
+        # Test case 2: bank_name in metadata.raw_response.data.account_bank_name
+        va2 = VirtualAccount.objects.create(
+            user=self.user,
+            provider="flutterwave",
+            provider_account_id="ref2",
+            account_number="2222222222",
+            bank_name=None,
+            metadata={"raw_response": {"data": {"account_bank_name": "Metadata Bank"}}},
+            assigned=True
+        )
+        
+        serializer2 = VirtualAccountSerializer(va2)
+        self.assertEqual(serializer2.data['bank_name'], "Metadata Bank")
+        
+        # Test case 3: No bank_name anywhere - should return "Bank"
+        va3 = VirtualAccount.objects.create(
+            user=self.user,
+            provider="flutterwave",
+            provider_account_id="ref3",
+            account_number="3333333333",
+            bank_name=None,
+            metadata={},
+            assigned=True
+        )
+        
+        serializer3 = VirtualAccountSerializer(va3)
+        self.assertEqual(serializer3.data['bank_name'], "Bank")
