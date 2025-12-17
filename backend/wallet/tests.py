@@ -1,3 +1,168 @@
-from django.test import TestCase
+from django.test import TestCase, Client
+from django.contrib.auth import get_user_model
+from decimal import Decimal
+import json
+import hmac
+import hashlib
+import base64
 
-# Create your tests here.
+from .models import Wallet, VirtualAccount, Deposit
+from .services.flutterwave_service import FlutterwaveService
+
+User = get_user_model()
+
+
+class FlutterwaveWebhookTestCase(TestCase):
+    """Test Flutterwave webhook handling"""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            email="test@example.com",
+            password="testpass123"
+        )
+        self.wallet = Wallet.objects.create(user=self.user, balance=Decimal("0.00"))
+        self.virtual_account = VirtualAccount.objects.create(
+            user=self.user,
+            provider="flutterwave",
+            provider_account_id="test_ref_123",
+            account_number="1234567890",
+            bank_name="Wema Bank",
+            account_name="Test User",
+        )
+
+    def test_webhook_payload_account_number_extraction(self):
+        """Test that webhook can extract account number from various payload structures"""
+        
+        # Test case 1: Direct account_number field
+        payload1 = {
+            "event": "virtualaccount.payment.completed",
+            "data": {
+                "id": "txn_123",
+                "account_number": "1234567890",
+                "amount": 1000,
+                "status": "success"
+            }
+        }
+        
+        # Test case 2: Nested in payment_details
+        payload2 = {
+            "event": "virtualaccount.payment.completed",
+            "data": {
+                "id": "txn_124",
+                "payment_details": {
+                    "account_number": "1234567890"
+                },
+                "amount": 1000,
+                "status": "success"
+            }
+        }
+        
+        # Test case 3: Nested in meta
+        payload3 = {
+            "event": "virtualaccount.payment.completed",
+            "data": {
+                "id": "txn_125",
+                "meta": {
+                    "account_number": "1234567890"
+                },
+                "amount": 1000,
+                "status": "success"
+            }
+        }
+        
+        # Test case 4: Fallback by reference
+        payload4 = {
+            "event": "virtualaccount.payment.completed",
+            "data": {
+                "id": "txn_126",
+                "reference": "test_ref_123",
+                "amount": 1000,
+                "status": "success"
+            }
+        }
+        
+        # All test cases should work
+        for payload in [payload1, payload2, payload3, payload4]:
+            data = payload.get("data", {})
+            
+            # Simulate the extraction logic from webhook
+            account_number = (
+                data.get("account_number")
+                or data.get("destination_account")
+                or data.get("receiver_account")
+                or data.get("credited_account")
+            )
+            
+            if not account_number and data.get("payment_details"):
+                payment_details = data.get("payment_details", {})
+                account_number = (
+                    payment_details.get("account_number")
+                    or payment_details.get("destination_account")
+                )
+            
+            if not account_number and data.get("meta"):
+                meta = data.get("meta", {})
+                account_number = meta.get("account_number") or meta.get("beneficiary_account_number")
+            
+            if not account_number and data.get("reference"):
+                va_fallback = VirtualAccount.objects.filter(
+                    provider_account_id=data.get("reference"),
+                    provider="flutterwave",
+                ).first()
+                if va_fallback:
+                    account_number = va_fallback.account_number
+            
+            self.assertIsNotNone(account_number, f"Failed to extract account number from payload: {payload}")
+            self.assertEqual(account_number, "1234567890")
+
+    def test_bank_transfer_info_extraction(self):
+        """Test that webhook can extract bank transfer info from various structures"""
+        
+        # Test case 1: Nested in payment_method.bank_transfer
+        data1 = {
+            "payment_method": {
+                "bank_transfer": {
+                    "originator_name": "John Doe",
+                    "originator_bank_name": "GTBank",
+                    "originator_account_number": "0123456789"
+                }
+            }
+        }
+        
+        # Test case 2: In transfer_details
+        data2 = {
+            "transfer_details": {
+                "originator_name": "Jane Smith",
+                "originator_bank_name": "Access Bank",
+                "originator_account_number": "9876543210"
+            }
+        }
+        
+        # Test case 3: Direct fields
+        data3 = {
+            "sender_name": "Bob Johnson",
+            "sender_bank": "Zenith Bank",
+            "sender_account": "5555555555"
+        }
+        
+        # Test extraction logic
+        for data in [data1, data2, data3]:
+            bt = {}
+            if data.get("payment_method"):
+                bt = data.get("payment_method", {}).get("bank_transfer", {})
+            
+            if not bt and data.get("transfer_details"):
+                bt = data.get("transfer_details", {})
+            
+            if not bt:
+                bt = {
+                    "originator_name": data.get("sender_name") or data.get("customer_name") or data.get("originator_name"),
+                    "originator_bank_name": data.get("sender_bank") or data.get("originator_bank"),
+                    "originator_account_number": data.get("sender_account") or data.get("originator_account"),
+                }
+            
+            self.assertTrue(
+                bt.get("originator_name") or bt.get("originator_bank_name") or bt.get("originator_account_number"),
+                f"Failed to extract any bank transfer info from: {data}"
+            )

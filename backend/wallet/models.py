@@ -226,6 +226,7 @@ class Deposit(models.Model):
         indexes = [
             models.Index(fields=["status"]),
             models.Index(fields=["created_at"]),
+            models.Index(fields=["provider_reference"]),
         ]
 
     def __str__(self):
