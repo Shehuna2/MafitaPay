@@ -13,6 +13,7 @@ import paystack
 from paystack import DedicatedVirtualAccount
 from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit
 from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer
+from .utils import extract_nested_value
 
 
 
@@ -29,46 +30,6 @@ logger = logging.getLogger(__name__)
 
 # Set Paystack API key
 paystack.api_key = settings.PAYSTACK_SECRET_KEY
-
-
-def extract_nested_value(data, *keys, fallback=None):
-    """
-    Extract a value from nested dictionary structures by trying multiple key paths.
-    
-    Args:
-        data: The dictionary to search
-        *keys: Variable number of key names to try (e.g., 'bank_name', 'bank', 'account_bank_name')
-        fallback: Default value if none of the keys are found
-    
-    Returns:
-        The first non-None value found, or fallback if none exist
-    """
-    # Try direct keys first
-    for key in keys:
-        if data.get(key):
-            return data.get(key)
-    
-    # Try nested paths
-    nested_paths = [
-        ("data",),
-        ("raw_response",),
-        ("raw_response", "data"),
-        ("raw_response", "raw_response", "data"),
-    ]
-    
-    for path in nested_paths:
-        current = data
-        for segment in path:
-            current = (current or {}).get(segment, {})
-            if not isinstance(current, dict):
-                break
-        
-        if isinstance(current, dict):
-            for key in keys:
-                if current.get(key):
-                    return current.get(key)
-    
-    return fallback
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
