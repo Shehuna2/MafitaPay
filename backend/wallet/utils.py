@@ -32,10 +32,13 @@ def extract_nested_value(data, paths, default=None):
                 if isinstance(value, dict):
                     value = value.get(key)
                 else:
+                    # If we hit a non-dict value before completing the path,
+                    # this path is invalid, so break and try the next path
                     value = None
                     break
             
-            if value is not None:
+            # Return the value if it's not None and not an empty string
+            if value is not None and value != '':
                 return value
         except (KeyError, TypeError, AttributeError):
             continue
