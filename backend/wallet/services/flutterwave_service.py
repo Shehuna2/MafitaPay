@@ -288,15 +288,17 @@ class FlutterwaveService:
             ).digest()
             expected = base64.b64encode(dig).decode()
             
-            # Log for debugging (first 20 chars only for security)
+            # Verify signature
+            is_valid = hmac.compare_digest(expected, signature)
+            
+            # Only log verification result, not the actual signatures (security)
             logger.debug(
-                "Signature verification: expected=%s..., received=%s..., match=%s",
-                expected[:20],
-                signature[:20],
-                hmac.compare_digest(expected, signature)
+                "Signature verification result: %s (payload length: %d bytes)",
+                "valid" if is_valid else "invalid",
+                len(raw_body)
             )
             
-            return hmac.compare_digest(expected, signature)
+            return is_valid
         except Exception as e:
             logger.exception(
                 "Webhook signature verification failed with exception: %s", 

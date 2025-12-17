@@ -237,7 +237,11 @@ def flutterwave_webhook(request):
 
         wallet, created = Wallet.objects.get_or_create(user=user)
         if created:
-            logger.info("Created new wallet for user %s", user.email)
+            logger.warning(
+                "Created new wallet for user %s during webhook processing. "
+                "This is unusual and may indicate a data integrity issue.",
+                user.email
+            )
 
         # IDEMPOTENT HANDLING
         with transaction.atomic():
