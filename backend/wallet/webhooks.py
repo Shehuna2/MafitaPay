@@ -159,7 +159,7 @@ def flutterwave_webhook(request):
                 }
         
         # Check transfer_details if bt is still empty
-        if not any(bt.values()) if bt else True:
+        if not bt or not any(bt.values()):
             transfer_details = data.get("transfer_details", {})
             if transfer_details:
                 bt = {
@@ -169,7 +169,7 @@ def flutterwave_webhook(request):
                 }
         
         # Check direct fields at data level if bt is still empty
-        if not any(bt.values()) if bt else True:
+        if not bt or not any(bt.values()):
             sender_name = (
                 data.get("sender_name")
                 or data.get("originator_name")
