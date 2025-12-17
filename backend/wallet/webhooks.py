@@ -94,7 +94,7 @@ def flutterwave_webhook(request):
             or data.get("reference")
         )
         # Convert to string and treat "None" string as missing
-        provider_ref = str(provider_ref) if provider_ref else ""
+        provider_ref = str(provider_ref) if provider_ref is not None else ""
         if not provider_ref or provider_ref == "None":
             logger.warning("Missing Flutterwave reference in payload, ignoring event=%s", event)
             return Response({"status": "ignored"}, status=200)
@@ -159,7 +159,7 @@ def flutterwave_webhook(request):
                 }
         
         # Check transfer_details if bt is still empty
-        if not bt or not any(bt.values()):
+        if not any(bt.values()):
             transfer_details = data.get("transfer_details", {})
             if transfer_details:
                 bt = {
@@ -169,7 +169,7 @@ def flutterwave_webhook(request):
                 }
         
         # Check direct fields at data level if bt is still empty
-        if not bt or not any(bt.values()):
+        if not any(bt.values()):
             sender_name = (
                 data.get("sender_name")
                 or data.get("originator_name")
