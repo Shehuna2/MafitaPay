@@ -38,10 +38,21 @@ class VirtualAccountSerializer(serializers.ModelSerializer):
         # Try DB field first
         if obj.bank_name:
             return obj.bank_name
-        # Fallback: extract from metadata
+        
+        # Fallback: extract from metadata with multiple nested paths
         metadata = obj.metadata or {}
-        data = metadata.get("data", {}) or {}
-        return data.get("account_bank_name") or "Bank"
+        
+        # Check various possible nested locations
+        bank_name = (
+            metadata.get("bank_name")
+            or metadata.get("raw_response", {}).get("bank_name")
+            or metadata.get("raw_response", {}).get("data", {}).get("account_bank_name")
+            or metadata.get("raw_response", {}).get("raw_response", {}).get("data", {}).get("account_bank_name")
+            or metadata.get("data", {}).get("account_bank_name")
+            or "Bank"
+        )
+        
+        return bank_name
 
 
 # ----------------------------------------------------------------------

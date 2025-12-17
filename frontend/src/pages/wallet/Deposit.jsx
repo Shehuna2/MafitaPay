@@ -256,7 +256,7 @@ export default function Deposit() {
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Bank</span>
                   <span className="text-indigo-400 font-bold">
-                    {dvaDetails.bank_name || "Mock Bank"}
+                    {dvaDetails.bank_name || "—"}
                   </span>
                 </div>
 
