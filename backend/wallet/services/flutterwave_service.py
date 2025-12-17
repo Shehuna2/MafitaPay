@@ -258,17 +258,48 @@ class FlutterwaveService:
     # WEBHOOK VERIFICATION
     # ---------------------------------------------------------
     def verify_webhook_signature(self, raw_body: bytes, signature: str) -> bool:
+        """
+        Verify Flutterwave webhook signature.
+        
+        Flutterwave sends webhooks with a 'verif-hash' header containing
+        a base64-encoded HMAC-SHA256 signature of the request body.
+        
+        Args:
+            raw_body: The raw request body as bytes
+            signature: The signature from the verif-hash header
+            
+        Returns:
+            True if signature is valid, False otherwise
+        """
         if not self.hash_secret:
+            logger.error("Hash secret is not configured for webhook verification")
+            return False
+
+        if not signature:
+            logger.error("No signature provided for verification")
             return False
 
         try:
+            # Compute HMAC-SHA256 signature
             dig = hmac.new(
                 self.hash_secret.encode(),
                 raw_body,
                 hashlib.sha256,
             ).digest()
             expected = base64.b64encode(dig).decode()
+            
+            # Log for debugging (first 20 chars only for security)
+            logger.debug(
+                "Signature verification: expected=%s..., received=%s..., match=%s",
+                expected[:20],
+                signature[:20],
+                hmac.compare_digest(expected, signature)
+            )
+            
             return hmac.compare_digest(expected, signature)
-        except Exception:
-            logger.exception("Webhook signature verification failed.")
+        except Exception as e:
+            logger.exception(
+                "Webhook signature verification failed with exception: %s", 
+                str(e)
+            )
             return False
