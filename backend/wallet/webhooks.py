@@ -50,14 +50,13 @@ def flutterwave_webhook(request):
         raw = request.body or b""
         
         signature = request.headers.get("Flutterwave-Signature")
-        timestamp = request.headers.get("Svix-Timestamp")
 
-        if not signature or not timestamp:
-            logger.warning(
-                "Missing Flutterwave Svix headers. Got headers: %s",
-                list(request.headers.keys())
-            )
+        if not signature:
             return Response({"error": "missing signature"}, status=400)
+
+        if not fw_service.verify_webhook_signature(raw, signature):
+            return Response({"error": "invalid signature"}, status=401)
+
 
 
         # Log all incoming webhook requests for debugging

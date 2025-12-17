@@ -257,23 +257,21 @@ class FlutterwaveService:
     # ---------------------------------------------------------
     # WEBHOOK VERIFICATION
     # ---------------------------------------------------------
-    def verify_webhook_signature(self, raw_body: bytes, signature: str, timestamp: str) -> bool:
+    def verify_webhook_signature(self, raw_body: bytes, signature: str) -> bool:
         if not self.hash_secret:
             return False
 
         try:
-            signed_payload = f"{timestamp}.{raw_body.decode()}"
-            digest = hmac.new(
+            computed = hmac.new(
                 self.hash_secret.encode(),
-                signed_payload.encode(),
+                raw_body,
                 hashlib.sha256,
-            ).digest()
+            ).hexdigest()
 
-            expected = base64.b64encode(digest).decode()
-            received = signature.split(",")[-1]
+            return hmac.compare_digest(computed, signature)
 
-            return hmac.compare_digest(expected, received)
         except Exception:
             logger.exception("Flutterwave webhook signature verification failed")
             return False
+
 
