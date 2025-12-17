@@ -30,6 +30,7 @@ HEADER_NAMES_TO_LOG = {
     "content-type",
     "host",
 }
+HEADER_NAMES_TO_LOG_LOWER = {h.lower() for h in HEADER_NAMES_TO_LOG}
 
 
 # --------------------------------------------------------------
@@ -98,7 +99,7 @@ def flutterwave_webhook(request):
             header_names = [
                 h
                 for h in request.headers.keys()
-                if h.lower() in HEADER_NAMES_TO_LOG
+                if h.lower() in HEADER_NAMES_TO_LOG_LOWER
             ]
             logger.warning(
                 "Missing verif-hash header → potential probe | IP: %s | UA: %s | headers=%s",
