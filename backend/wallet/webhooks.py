@@ -22,15 +22,15 @@ from .services.flutterwave_service import FlutterwaveService
 
 logger = logging.getLogger(__name__)
 
-HEADER_NAMES_TO_LOG = {
+WEBHOOK_HEADER_NAMES_TO_LOG = {
     "verif-hash",
     "verif_hash",
-    "svix-signature",
+    "svix-signature",  # logged when probes deliver via Svix-style clients
     "user-agent",
     "content-type",
     "host",
 }
-HEADER_NAMES_TO_LOG_LOWER = {h.lower() for h in HEADER_NAMES_TO_LOG}
+WEBHOOK_HEADER_NAMES_TO_LOG_LOWER = {h.lower() for h in WEBHOOK_HEADER_NAMES_TO_LOG}
 
 
 # --------------------------------------------------------------
@@ -99,7 +99,7 @@ def flutterwave_webhook(request):
             header_names = [
                 h
                 for h in request.headers.keys()
-                if h.lower() in HEADER_NAMES_TO_LOG_LOWER
+                if h.lower() in WEBHOOK_HEADER_NAMES_TO_LOG_LOWER
             ]
             logger.warning(
                 "Missing verif-hash header → potential probe | IP: %s | UA: %s | headers=%s",
