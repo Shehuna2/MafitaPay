@@ -54,7 +54,7 @@ def flutterwave_webhook(request):
             logger.warning("Missing Flutterwave verif-hash header")
             return Response({"error": "missing signature"}, status=400)
 
-        fw_service = FlutterwaveService(use_live=True)
+        fw_service = FlutterwaveService(use_live=not settings.DEBUG)
 
         # Verify authenticity
         if not fw_service.verify_webhook_signature(raw, signature):
@@ -65,6 +65,9 @@ def flutterwave_webhook(request):
         event = payload.get("event") or payload.get("event_type") or payload.get("type")
         data = payload.get("data", {}) or payload
 
+        # Log truncated payload for debugging
+        payload_preview = str(payload)[:500] if payload else "empty"
+        logger.debug("FLW webhook received: event=%s, payload_preview=%s", event, payload_preview)
         logger.info("FLW webhook event: %s", event)
 
         # Allowed events
@@ -84,77 +87,169 @@ def flutterwave_webhook(request):
         if amount <= 0:
             return Response({"status": "ignored"}, status=200)
 
-        # FIX: Transaction ID fallback
+        # FIX: Transaction ID fallback - check multiple fields
         provider_ref = (
-            str(data.get("id"))
-            or str(data.get("flw_ref"))
-            or str(data.get("reference"))
+            data.get("id")
+            or data.get("flw_ref")
+            or data.get("reference")
         )
+        # Convert to string and treat "None" string as missing
+        provider_ref = str(provider_ref) if provider_ref else ""
         if not provider_ref or provider_ref == "None":
-            logger.error("Missing Flutterwave reference in payload: %s", data)
+            logger.warning("Missing Flutterwave reference in payload, ignoring event=%s", event)
             return Response({"status": "ignored"}, status=200)
+        
+        logger.debug("Extracted provider_reference=%s", provider_ref)
 
-        # Resolve VA account number
+        # Resolve VA account number - check multiple locations with fallbacks
         account_number = (
             data.get("account_number")
             or data.get("destination_account")
             or data.get("receiver_account")
+            or data.get("credited_account")
         )
-
-        # FW bank transfer payload
-        bt = data.get("payment_method", {}).get("bank_transfer", {})
-
+        
+        # Check nested payment_details
         if not account_number:
-            account_number = data.get("meta", {}).get("account_number")
-
+            payment_details = data.get("payment_details", {})
+            if payment_details:
+                account_number = (
+                    payment_details.get("account_number")
+                    or payment_details.get("destination_account")
+                )
+        
+        # Check nested meta
+        if not account_number:
+            meta = data.get("meta", {})
+            if meta:
+                account_number = (
+                    meta.get("account_number")
+                    or meta.get("beneficiary_account_number")
+                )
+        
+        # Fallback: lookup by reference as provider_account_id
         if not account_number and data.get("reference"):
+            logger.debug("Attempting VA lookup by reference=%s", data.get("reference"))
             va_fallback = VirtualAccount.objects.filter(
                 provider_account_id=data.get("reference"),
                 provider="flutterwave",
             ).first()
             if va_fallback:
                 account_number = va_fallback.account_number
+                logger.debug("Found VA via reference lookup: account_number=%s", account_number)
 
         if not account_number:
+            logger.warning("No account_number found in webhook payload, ignoring event=%s, provider_ref=%s", event, provider_ref)
             return Response({"status": "ignored"}, status=200)
+        
+        logger.debug("Resolved account_number=%s", account_number)
 
+        # Extract bank transfer/originator info from multiple possible locations
+        bt = {}
+        
+        # Check payment_method.bank_transfer
+        payment_method = data.get("payment_method", {})
+        if payment_method:
+            bank_transfer = payment_method.get("bank_transfer", {})
+            if bank_transfer:
+                bt = {
+                    "originator_name": bank_transfer.get("originator_name"),
+                    "originator_bank_name": bank_transfer.get("originator_bank_name"),
+                    "originator_account_number": bank_transfer.get("originator_account_number"),
+                }
+        
+        # Check transfer_details
+        if not bt:
+            transfer_details = data.get("transfer_details", {})
+            if transfer_details:
+                bt = {
+                    "originator_name": transfer_details.get("sender_name") or transfer_details.get("originator_name"),
+                    "originator_bank_name": transfer_details.get("sender_bank") or transfer_details.get("originator_bank"),
+                    "originator_account_number": transfer_details.get("sender_account") or transfer_details.get("originator_account"),
+                }
+        
+        # Check direct fields at data level
+        if not bt:
+            sender_name = (
+                data.get("sender_name")
+                or data.get("originator_name")
+            )
+            sender_bank = (
+                data.get("sender_bank")
+                or data.get("originator_bank")
+            )
+            sender_account = (
+                data.get("sender_account")
+                or data.get("originator_account")
+                or data.get("sender_account_number")
+            )
+            
+            # Only build bt dict if at least one field exists
+            if sender_name or sender_bank or sender_account:
+                bt = {
+                    "originator_name": sender_name,
+                    "originator_bank_name": sender_bank,
+                    "originator_account_number": sender_account,
+                }
+        
+        logger.debug("Extracted bank transfer info: %s", bt)
+        
         va = VirtualAccount.objects.filter(
             account_number=account_number,
             provider="flutterwave",
         ).select_related("user").first()
 
         if not va:
+            logger.warning("No VirtualAccount found for account_number=%s, provider=flutterwave", account_number)
             return Response({"status": "ignored"}, status=200)
+        
+        logger.info("Found VA for user=%s, account_number=%s", va.user.email, account_number)
 
         user = va.user
         wallet, _ = Wallet.objects.get_or_create(user=user)
 
-        # IDEMPOTENT HANDLING
+        # IDEMPOTENT HANDLING - improved with retry logic
         with transaction.atomic():
             existing = Deposit.objects.select_for_update().filter(
                 provider_reference=provider_ref
             ).first()
 
+            # Build metadata with all extracted info
             metadata = clean_for_json({
                 "provider": "flutterwave",
                 "event": event,
                 "account_number": account_number,
-                "sender_name": bt.get("originator_name"),
-                "sender_bank": bt.get("originator_bank_name"),
-                "sender_account_number": bt.get("originator_account_number"),
+                "sender_name": bt.get("originator_name") if bt else None,
+                "sender_bank": bt.get("originator_bank_name") if bt else None,
+                "sender_account_number": bt.get("originator_account_number") if bt else None,
                 "flutterwave_id": provider_ref,
             })
 
             if existing:
+                logger.debug("Found existing Deposit id=%s, status=%s", existing.id, existing.status)
                 if existing.status != "credited":
+                    # Retry crediting the wallet
+                    logger.info("Retrying credit for existing Deposit id=%s, amount=%s, user=%s", 
+                               existing.id, amount, user.email)
                     if wallet.deposit(amount, f"flw_{provider_ref}", metadata):
                         existing.status = "credited"
                         existing.save(update_fields=["status"])
+                        logger.info("Successfully recovered deposit: provider_ref=%s, user=%s, amount=%s", 
+                                   provider_ref, user.email, amount)
                         return Response({"status": "recovered"}, status=200)
+                    else:
+                        logger.error("Failed to credit wallet on retry: provider_ref=%s, user=%s, amount=%s", 
+                                    provider_ref, user.email, amount)
+                        return Response({"status": "deposit_failed"}, status=500)
+                logger.debug("Deposit already processed: provider_ref=%s", provider_ref)
                 return Response({"status": "already_processed"}, status=200)
 
-            # New deposit
+            # New deposit - attempt to credit wallet
+            logger.info("Creating new deposit: provider_ref=%s, user=%s, amount=%s", 
+                       provider_ref, user.email, amount)
             if not wallet.deposit(amount, f"flw_{provider_ref}", metadata):
+                logger.error("Failed to credit wallet for new deposit: provider_ref=%s, user=%s, amount=%s", 
+                            provider_ref, user.email, amount)
                 return Response({"status": "deposit_failed"}, status=500)
 
             Deposit.objects.create(
@@ -163,10 +258,10 @@ def flutterwave_webhook(request):
                 amount=amount,
                 provider_reference=provider_ref,
                 status="credited",
-                raw=payload
+                raw=clean_for_json(payload)
             )
 
-        logger.info("Flutterwave deposit success → ₦%s | user=%s", amount, user.email)
+        logger.info("Flutterwave deposit success → ₦%s | user=%s | provider_ref=%s", amount, user.email, provider_ref)
         return Response({"status": "success"}, status=200)
 
     except Exception:
