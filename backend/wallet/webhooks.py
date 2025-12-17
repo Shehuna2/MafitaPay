@@ -23,6 +23,18 @@ from .services.flutterwave_service import FlutterwaveService
 logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------
+# Helper: Resolve Flutterwave signature header variants
+# --------------------------------------------------------------
+def _get_flw_signature(request):
+    return (
+        request.headers.get("verif-hash")
+        or request.headers.get("Verif-Hash")
+        or request.headers.get("verif_hash")
+        or request.META.get("HTTP_VERIF_HASH")
+    )
+
+
+# --------------------------------------------------------------
 # Helper: Make any object JSON-serializable (convert set → list)
 # --------------------------------------------------------------
 def clean_for_json(obj):
@@ -60,12 +72,7 @@ def flutterwave_webhook(request):
     )
 
     try:
-        signature = (
-            request.headers.get("verif-hash")
-            or request.headers.get("Verif-Hash")
-            or request.headers.get("verif_hash")
-            or request.META.get("HTTP_VERIF_HASH")
-        )
+        signature = _get_flw_signature(request)
 
         # Health check or probe without signature → respond quietly
         if not signature and is_health_check:
@@ -86,7 +93,7 @@ def flutterwave_webhook(request):
 
         if not fw_service.hash_secret:
             logger.error("Flutterwave hash secret not configured; cannot verify webhook.")
-            return Response({"error": "hash secret not configured"}, status=500)
+            return Response({"error": "service configuration error"}, status=500)
 
         if not fw_service.verify_webhook_signature(raw, signature):
             logger.warning(
