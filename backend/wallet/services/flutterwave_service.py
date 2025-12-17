@@ -262,16 +262,13 @@ class FlutterwaveService:
             return False
 
         try:
-            computed = hmac.new(
+            dig = hmac.new(
                 self.hash_secret.encode(),
                 raw_body,
                 hashlib.sha256,
-            ).hexdigest()
-
-            return hmac.compare_digest(computed, signature)
-
+            ).digest()
+            expected = base64.b64encode(dig).decode()
+            return hmac.compare_digest(expected, signature)
         except Exception:
-            logger.exception("Flutterwave webhook signature verification failed")
+            logger.exception("Webhook signature verification failed.")
             return False
-
-
