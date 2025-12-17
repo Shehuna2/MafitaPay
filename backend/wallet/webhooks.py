@@ -48,18 +48,49 @@ def flutterwave_webhook(request):
     """
     try:
         raw = request.body or b""
-        signature = request.headers.get("verif-hash")  # REQUIRED HEADER
+        
+        # Try multiple header name variations (case-insensitive handling)
+        signature = (
+            request.headers.get("verif-hash") 
+            or request.headers.get("Verif-Hash")
+            or request.META.get("HTTP_VERIF_HASH")
+        )
+
+        # Log all incoming webhook requests for debugging
+        logger.info(
+            "Flutterwave webhook received: headers=%s, body_length=%d",
+            dict(request.headers),
+            len(raw)
+        )
 
         if not signature:
-            logger.warning("Missing Flutterwave verif-hash header")
+            logger.warning(
+                "Missing Flutterwave verif-hash header. Available headers: %s",
+                list(request.headers.keys())
+            )
             return Response({"error": "missing signature"}, status=400)
 
         # Use live credentials when not in DEBUG mode
         fw_service = FlutterwaveService(use_live=not settings.DEBUG)
 
+        # Check if hash secret is configured
+        if not fw_service.hash_secret:
+            logger.error(
+                "Flutterwave hash secret not configured. Cannot verify webhook. "
+                "Environment: %s",
+                "LIVE" if not settings.DEBUG else "TEST"
+            )
+            return Response({"error": "hash secret not configured"}, status=500)
+
         # Verify authenticity
         if not fw_service.verify_webhook_signature(raw, signature):
-            logger.error("Invalid Flutterwave webhook signature")
+            logger.error(
+                "Invalid Flutterwave webhook signature. "
+                "Signature: %s..., Body length: %d, Environment: %s",
+                signature[:20] if signature else "None",
+                len(raw),
+                "LIVE" if not settings.DEBUG else "TEST"
+            )
             return Response({"error": "invalid signature"}, status=401)
 
         payload = json.loads(raw.decode("utf-8") or "{}")
@@ -76,14 +107,25 @@ def flutterwave_webhook(request):
             "transfer.successful",
             "virtualaccount.payment.completed",
         ):
+            logger.info("Ignoring Flutterwave webhook event: %s", event)
             return Response({"status": "ignored"}, status=200)
 
         status_text = (data.get("status") or "").lower()
         if status_text not in ("success", "successful", "succeeded"):
+            logger.info(
+                "Ignoring Flutterwave webhook with status: %s (event: %s)",
+                status_text,
+                event
+            )
             return Response({"status": "ignored"}, status=200)
 
         amount = Decimal(str(data.get("amount", "0")))
         if amount <= 0:
+            logger.warning(
+                "Ignoring Flutterwave webhook with invalid amount: %s (event: %s)",
+                amount,
+                event
+            )
             return Response({"status": "ignored"}, status=200)
 
         # FIX: Transaction ID fallback
@@ -152,7 +194,15 @@ def flutterwave_webhook(request):
                 logger.info("Found VA by reference fallback: %s", account_number)
 
         if not account_number:
-            logger.warning("No account number found in FLW webhook. Data keys: %s", list(data.keys()))
+            logger.error(
+                "CRITICAL: No account number found in FLW webhook. "
+                "Event: %s, Amount: ₦%s, Reference: %s, Data keys: %s. "
+                "This may result in lost funds!",
+                event,
+                amount,
+                provider_ref,
+                list(data.keys())
+            )
             return Response({"status": "ignored"}, status=200)
 
         va = VirtualAccount.objects.filter(
@@ -161,15 +211,37 @@ def flutterwave_webhook(request):
         ).select_related("user").first()
 
         if not va:
-            logger.warning("No VA found for account_number=%s, provider=flutterwave", account_number)
+            logger.error(
+                "CRITICAL: No VA found for account_number=%s, provider=flutterwave. "
+                "Event: %s, Amount: ₦%s, Reference: %s. "
+                "Fund transfer successful but cannot credit user!",
+                account_number,
+                event,
+                amount,
+                provider_ref
+            )
             return Response({"status": "ignored"}, status=200)
 
         user = va.user
         if not user:
-            logger.error("VirtualAccount %s has no user!", va.id)
+            logger.error(
+                "CRITICAL: VirtualAccount %s (account_number=%s) has no user! "
+                "Event: %s, Amount: ₦%s, Reference: %s",
+                va.id,
+                account_number,
+                event,
+                amount,
+                provider_ref
+            )
             return Response({"status": "ignored"}, status=200)
 
-        wallet, _ = Wallet.objects.get_or_create(user=user)
+        wallet, created = Wallet.objects.get_or_create(user=user)
+        if created:
+            logger.warning(
+                "Created new wallet for user %s during webhook processing. "
+                "This is unusual and may indicate a data integrity issue.",
+                user.email
+            )
 
         # IDEMPOTENT HANDLING
         with transaction.atomic():
@@ -188,23 +260,61 @@ def flutterwave_webhook(request):
             })
 
             if existing:
-                logger.info("Duplicate deposit detected for ref=%s, status=%s", provider_ref, existing.status)
+                logger.info(
+                    "Duplicate deposit detected: ref=%s, status=%s, user=%s, amount=₦%s",
+                    provider_ref,
+                    existing.status,
+                    user.email,
+                    amount
+                )
                 if existing.status != "credited":
-                    logger.info("Attempting to credit existing non-credited deposit for user=%s, amount=₦%s", user.email, amount)
+                    logger.warning(
+                        "Attempting to credit existing non-credited deposit: "
+                        "user=%s, amount=₦%s, ref=%s, current_status=%s",
+                        user.email,
+                        amount,
+                        provider_ref,
+                        existing.status
+                    )
                     if wallet.deposit(amount, f"flw_{provider_ref}", metadata):
                         existing.status = "credited"
                         existing.save(update_fields=["status"])
-                        logger.info("Successfully recovered and credited deposit for user=%s", user.email)
+                        logger.info(
+                            "Successfully recovered and credited deposit: user=%s, amount=₦%s, ref=%s",
+                            user.email,
+                            amount,
+                            provider_ref
+                        )
                         return Response({"status": "recovered"}, status=200)
                     else:
-                        logger.error("Failed to credit recovered deposit for user=%s, ref=%s", user.email, provider_ref)
+                        logger.error(
+                            "CRITICAL: Failed to credit recovered deposit! "
+                            "user=%s, amount=₦%s, ref=%s. Manual intervention required!",
+                            user.email,
+                            amount,
+                            provider_ref
+                        )
                         return Response({"status": "deposit_failed"}, status=500)
                 return Response({"status": "already_processed"}, status=200)
 
             # New deposit
-            logger.info("Processing new deposit: user=%s, amount=₦%s, ref=%s", user.email, amount, provider_ref)
+            logger.info(
+                "Processing new deposit: user=%s, amount=₦%s, ref=%s, event=%s",
+                user.email,
+                amount,
+                provider_ref,
+                event
+            )
             if not wallet.deposit(amount, f"flw_{provider_ref}", metadata):
-                logger.error("Wallet deposit failed for user=%s, amount=₦%s, ref=%s", user.email, amount, provider_ref)
+                logger.error(
+                    "CRITICAL: Wallet deposit failed! "
+                    "user=%s, amount=₦%s, ref=%s, event=%s. "
+                    "Manual intervention required!",
+                    user.email,
+                    amount,
+                    provider_ref,
+                    event
+                )
                 return Response({"status": "deposit_failed"}, status=500)
 
             Deposit.objects.create(
@@ -215,12 +325,35 @@ def flutterwave_webhook(request):
                 status="credited",
                 raw=payload
             )
+            logger.info(
+                "Deposit record created successfully: user=%s, amount=₦%s, ref=%s",
+                user.email,
+                amount,
+                provider_ref
+            )
 
-        logger.info("Flutterwave deposit success → ₦%s | user=%s | ref=%s", amount, user.email, provider_ref)
+        logger.info(
+            "✓ Flutterwave deposit SUCCESS: ₦%s credited to %s (ref=%s, event=%s)",
+            amount,
+            user.email,
+            provider_ref,
+            event
+        )
         return Response({"status": "success"}, status=200)
 
-    except Exception:
-        logger.exception("FATAL ERROR in Flutterwave webhook")
+    except Exception as e:
+        logger.exception(
+            "FATAL ERROR in Flutterwave webhook processing. "
+            "Exception: %s, Request body length: %d",
+            str(e),
+            len(request.body or b"")
+        )
+        # Log partial payload for debugging (first 500 chars)
+        try:
+            partial_payload = (request.body or b"").decode("utf-8")[:500]
+            logger.error("Partial webhook payload: %s", partial_payload)
+        except Exception:
+            logger.error("Could not decode webhook payload for logging")
         return Response({"error": "server error"}, status=500)
 
 

@@ -30,6 +30,71 @@ class FlutterwaveWebhookTestCase(TestCase):
             bank_name="Wema Bank",
             account_name="Test User",
         )
+    
+    def test_webhook_missing_signature_header(self):
+        """Test that webhook rejects requests without verif-hash header"""
+        payload = {
+            "event": "virtualaccount.payment.completed",
+            "data": {
+                "id": "txn_missing_sig",
+                "account_number": "1234567890",
+                "amount": 1000,
+                "status": "success"
+            }
+        }
+        
+        response = self.client.post(
+            '/api/wallet/flutterwave-webhook/',
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("missing signature", response.json().get("error", "").lower())
+    
+    def test_webhook_signature_verification(self):
+        """Test webhook signature verification with correct hash"""
+        from django.conf import settings
+        
+        # Mock the hash secret
+        test_hash_secret = "test_hash_secret_12345"
+        
+        payload = {
+            "event": "virtualaccount.payment.completed",
+            "data": {
+                "id": "txn_sig_test",
+                "account_number": "1234567890",
+                "amount": 1000,
+                "status": "success"
+            }
+        }
+        
+        payload_bytes = json.dumps(payload).encode()
+        
+        # Compute the correct signature
+        dig = hmac.new(
+            test_hash_secret.encode(),
+            payload_bytes,
+            hashlib.sha256
+        ).digest()
+        correct_signature = base64.b64encode(dig).decode()
+        
+        # Test with FlutterwaveService directly
+        from unittest.mock import patch
+        
+        with patch.object(settings, 'FLW_TEST_HASH_SECRET', test_hash_secret):
+            fw_service = FlutterwaveService(use_live=False)
+            self.assertTrue(
+                fw_service.verify_webhook_signature(payload_bytes, correct_signature),
+                "Valid signature should pass verification"
+            )
+            
+            # Test with wrong signature
+            wrong_signature = base64.b64encode(b"wrong_signature").decode()
+            self.assertFalse(
+                fw_service.verify_webhook_signature(payload_bytes, wrong_signature),
+                "Invalid signature should fail verification"
+            )
 
     def test_webhook_payload_account_number_extraction(self):
         """Test that webhook can extract account number from various payload structures"""
