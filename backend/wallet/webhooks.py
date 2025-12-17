@@ -22,6 +22,34 @@ from .services.flutterwave_service import FlutterwaveService
 
 logger = logging.getLogger(__name__)
 
+WEBHOOK_HEADER_NAMES_TO_LOG = {
+    "verif-hash",
+    "verif_hash",
+    "svix-signature",  # logged when probes deliver via Svix-style clients
+    "user-agent",
+    "content-type",
+    "host",
+}
+WEBHOOK_HEADER_NAMES_TO_LOG_LOWER = {h.lower() for h in WEBHOOK_HEADER_NAMES_TO_LOG}
+
+
+# --------------------------------------------------------------
+# Helper: Resolve Flutterwave signature header variants
+# --------------------------------------------------------------
+def _get_flw_signature(request):
+    """
+    Resolve Flutterwave signature header across common variants:
+    - verif-hash / Verif-Hash → as sent by Flutterwave
+    - verif_hash / HTTP_VERIF_HASH → Django/Wsgi transformed forms
+    """
+    return (
+        request.headers.get("verif-hash")
+        or request.headers.get("Verif-Hash")
+        or request.headers.get("verif_hash")
+        or request.META.get("HTTP_VERIF_HASH")
+    )
+
+
 # --------------------------------------------------------------
 # Helper: Make any object JSON-serializable (convert set → list)
 # --------------------------------------------------------------
@@ -60,7 +88,7 @@ def flutterwave_webhook(request):
     )
 
     try:
-        signature = request.headers.get("verif-hash")
+        signature = _get_flw_signature(request)
 
         # Health check or probe without signature → respond quietly
         if not signature and is_health_check:
@@ -68,15 +96,25 @@ def flutterwave_webhook(request):
 
         # Real attempt without signature → log as suspicious
         if not signature:
+            header_names = [
+                h
+                for h in request.headers.keys()
+                if h.lower() in WEBHOOK_HEADER_NAMES_TO_LOG_LOWER
+            ]
             logger.warning(
-                "Missing verif-hash header → potential probe | IP: %s | UA: %s",
+                "Missing verif-hash header → potential probe | IP: %s | UA: %s | headers=%s",
                 remote_ip,
                 user_agent[:200],
+                header_names,
             )
             return Response({"error": "missing signature"}, status=400)
 
         # Verify signature
         fw_service = FlutterwaveService(use_live=True)
+
+        if not fw_service.hash_secret:
+            logger.error("Flutterwave hash secret not configured; cannot verify webhook.")
+            return Response({"error": "unable to process webhook"}, status=500)
 
         if not fw_service.verify_webhook_signature(raw, signature):
             logger.warning(

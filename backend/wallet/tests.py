@@ -5,6 +5,7 @@ import json
 import hmac
 import hashlib
 import base64
+from unittest.mock import patch
 
 from .models import Wallet, VirtualAccount, Deposit
 from .services.flutterwave_service import FlutterwaveService
@@ -51,6 +52,39 @@ class FlutterwaveWebhookTestCase(TestCase):
         
         self.assertEqual(response.status_code, 400)
         self.assertIn("missing signature", response.json().get("error", "").lower())
+
+    @patch("wallet.webhooks.FlutterwaveService")
+    def test_webhook_accepts_header_variants(self, mock_fw_service):
+        """Ensure webhook accepts HTTP_VERIF_HASH header variant"""
+        payload = {
+            "event": "virtualaccount.payment.completed",
+            "data": {
+                "id": "txn_header_variant",
+                "account_number": "1234567890",
+                "amount": 1000,
+                "status": "success"
+            }
+        }
+
+        payload_bytes = json.dumps(payload).encode()
+        signature = "dummy-signature"
+
+        mock_fw_service.return_value.hash_secret = "dummy"
+        mock_fw_service.return_value.verify_webhook_signature.return_value = True
+
+        response = self.client.post(
+            '/api/wallet/flutterwave-webhook/',
+            data=payload_bytes,
+            content_type='application/json',
+            HTTP_VERIF_HASH=signature
+        )
+
+        self.assertEqual(response.status_code, 200)
+        mock_fw_service.return_value.verify_webhook_signature.assert_called_once_with(
+            payload_bytes, signature
+        )
+        self.wallet.refresh_from_db()
+        self.assertEqual(self.wallet.balance, Decimal("1000.00"))
     
     def test_webhook_signature_verification(self):
         """Test webhook signature verification with correct hash"""
