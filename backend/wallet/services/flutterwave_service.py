@@ -260,6 +260,9 @@ class FlutterwaveService:
     def verify_webhook_signature(self, raw_body: bytes, signature: str) -> bool:
         if not self.hash_secret:
             return False
+        if not signature:
+            logger.warning("Webhook signature header missing during verification.")
+            return False
 
         try:
             dig = hmac.new(

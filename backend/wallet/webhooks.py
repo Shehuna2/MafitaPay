@@ -60,7 +60,12 @@ def flutterwave_webhook(request):
     )
 
     try:
-        signature = request.headers.get("verif-hash")
+        signature = (
+            request.headers.get("verif-hash")
+            or request.headers.get("Verif-Hash")
+            or request.headers.get("verif_hash")
+            or request.META.get("HTTP_VERIF_HASH")
+        )
 
         # Health check or probe without signature → respond quietly
         if not signature and is_health_check:
@@ -69,14 +74,19 @@ def flutterwave_webhook(request):
         # Real attempt without signature → log as suspicious
         if not signature:
             logger.warning(
-                "Missing verif-hash header → potential probe | IP: %s | UA: %s",
+                "Missing verif-hash header → potential probe | IP: %s | UA: %s | headers=%s",
                 remote_ip,
                 user_agent[:200],
+                list(request.headers.keys()),
             )
             return Response({"error": "missing signature"}, status=400)
 
         # Verify signature
         fw_service = FlutterwaveService(use_live=True)
+
+        if not fw_service.hash_secret:
+            logger.error("Flutterwave hash secret not configured; cannot verify webhook.")
+            return Response({"error": "hash secret not configured"}, status=500)
 
         if not fw_service.verify_webhook_signature(raw, signature):
             logger.warning(
