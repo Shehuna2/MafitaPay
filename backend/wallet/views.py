@@ -13,6 +13,7 @@ import paystack
 from paystack import DedicatedVirtualAccount
 from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit
 from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer
+from .utils import extract_bank_name, extract_account_name
 
 
 
@@ -197,29 +198,9 @@ class GenerateDVAAPIView(APIView):
 
         account_number = fw_response["account_number"]
         
-        # Extract bank_name from multiple possible paths
-        bank_name = (
-            fw_response.get("bank_name")
-            or fw_response.get("bank")
-            or fw_response.get("account_bank_name")
-            or (fw_response.get("data") or {}).get("account_bank_name")
-            or (fw_response.get("raw_response") or {}).get("bank_name")
-            or (fw_response.get("raw_response") or {}).get("account_bank_name")
-            or (fw_response.get("raw_response") or {}).get("data", {}).get("account_bank_name")
-            or (fw_response.get("raw_response") or {}).get("raw_response", {}).get("data", {}).get("account_bank_name")
-            or "Unknown Bank"
-        )
-        
-        # Extract account_name from multiple possible paths
-        account_name = (
-            fw_response.get("account_name")
-            or fw_response.get("name")
-            or (fw_response.get("data") or {}).get("account_name")
-            or (fw_response.get("raw_response") or {}).get("account_name")
-            or (fw_response.get("raw_response") or {}).get("data", {}).get("account_name")
-            or (fw_response.get("raw_response") or {}).get("raw_response", {}).get("data", {}).get("account_name")
-            or "Virtual Account"
-        )
+        # Extract bank_name and account_name from multiple possible nested paths
+        bank_name = extract_bank_name(fw_response, default="Unknown Bank")
+        account_name = extract_account_name(fw_response, default="Virtual Account")
         
         provider_ref = fw_response.get("provider_reference") or fw_response.get("reference")
 

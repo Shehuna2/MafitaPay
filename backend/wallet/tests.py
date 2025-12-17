@@ -291,6 +291,7 @@ class FlutterwaveVABankNameExtractionTestCase(TestCase):
 
     def test_fw_response_extraction_logic(self):
         """Test the extraction logic that should be in generate_flutterwave_va"""
+        from .utils import extract_bank_name, extract_account_name
         
         # Simulate the fw_response structure from the issue
         fw_response = {
@@ -322,28 +323,9 @@ class FlutterwaveVABankNameExtractionTestCase(TestCase):
             "customer_id": "cus_zyRRrX9qSZ"
         }
         
-        # Replicate the extraction logic from views.py
-        bank_name = (
-            fw_response.get("bank_name")
-            or fw_response.get("bank")
-            or fw_response.get("account_bank_name")
-            or (fw_response.get("data") or {}).get("account_bank_name")
-            or (fw_response.get("raw_response") or {}).get("bank_name")
-            or (fw_response.get("raw_response") or {}).get("account_bank_name")
-            or (fw_response.get("raw_response") or {}).get("data", {}).get("account_bank_name")
-            or (fw_response.get("raw_response") or {}).get("raw_response", {}).get("data", {}).get("account_bank_name")
-            or "Unknown Bank"
-        )
-        
-        account_name = (
-            fw_response.get("account_name")
-            or fw_response.get("name")
-            or (fw_response.get("data") or {}).get("account_name")
-            or (fw_response.get("raw_response") or {}).get("account_name")
-            or (fw_response.get("raw_response") or {}).get("data", {}).get("account_name")
-            or (fw_response.get("raw_response") or {}).get("raw_response", {}).get("data", {}).get("account_name")
-            or "Virtual Account"
-        )
+        # Use the actual utility functions from views.py
+        bank_name = extract_bank_name(fw_response, default="Unknown Bank")
+        account_name = extract_account_name(fw_response, default="Virtual Account")
         
         # Verify extraction worked correctly
         self.assertEqual(bank_name, "Sterling BANK")
