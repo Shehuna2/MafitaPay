@@ -42,19 +42,28 @@ class VirtualAccountSerializer(serializers.ModelSerializer):
         # Fallback: extract from metadata with multiple nested paths
         metadata = obj.metadata or {}
         
-        bank_name = (
-            metadata.get("bank_name")
-            or metadata.get("bank")
-            or metadata.get("account_bank_name")
-            or (metadata.get("data") or {}).get("account_bank_name")
-            or (metadata.get("raw_response") or {}).get("bank_name")
-            or (metadata.get("raw_response") or {}).get("account_bank_name")
-            or ((metadata.get("raw_response") or {}).get("data") or {}).get("account_bank_name")
-            or ((metadata.get("raw_response") or {}).get("raw_response") or {}).get("data", {}).get("account_bank_name")
-            or "Bank"
-        )
+        # Helper to extract value from nested paths
+        def extract_from_metadata(data, *keys):
+            # Try direct keys
+            for key in keys:
+                if data.get(key):
+                    return data.get(key)
+            
+            # Try nested paths
+            for path in [("data",), ("raw_response",), ("raw_response", "data"), ("raw_response", "raw_response", "data")]:
+                current = data
+                for segment in path:
+                    current = (current or {}).get(segment, {})
+                    if not isinstance(current, dict):
+                        break
+                
+                if isinstance(current, dict):
+                    for key in keys:
+                        if current.get(key):
+                            return current.get(key)
+            return None
         
-        return bank_name
+        return extract_from_metadata(metadata, "bank_name", "bank", "account_bank_name") or "Bank"
 
 
 # ----------------------------------------------------------------------

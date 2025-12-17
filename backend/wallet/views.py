@@ -30,6 +30,46 @@ logger = logging.getLogger(__name__)
 # Set Paystack API key
 paystack.api_key = settings.PAYSTACK_SECRET_KEY
 
+
+def extract_nested_value(data, *keys, fallback=None):
+    """
+    Extract a value from nested dictionary structures by trying multiple key paths.
+    
+    Args:
+        data: The dictionary to search
+        *keys: Variable number of key names to try (e.g., 'bank_name', 'bank', 'account_bank_name')
+        fallback: Default value if none of the keys are found
+    
+    Returns:
+        The first non-None value found, or fallback if none exist
+    """
+    # Try direct keys first
+    for key in keys:
+        if data.get(key):
+            return data.get(key)
+    
+    # Try nested paths
+    nested_paths = [
+        ("data",),
+        ("raw_response",),
+        ("raw_response", "data"),
+        ("raw_response", "raw_response", "data"),
+    ]
+    
+    for path in nested_paths:
+        current = data
+        for segment in path:
+            current = (current or {}).get(segment, {})
+            if not isinstance(current, dict):
+                break
+        
+        if isinstance(current, dict):
+            for key in keys:
+                if current.get(key):
+                    return current.get(key)
+    
+    return fallback
+
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = "page_size"
@@ -198,27 +238,17 @@ class GenerateDVAAPIView(APIView):
         account_number = fw_response["account_number"]
         
         # Extract account_name robustly from multiple possible paths
-        account_name = (
-            fw_response.get("account_name")
-            or fw_response.get("name")
-            or (fw_response.get("data") or {}).get("account_name")
-            or (fw_response.get("raw_response") or {}).get("account_name")
-            or ((fw_response.get("raw_response") or {}).get("data") or {}).get("account_name")
-            or ((fw_response.get("raw_response") or {}).get("raw_response") or {}).get("data", {}).get("account_name")
-            or "Virtual Account"
+        account_name = extract_nested_value(
+            fw_response, 
+            "account_name", "name",
+            fallback="Virtual Account"
         )
         
         # Extract bank_name robustly from multiple possible nested paths
-        bank_name = (
-            fw_response.get("bank_name")
-            or fw_response.get("bank")
-            or fw_response.get("account_bank_name")
-            or (fw_response.get("data") or {}).get("account_bank_name")
-            or (fw_response.get("raw_response") or {}).get("bank_name")
-            or (fw_response.get("raw_response") or {}).get("account_bank_name")
-            or ((fw_response.get("raw_response") or {}).get("data") or {}).get("account_bank_name")
-            or ((fw_response.get("raw_response") or {}).get("raw_response") or {}).get("data", {}).get("account_bank_name")
-            or "Unknown Bank"
+        bank_name = extract_nested_value(
+            fw_response,
+            "bank_name", "bank", "account_bank_name",
+            fallback="Unknown Bank"
         )
         
         provider_ref = fw_response.get("provider_reference")
