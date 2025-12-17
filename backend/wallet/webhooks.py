@@ -22,6 +22,16 @@ from .services.flutterwave_service import FlutterwaveService
 
 logger = logging.getLogger(__name__)
 
+HEADER_NAMES_TO_LOG = {
+    "verif-hash",
+    "verif_hash",
+    "svix-signature",
+    "user-agent",
+    "content-type",
+    "host",
+}
+
+
 # --------------------------------------------------------------
 # Helper: Resolve Flutterwave signature header variants
 # --------------------------------------------------------------
@@ -88,8 +98,7 @@ def flutterwave_webhook(request):
             header_names = [
                 h
                 for h in request.headers.keys()
-                if h.lower()
-                in {"verif-hash", "verif_hash", "svix-signature", "user-agent", "content-type", "host"}
+                if h.lower() in HEADER_NAMES_TO_LOG
             ]
             logger.warning(
                 "Missing verif-hash header → potential probe | IP: %s | UA: %s | headers=%s",
@@ -104,7 +113,7 @@ def flutterwave_webhook(request):
 
         if not fw_service.hash_secret:
             logger.error("Flutterwave hash secret not configured; cannot verify webhook.")
-            return Response({"error": "service configuration error"}, status=500)
+            return Response({"error": "unable to process webhook"}, status=500)
 
         if not fw_service.verify_webhook_signature(raw, signature):
             logger.warning(
