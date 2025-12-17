@@ -48,7 +48,13 @@ def flutterwave_webhook(request):
     """
     try:
         raw = request.body or b""
-        signature = request.headers.get("verif-hash")  # REQUIRED HEADER
+        
+        signature = (
+            request.headers.get("verif-hash")
+            or request.headers.get("Verif-Hash")
+            or request.headers.get("VERIF-HASH")
+            or request.META.get("HTTP_VERIF_HASH")
+        )
 
         if not signature:
             logger.warning("Missing Flutterwave verif-hash header")
