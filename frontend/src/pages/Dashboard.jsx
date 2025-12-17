@@ -359,6 +359,35 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* FUNDING NOTICE */}
+      <div className="mx-2 mb-5">
+        <div className="flex items-start gap-3 bg-yellow-500/10 border border-yellow-500/30 backdrop-blur-md p-3 rounded-2xl animate-fade-in">
+          
+          <div className="shrink-0 mt-0.5">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-yellow-500/20 text-yellow-400 text-sm font-bold">
+              !
+            </span>
+          </div>
+
+          <div className="flex-1">
+            <p className="text-sm text-yellow-200 leading-snug">
+              Funding via <span className="font-semibold text-white">Flutterwave</span> may
+              experience <span className="font-semibold text-yellow-300">unnecessary delays</span>.
+              Please use <span className="text-indigo-400 font-semibold">P2P Deposit</span> for
+              faster funding while we resolve this issue.
+            </p>
+
+            <Link
+              to="/p2p/marketplace"
+              className="inline-block mt-2 text-xs font-semibold text-indigo-400 hover:text-white underline"
+            >
+              Go to P2P Marketplace →
+            </Link>
+          </div>
+        </div>
+      </div>
+
+
       {/* UNIVERSAL MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -463,3 +492,4 @@ export default function Dashboard() {
     </div>
   );
 }
+
