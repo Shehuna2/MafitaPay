@@ -49,12 +49,16 @@ def flutterwave_webhook(request):
     try:
         raw = request.body or b""
         
-        # Try multiple header name variations (case-insensitive handling)
-        signature = (
-            request.headers.get("verif-hash") 
-            or request.headers.get("Verif-Hash")
-            or request.META.get("HTTP_VERIF_HASH")
-        )
+        signature = request.headers.get("Flutterwave-Signature")
+        timestamp = request.headers.get("Svix-Timestamp")
+
+        if not signature or not timestamp:
+            logger.warning(
+                "Missing Flutterwave Svix headers. Got headers: %s",
+                list(request.headers.keys())
+            )
+            return Response({"error": "missing signature"}, status=400)
+
 
         # Log all incoming webhook requests for debugging
         logger.info(
@@ -83,7 +87,8 @@ def flutterwave_webhook(request):
             return Response({"error": "hash secret not configured"}, status=500)
 
         # Verify authenticity
-        if not fw_service.verify_webhook_signature(raw, signature):
+        if not fw_service.verify_webhook_signature(raw, signature, timestamp):
+
             logger.error(
                 "Invalid Flutterwave webhook signature. "
                 "Signature: %s..., Body length: %d, Environment: %s",
