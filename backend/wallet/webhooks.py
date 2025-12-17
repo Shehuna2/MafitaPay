@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 # Helper: Resolve Flutterwave signature header variants
 # --------------------------------------------------------------
 def _get_flw_signature(request):
+    """Resolve Flutterwave signature header across common case/format variants."""
     return (
         request.headers.get("verif-hash")
         or request.headers.get("Verif-Hash")
