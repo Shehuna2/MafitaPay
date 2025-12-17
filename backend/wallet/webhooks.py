@@ -54,7 +54,8 @@ def flutterwave_webhook(request):
             logger.warning("Missing Flutterwave verif-hash header")
             return Response({"error": "missing signature"}, status=400)
 
-        fw_service = FlutterwaveService(use_live=True)
+        # Use live credentials when not in DEBUG mode
+        fw_service = FlutterwaveService(use_live=not settings.DEBUG)
 
         # Verify authenticity
         if not fw_service.verify_webhook_signature(raw, signature):
@@ -66,6 +67,7 @@ def flutterwave_webhook(request):
         data = payload.get("data", {}) or payload
 
         logger.info("FLW webhook event: %s", event)
+        logger.debug("FLW webhook full payload: %s", json.dumps(payload, default=str)[:500])
 
         # Allowed events
         if event not in (
@@ -94,19 +96,46 @@ def flutterwave_webhook(request):
             logger.error("Missing Flutterwave reference in payload: %s", data)
             return Response({"status": "ignored"}, status=200)
 
-        # Resolve VA account number
+        # Resolve VA account number - Flutterwave v4 uses various field structures
         account_number = (
             data.get("account_number")
             or data.get("destination_account")
             or data.get("receiver_account")
+            or data.get("credited_account")
         )
 
-        # FW bank transfer payload
-        bt = data.get("payment_method", {}).get("bank_transfer", {})
+        # Check for nested account information in payment details
+        if not account_number and data.get("payment_details"):
+            payment_details = data.get("payment_details", {})
+            account_number = (
+                payment_details.get("account_number")
+                or payment_details.get("destination_account")
+            )
 
-        if not account_number:
-            account_number = data.get("meta", {}).get("account_number")
+        # Check meta field
+        if not account_number and data.get("meta"):
+            meta = data.get("meta", {})
+            account_number = meta.get("account_number") or meta.get("beneficiary_account_number")
 
+        # Extract bank transfer info - Flutterwave v4 structure
+        # Check multiple possible locations for originator info
+        bt = {}
+        if data.get("payment_method"):
+            bt = data.get("payment_method", {}).get("bank_transfer", {})
+        
+        # Fallback: check if transfer details are directly in data
+        if not bt and data.get("transfer_details"):
+            bt = data.get("transfer_details", {})
+        
+        # Another common structure in FW v4
+        if not bt:
+            bt = {
+                "originator_name": data.get("sender_name") or data.get("customer_name") or data.get("originator_name"),
+                "originator_bank_name": data.get("sender_bank") or data.get("originator_bank"),
+                "originator_account_number": data.get("sender_account") or data.get("originator_account"),
+            }
+
+        # Fallback: Try to find VA by reference
         if not account_number and data.get("reference"):
             va_fallback = VirtualAccount.objects.filter(
                 provider_account_id=data.get("reference"),
@@ -114,8 +143,10 @@ def flutterwave_webhook(request):
             ).first()
             if va_fallback:
                 account_number = va_fallback.account_number
+                logger.info("Found VA by reference fallback: %s", account_number)
 
         if not account_number:
+            logger.warning("No account number found in FLW webhook. Data keys: %s", list(data.keys()))
             return Response({"status": "ignored"}, status=200)
 
         va = VirtualAccount.objects.filter(
@@ -124,9 +155,14 @@ def flutterwave_webhook(request):
         ).select_related("user").first()
 
         if not va:
+            logger.warning("No VA found for account_number=%s, provider=flutterwave", account_number)
             return Response({"status": "ignored"}, status=200)
 
         user = va.user
+        if not user:
+            logger.error("VirtualAccount %s has no user!", va.id)
+            return Response({"status": "ignored"}, status=200)
+
         wallet, _ = Wallet.objects.get_or_create(user=user)
 
         # IDEMPOTENT HANDLING
@@ -146,15 +182,23 @@ def flutterwave_webhook(request):
             })
 
             if existing:
+                logger.info("Duplicate deposit detected for ref=%s, status=%s", provider_ref, existing.status)
                 if existing.status != "credited":
+                    logger.info("Attempting to credit existing non-credited deposit for user=%s, amount=₦%s", user.email, amount)
                     if wallet.deposit(amount, f"flw_{provider_ref}", metadata):
                         existing.status = "credited"
                         existing.save(update_fields=["status"])
+                        logger.info("Successfully recovered and credited deposit for user=%s", user.email)
                         return Response({"status": "recovered"}, status=200)
+                    else:
+                        logger.error("Failed to credit recovered deposit for user=%s, ref=%s", user.email, provider_ref)
+                        return Response({"status": "deposit_failed"}, status=500)
                 return Response({"status": "already_processed"}, status=200)
 
             # New deposit
+            logger.info("Processing new deposit: user=%s, amount=₦%s, ref=%s", user.email, amount, provider_ref)
             if not wallet.deposit(amount, f"flw_{provider_ref}", metadata):
+                logger.error("Wallet deposit failed for user=%s, amount=₦%s, ref=%s", user.email, amount, provider_ref)
                 return Response({"status": "deposit_failed"}, status=500)
 
             Deposit.objects.create(
@@ -166,7 +210,7 @@ def flutterwave_webhook(request):
                 raw=payload
             )
 
-        logger.info("Flutterwave deposit success → ₦%s | user=%s", amount, user.email)
+        logger.info("Flutterwave deposit success → ₦%s | user=%s | ref=%s", amount, user.email, provider_ref)
         return Response({"status": "success"}, status=200)
 
     except Exception:
