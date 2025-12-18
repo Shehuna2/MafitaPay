@@ -61,20 +61,6 @@ def flutterwave_webhook(request):
             )
             return Response({"error": "payload too large"}, status=413)
         
-        # Log ALL incoming headers for debugging (mask sensitive values)
-        # This helps us see exactly what Flutterwave sends
-        sensitive_value_headers = {"authorization", "cookie", "x-api-key", "verif-hash", "x-verif-hash", "flutterwave-signature"}
-        logged_headers = {}
-        for key, value in request.headers.items():
-            if key.lower() in sensitive_value_headers:
-                logged_headers[key] = "[REDACTED]"
-            else:
-                logged_headers[key] = value
-        logger.info(
-            "Flutterwave webhook incoming headers: %s",
-            logged_headers
-        )
-        
         # Check multiple header variations for signature
         # Django's request.headers is case-insensitive, but we check common variants
         # as well as Django's META format for completeness
