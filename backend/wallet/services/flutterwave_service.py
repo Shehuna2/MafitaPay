@@ -261,8 +261,9 @@ class FlutterwaveService:
         """
         Flutterwave webhook verification.
     
-        Flutterwave DOES NOT sign payloads.
-        It sends the secret hash directly in `verif-hash` header.
+        Supports multiple verification methods:
+        1. Direct hash comparison (verif-hash header = hash_secret)
+        2. HMAC-SHA256 verification (Flutterwave-Signature header with base64-encoded HMAC)
         """
         if not self.hash_secret:
             logger.error("CRITICAL: Flutterwave hash secret not configured.")
@@ -272,7 +273,34 @@ class FlutterwaveService:
             logger.warning("Flutterwave webhook signature missing.")
             return False
     
-        return hmac.compare_digest(
-            signature.strip(),
-            self.hash_secret.strip(),
+        signature = signature.strip()
+        hash_secret = self.hash_secret.strip()
+        
+        # Method 1: Direct comparison (legacy verif-hash method)
+        # Flutterwave may send the secret hash directly in `verif-hash` header
+        if hmac.compare_digest(signature, hash_secret):
+            logger.debug("Webhook signature verified using direct comparison.")
+            return True
+        
+        # Method 2: HMAC-SHA256 verification (Flutterwave-Signature header)
+        # Flutterwave may sign payloads with HMAC-SHA256 and send base64-encoded signature
+        try:
+            computed_signature = base64.b64encode(
+                hmac.new(
+                    hash_secret.encode("utf-8"),
+                    raw_body,
+                    hashlib.sha256
+                ).digest()
+            ).decode("utf-8")
+            
+            if hmac.compare_digest(signature, computed_signature):
+                logger.debug("Webhook signature verified using HMAC-SHA256.")
+                return True
+        except (UnicodeEncodeError, TypeError, ValueError) as e:
+            logger.warning("HMAC signature verification failed with error: %s", str(e))
+        
+        logger.warning(
+            "Flutterwave webhook signature verification failed. "
+            "Neither direct comparison nor HMAC-SHA256 matched."
         )
+        return False
