@@ -27,6 +27,101 @@ def _make_signature(bonus_type_id, user_id, event, context: dict):
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _extract_object_attributes(key, obj, User):
+    """
+    Helper function to extract attributes from an object for JSON serialization.
+    
+    Args:
+        key: The key name for this object in the context
+        obj: The object to extract attributes from
+        User: The User model class
+        
+    Returns:
+        Dictionary with extracted attributes
+    """
+    result = {}
+    
+    # Extract ID
+    if hasattr(obj, 'id'):
+        result[key] = str(obj.id)
+    else:
+        result[key] = str(obj)
+        return result
+    
+    # Extract email for User models or any object with email attribute
+    if hasattr(obj, 'email') and obj.email:
+        result[f"{key}_email"] = obj.email
+    
+    # Extract reference if available (for WalletTransaction)
+    if hasattr(obj, 'reference') and obj.reference:
+        result[f"{key}_reference"] = obj.reference
+    
+    # Extract category if available (for WalletTransaction)
+    if hasattr(obj, 'category') and obj.category:
+        result[f"{key}_category"] = obj.category
+    
+    return result
+
+
+def _sanitize_value(value, User):
+    """
+    Sanitize a single value for JSON serialization.
+    
+    Args:
+        value: The value to sanitize
+        User: The User model class
+        
+    Returns:
+        JSON-serializable value
+    """
+    from django.db import models
+    
+    if value is None:
+        return None
+    elif isinstance(value, (str, int, float, bool)):
+        return value
+    elif isinstance(value, Decimal):
+        return str(value)
+    elif isinstance(value, dict):
+        return _sanitize_context_for_json(value)
+    elif isinstance(value, (list, tuple)):
+        return [_sanitize_value(item, User) for item in value]
+    elif isinstance(value, models.Model) or hasattr(value, '__dict__'):
+        # Handle Django models and any object with attributes
+        return str(value.id) if hasattr(value, 'id') else str(value)
+    else:
+        # Final fallback to string representation
+        return str(value)
+
+
+def _sanitize_context_for_json(context: dict):
+    """
+    Sanitize context dictionary to ensure all values are JSON serializable.
+    Converts Django model instances to their string representations (IDs or references).
+    
+    Args:
+        context: Dictionary that may contain Django model instances
+        
+    Returns:
+        Dictionary with all values converted to JSON-serializable types
+    """
+    from django.db import models
+    from django.contrib.auth import get_user_model
+    
+    User = get_user_model()
+    sanitized = {}
+    
+    for key, value in context.items():
+        if isinstance(value, models.Model) or (hasattr(value, '__dict__') and hasattr(value, 'id')):
+            # Extract detailed attributes for objects with IDs
+            sanitized.update(_extract_object_attributes(key, value, User))
+        else:
+            # Use simple sanitization for other types
+            sanitized[key] = _sanitize_value(value, User)
+    
+    return sanitized
+
+
 class RewardEngine:
     """
     Central engine responsible for creating Bonus records (and letting BonusService apply them).
@@ -78,14 +173,18 @@ class RewardEngine:
         signature_context = dict(context)
         if referee:
             signature_context["referee_id"] = str(getattr(referee, "id", referee))
-        signature = _make_signature(bonus_type_id=bonus_type.id, user_id=user.id, event=event or "manual", context=signature_context)
+        
+        # Sanitize the context to ensure it's JSON serializable
+        sanitized_context = _sanitize_context_for_json(signature_context)
+        
+        signature = _make_signature(bonus_type_id=bonus_type.id, user_id=user.id, event=event or "manual", context=sanitized_context)
 
         # metadata to store (always include signature)
         base_metadata = {
             **(metadata or {}),
             "trigger_signature": signature,
             "trigger_event": event or "manual",
-            "trigger_context": signature_context,
+            "trigger_context": sanitized_context,
             "awarded_at": timezone.now().isoformat(),
             "awarded_by": "system",
         }
@@ -118,7 +217,7 @@ class RewardEngine:
                 r_amount = Decimal(str(referee_amount)) if referee_amount is not None else amount
 
                 # signature for referee award should include referee id + role
-                ref_sig_ctx = dict(signature_context)
+                ref_sig_ctx = dict(sanitized_context)
                 ref_sig_ctx["role"] = "referee"
                 ref_signature = _make_signature(bonus_type_id=bonus_type.id, user_id=referee.id, event=event or "manual", context=ref_sig_ctx)
 
@@ -151,7 +250,7 @@ class RewardEngine:
                     referrer_amount = rules.get("referrer_amount")
                     rr_amount = Decimal(str(referrer_amount)) if referrer_amount is not None else amount
 
-                    referrer_sig_ctx = dict(signature_context)
+                    referrer_sig_ctx = dict(sanitized_context)
                     referrer_sig_ctx["role"] = "referrer"
                     referrer_signature = _make_signature(bonus_type_id=bonus_type.id, user_id=user.id, event=event or "manual", context=referrer_sig_ctx)
 
