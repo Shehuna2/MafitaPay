@@ -61,6 +61,20 @@ def flutterwave_webhook(request):
             )
             return Response({"error": "payload too large"}, status=413)
         
+        # Log ALL incoming headers for debugging (mask sensitive values)
+        # This helps us see exactly what Flutterwave sends
+        sensitive_value_headers = {"authorization", "cookie", "x-api-key", "verif-hash", "x-verif-hash"}
+        logged_headers = {}
+        for key, value in request.headers.items():
+            if key.lower() in sensitive_value_headers:
+                logged_headers[key] = "[REDACTED]"
+            else:
+                logged_headers[key] = value
+        logger.info(
+            "Flutterwave webhook incoming headers: %s",
+            logged_headers
+        )
+        
         # Check multiple header variations for verif-hash
         # Django's request.headers is case-insensitive, but we check common variants
         # as well as Django's META format for completeness
@@ -72,16 +86,8 @@ def flutterwave_webhook(request):
         )
 
         if not signature:
-            # Log available header keys for debugging (only names, not values)
-            # Avoid logging sensitive headers entirely
-            sensitive_headers = {"authorization", "cookie", "x-api-key", "verif-hash", "x-verif-hash"}
-            safe_header_keys = [
-                k for k in request.headers.keys()
-                if k.lower() not in sensitive_headers
-            ]
             logger.warning(
-                "Missing Flutterwave verif-hash header. Available headers: %s",
-                safe_header_keys
+                "Missing Flutterwave verif-hash header in the above logged headers"
             )
             return Response({"error": "missing signature"}, status=400)
 
