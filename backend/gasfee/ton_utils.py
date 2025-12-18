@@ -175,8 +175,9 @@ class TonWallet:
         
         multiplier = tier_multipliers.get(tier.lower(), Decimal("1.5"))
         
-        # Get fee cap from environment
-        max_fee_ton = Decimal(os.getenv("TON_GAS_FEE_MAX", "0.5"))
+        # Get fee cap from settings
+        from django.conf import settings
+        max_fee_ton = Decimal(str(getattr(settings, "TON_GAS_FEE_MAX", "0.5")))
         
         payload = {
             "id": 1,

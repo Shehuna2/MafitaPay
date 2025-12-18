@@ -135,8 +135,9 @@ def estimate_near_gas_fee(tier: str = "standard") -> Decimal:
         "economy": Decimal("0.00015"),  # Lower buffer for economy
     }
     
-    # Get fee from environment or use tier-based default
-    max_fee = Decimal(get_env_var("NEAR_GAS_FEE_MAX", required=False) or "0.001")
+    # Get fee from Django settings or use tier-based default
+    from django.conf import settings
+    max_fee = Decimal(str(getattr(settings, "NEAR_GAS_FEE_MAX", "0.001")))
     estimated = base_fees.get(tier.lower(), Decimal("0.0002"))
     
     # Apply cap

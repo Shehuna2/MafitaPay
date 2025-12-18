@@ -255,8 +255,9 @@ def send_evm(
             if is_retryable and attempt < max_retries - 1:
                 logger.warning(f"Transaction failed on {chain} (attempt {attempt + 1}), retrying with bumped gas: {msg}")
                 
-                # Bump gas price by 20%
-                bump_percent = int(os.getenv("TX_RETRY_GAS_BUMP_PERCENT", "20"))
+                # Bump gas price using configured percentage
+                from django.conf import settings
+                bump_percent = int(getattr(settings, "TX_RETRY_GAS_BUMP_PERCENT", 20))
                 if "maxFeePerGas" in tx:
                     tx["maxFeePerGas"] = int(tx["maxFeePerGas"] * (1 + bump_percent / 100))
                     tx["maxPriorityFeePerGas"] = int(tx["maxPriorityFeePerGas"] * (1 + bump_percent / 100))

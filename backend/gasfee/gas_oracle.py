@@ -206,9 +206,9 @@ class GasOracle:
             gas_cap_wei = w3.to_wei(gas_cap_gwei, "gwei")
             
             if adjusted_price > gas_cap_wei:
+                adjusted_gwei = w3.from_wei(adjusted_price, 'gwei')
                 logger.warning(
-                    f"Gas price {w3.from_wei(adjusted_price, 'gwei')} Gwei exceeds cap "
-                    f"{gas_cap_gwei} Gwei for {chain}. Capping."
+                    f"Gas price {adjusted_gwei} Gwei exceeds cap {gas_cap_gwei} Gwei for {chain}. Capping."
                 )
                 adjusted_price = gas_cap_wei
             

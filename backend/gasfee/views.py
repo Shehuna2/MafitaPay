@@ -409,9 +409,6 @@ class BuyCryptoAPI(APIView):
         # ---- 5) Perform chain send (outside DB atomic) ----
         # Get sender function with tier support
         sender_fn = get_sender_with_tier(crypto.network, gas_tier)
-        if not sender_fn:
-            # Fallback to legacy SENDERS dict
-            sender_fn = SENDERS.get(crypto.network.upper())
         
         if not sender_fn:
             # unsupported network
