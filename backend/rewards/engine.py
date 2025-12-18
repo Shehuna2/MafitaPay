@@ -27,6 +27,73 @@ def _make_signature(bonus_type_id, user_id, event, context: dict):
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _extract_object_attributes(key, obj, User):
+    """
+    Helper function to extract attributes from an object for JSON serialization.
+    
+    Args:
+        key: The key name for this object in the context
+        obj: The object to extract attributes from
+        User: The User model class
+        
+    Returns:
+        Dictionary with extracted attributes
+    """
+    result = {}
+    
+    # Extract ID
+    if hasattr(obj, 'id'):
+        result[key] = str(obj.id)
+    else:
+        result[key] = str(obj)
+        return result
+    
+    # Extract email for User models or any object with email attribute
+    if hasattr(obj, 'email') and obj.email:
+        result[f"{key}_email"] = obj.email
+    
+    # Extract reference if available (for WalletTransaction)
+    if hasattr(obj, 'reference') and obj.reference:
+        result[f"{key}_reference"] = obj.reference
+    
+    # Extract category if available (for WalletTransaction)
+    if hasattr(obj, 'category') and obj.category:
+        result[f"{key}_category"] = obj.category
+    
+    return result
+
+
+def _sanitize_value(value, User):
+    """
+    Sanitize a single value for JSON serialization.
+    
+    Args:
+        value: The value to sanitize
+        User: The User model class
+        
+    Returns:
+        JSON-serializable value
+    """
+    from django.db import models
+    
+    if value is None:
+        return None
+    elif isinstance(value, (str, int, float, bool)):
+        return value
+    elif isinstance(value, Decimal):
+        return str(value)
+    elif isinstance(value, dict):
+        return _sanitize_context_for_json(value)
+    elif isinstance(value, (list, tuple)):
+        return [_sanitize_value(item, User) for item in value]
+    elif isinstance(value, models.Model) or hasattr(value, '__dict__'):
+        # Handle Django models and any object with attributes
+        return str(value.id) if hasattr(value, 'id') else str(value)
+    else:
+        # Final fallback to string representation
+        return str(value)
+
+
 def _sanitize_context_for_json(context: dict):
     """
     Sanitize context dictionary to ensure all values are JSON serializable.
@@ -45,52 +112,12 @@ def _sanitize_context_for_json(context: dict):
     sanitized = {}
     
     for key, value in context.items():
-        if value is None:
-            sanitized[key] = None
-        elif isinstance(value, (str, int, float, bool)):
-            sanitized[key] = value
-        elif isinstance(value, Decimal):
-            sanitized[key] = str(value)
-        elif isinstance(value, dict):
-            sanitized[key] = _sanitize_context_for_json(value)
-        elif isinstance(value, (list, tuple)):
-            sanitized[key] = [
-                _sanitize_context_for_json({"item": item})["item"] 
-                if isinstance(item, dict) 
-                else item 
-                for item in value
-            ]
-        elif isinstance(value, models.Model):
-            # Handle Django models (including User models)
-            sanitized[key] = str(value.id) if hasattr(value, 'id') else str(value.pk)
-            
-            # Add email for User models
-            if isinstance(value, User) and hasattr(value, 'email'):
-                sanitized[f"{key}_email"] = value.email
-            
-            # Include reference if available (for WalletTransaction)
-            if hasattr(value, 'reference') and value.reference:
-                sanitized[f"{key}_reference"] = value.reference
-            
-            # Include category if available (for WalletTransaction)
-            if hasattr(value, 'category') and value.category:
-                sanitized[f"{key}_category"] = value.category
-        elif hasattr(value, '__dict__'):
-            # Handle any object with attributes (fallback for non-Django objects)
-            # Try to extract id and email if they exist
-            if hasattr(value, 'id'):
-                sanitized[key] = str(value.id)
-                if hasattr(value, 'email'):
-                    sanitized[f"{key}_email"] = value.email
-                if hasattr(value, 'reference'):
-                    sanitized[f"{key}_reference"] = value.reference
-                if hasattr(value, 'category'):
-                    sanitized[f"{key}_category"] = value.category
-            else:
-                sanitized[key] = str(value)
+        if isinstance(value, models.Model) or (hasattr(value, '__dict__') and hasattr(value, 'id')):
+            # Extract detailed attributes for objects with IDs
+            sanitized.update(_extract_object_attributes(key, value, User))
         else:
-            # Final fallback to string representation
-            sanitized[key] = str(value)
+            # Use simple sanitization for other types
+            sanitized[key] = _sanitize_value(value, User)
     
     return sanitized
 
