@@ -47,7 +47,16 @@ def flutterwave_webhook(request):
     Flutterwave v4 Webhook Handler — secure + idempotent + fixed transaction ID.
     """
     try:
+        # SECURITY: Limit payload size to prevent DoS attacks (1MB max)
+        MAX_WEBHOOK_SIZE = 1024 * 1024  # 1MB
         raw = request.body or b""
+        
+        if len(raw) > MAX_WEBHOOK_SIZE:
+            logger.warning(
+                "Webhook payload too large: %d bytes (max: %d)",
+                len(raw), MAX_WEBHOOK_SIZE
+            )
+            return Response({"error": "payload too large"}, status=413)
         
         signature = (
             request.headers.get("verif-hash")
@@ -62,6 +71,14 @@ def flutterwave_webhook(request):
 
         fw_service = FlutterwaveService(use_live=True)
 
+        # SECURITY: Validate hash secret is configured
+        if not fw_service.hash_secret:
+            logger.error(
+                "CRITICAL: Flutterwave hash secret not configured. "
+                "Cannot verify webhook. Environment: LIVE"
+            )
+            return Response({"error": "configuration error"}, status=500)
+
         # Verify authenticity
         if not fw_service.verify_webhook_signature(raw, signature):
             logger.error("Invalid Flutterwave webhook signature")
@@ -71,7 +88,12 @@ def flutterwave_webhook(request):
         event = payload.get("event") or payload.get("event_type") or payload.get("type")
         data = payload.get("data", {}) or payload
 
-        logger.info("FLW webhook event: %s", event)
+        # SECURITY: Log without exposing sensitive data
+        logger.info(
+            "Flutterwave webhook received: event=%s, body_length=%d",
+            event or "unknown",
+            len(raw)
+        )
 
         # Allowed events
         if event not in (
@@ -86,8 +108,14 @@ def flutterwave_webhook(request):
         if status_text not in ("success", "successful", "succeeded"):
             return Response({"status": "ignored"}, status=200)
 
+        # SECURITY: Validate amount is positive and within reasonable limits
+        MAX_AMOUNT = Decimal("10000000")  # 10M NGN maximum
         amount = Decimal(str(data.get("amount", "0")))
-        if amount <= 0:
+        if amount <= 0 or amount > MAX_AMOUNT:
+            logger.warning(
+                "Invalid or excessive amount in webhook: %s (max: %s)",
+                amount, MAX_AMOUNT
+            )
             return Response({"status": "ignored"}, status=200)
 
         # FIX: Transaction ID fallback
