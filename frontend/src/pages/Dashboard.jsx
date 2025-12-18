@@ -29,7 +29,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showBalance, setShowBalance] = useState(false);
+  const [showBalance, setShowBalance] = useState(true);
   const [displayBalance, setDisplayBalance] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState("");
@@ -44,7 +44,7 @@ export default function Dashboard() {
   const touchEnd = useRef(0);
 
   const eventCards = [
-    { title: "Crypto Summit 2025", details: "Join the biggest blockchain event in Lagos", date: "12/6" },
+    { title: "Crypto Summit 2026", details: "Join the biggest blockchain event in Lagos", date: "12/6" },
     { title: "Zero-Fee Week", details: "Trade any asset with 0% fees", date: "15/6" },
     { title: "Referral Bonus", details: "Invite a friend – earn ₦200 each", date: "20/6" },
   ];
@@ -142,21 +142,24 @@ export default function Dashboard() {
 
     return (
       <div
-        className="flex items-center gap-3 cursor-pointer select-none"
-        onClick={() => setShowBalance((v) => !v)}
-      >
-        {showBalance ? (
-          <>
-            {formatCurrency(displayBalance.toFixed(2))}
-            <EyeOff className="w-5 h-5 text-gray-400" />
-          </>
-        ) : (
-          <span className="text-5xl sm:text-6xl font-extrabold tracking-widest text-gray-400 animate-pulse">
+      className="flex items-center gap-3 cursor-pointer select-none text-green-300/60"
+      onClick={() => setShowBalance(v => !v)}
+    >
+      {showBalance ? (
+        <>
+          {formatCurrency(displayBalance.toFixed(2))}
+          <EyeOff className="w-5 h-5 text-gray-400" />
+        </>
+      ) : (
+        <>
+          <span className="text-5xl sm:text-6xl font-extrabold tracking-widest text-green-300/60">
             ●●●●
           </span>
-          
-        )}
-      </div>
+          <Eye className="w-5 h-5 text-gray-400" />
+        </>
+      )}
+    </div>
+
     );
   };
 
@@ -361,31 +364,25 @@ export default function Dashboard() {
 
       {/* FUNDING NOTICE */}
       <div className="mx-2 mb-5">
-        <div className="flex items-start gap-3 bg-yellow-500/10 border border-yellow-500/30 backdrop-blur-md p-3 rounded-2xl animate-fade-in">
+        <div className="flex items-start gap-3 bg-green-500/10 border border-green-500/30 backdrop-blur-md p-3 rounded-2xl animate-fade-in">
           
           <div className="shrink-0 mt-0.5">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-yellow-500/20 text-yellow-400 text-sm font-bold">
-              !
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500/20 text-green-400 text-sm font-bold">
+              ✓
             </span>
           </div>
 
           <div className="flex-1">
-            <p className="text-sm text-yellow-200 leading-snug">
-              Funding via <span className="font-semibold text-white">Flutterwave</span> may
-              experience <span className="font-semibold text-yellow-300">unnecessary delays</span>.
-              Please use <span className="text-indigo-400 font-semibold">P2P Deposit</span> for
-              faster funding while we resolve this issue.
+            <p className="text-sm text-green-200 leading-snug">
+              <span className="font-semibold text-white">Flutterwave funding</span> is now
+              <span className="font-semibold text-green-300"> fully resolved</span>.
+              Deposits are <span className="font-semibold">crediting successfully</span> and
+              even <span className="font-semibold">faster than before</span>.
             </p>
-
-            <Link
-              to="/p2p/marketplace"
-              className="inline-block mt-2 text-xs font-semibold text-indigo-400 hover:text-white underline"
-            >
-              Go to P2P Marketplace →
-            </Link>
           </div>
         </div>
       </div>
+
 
 
       {/* UNIVERSAL MODAL */}
@@ -492,4 +489,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
