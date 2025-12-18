@@ -69,8 +69,9 @@ def flutterwave_webhook(request):
         )
 
         if not signature:
-            logger.warning("Missing Flutterwave verif-hash header")
-            return Response({"error": "missing signature"}, status=400)
+            logger.warning("Missing Flutterwave verif-hash header (ignored)")
+            return Response({"status": "ignored"}, status=200)
+
 
         fw_service = FlutterwaveService(use_live=True)
 
