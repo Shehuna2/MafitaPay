@@ -299,7 +299,7 @@ class GasOracle:
         Returns:
             New gas fees dict with increased prices
         """
-        multiplier = Decimal(1 + bump_percent / 100)
+        multiplier = Decimal("1") + Decimal(bump_percent) / Decimal("100")
         
         if current_fees.get("type") == 2:
             # EIP-1559
