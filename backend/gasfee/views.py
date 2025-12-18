@@ -146,6 +146,43 @@ def amount_to_wei(amount) -> int:
     except Exception:
         return int(float(amount) * (10 ** 18))
 
+def get_sender_with_tier(network: str, tier: str = "standard"):
+    """
+    Get sender function with tier support
+    
+    Args:
+        network: Network identifier
+        tier: Gas tier (fast/standard/economy)
+        
+    Returns:
+        Callable sender function
+    """
+    network = network.upper()
+    
+    # EVM chains with tier support
+    if network in {"ETH", "ARB", "BASE", "OP", "POL", "AVAX", "LINEA"}:
+        return lambda to, amt, oid: send_evm(network, to, amt, oid, tier=tier)
+    
+    # BSC with tier support
+    if network in {"BSC", "BNB"}:
+        return lambda to, amt, oid: send_bsc(to, amt, oid, tier=tier)
+    
+    # NEAR with tier support
+    if network == "NEAR":
+        return lambda to, amt, oid: send_near(to, amt, oid, tier=tier)
+    
+    # TON with tier support
+    if network == "TON":
+        return lambda to, amt, oid: send_ton(to, amt, oid, tier=tier)
+    
+    # Solana (no tier support yet)
+    if network == "SOL":
+        return send_solana
+    
+    return None
+
+
+# Legacy SENDERS dict for backward compatibility
 SENDERS = {
     # EVM chains
     "ETH": lambda to, amt, oid: send_evm("ETH", to, amt),
@@ -243,6 +280,12 @@ class BuyCryptoAPI(APIView):
         raw_amount = request.data.get("amount")
         currency = (request.data.get("currency") or "NGN").upper()
         wallet_address = (request.data.get("wallet_address") or "").strip()
+        gas_tier = (request.data.get("gas_tier") or "standard").lower()
+        
+        # Validate gas tier
+        if gas_tier not in ["fast", "standard", "economy"]:
+            logger.warning(f"Invalid gas tier '{gas_tier}', using 'standard'")
+            gas_tier = "standard"
 
 
         if raw_amount is None:
@@ -364,7 +407,9 @@ class BuyCryptoAPI(APIView):
             return Response({"error": "transaction_failed"}, status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # ---- 5) Perform chain send (outside DB atomic) ----
-        sender_fn = SENDERS.get(crypto.network.upper())
+        # Get sender function with tier support
+        sender_fn = get_sender_with_tier(crypto.network, gas_tier)
+        
         if not sender_fn:
             # unsupported network
             logger.error(f"Unsupported network for onchain send: {crypto.network}")

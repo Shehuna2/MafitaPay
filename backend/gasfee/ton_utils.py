@@ -156,16 +156,34 @@ class TonWallet:
 
     # ---------------- FEE ESTIMATE ---------------- #
 
-    def estimate_fee(self) -> TonAmount:
+    def estimate_fee(self, tier: str = "standard") -> TonAmount:
         """
-        Reads last 5 fees and returns 1.5x average.
-        Always returns TonAmount.
+        Estimates transaction fee with dynamic calculation and safety margins.
+        
+        Args:
+            tier: Gas tier (fast/standard/economy)
+        
+        Returns:
+            TonAmount for the estimated fee
         """
+        # Tier multipliers for TON
+        tier_multipliers = {
+            "fast": Decimal("2.0"),      # 2x base for urgent
+            "standard": Decimal("1.5"),  # 1.5x base for normal
+            "economy": Decimal("1.2"),   # 1.2x base for economy
+        }
+        
+        multiplier = tier_multipliers.get(tier.lower(), Decimal("1.5"))
+        
+        # Get fee cap from settings
+        from django.conf import settings
+        max_fee_ton = Decimal(str(getattr(settings, "TON_GAS_FEE_MAX", "0.5")))
+        
         payload = {
             "id": 1,
             "jsonrpc": "2.0",
             "method": "getTransactions",
-            "params": {"address": self.address, "limit": 5}
+            "params": {"address": self.address, "limit": 10}  # Check more transactions
         }
         try:
             res = self.api.call(payload)
@@ -173,26 +191,49 @@ class TonWallet:
             for tx in res.get("result", []):
                 if "fee" in tx:
                     nano = Decimal(str(tx["fee"]))
-                    fees.append(nano / Decimal("1e9"))
+                    fee_ton = nano / Decimal("1e9")
+                    # Filter out abnormally high fees (potential errors)
+                    if fee_ton < Decimal("0.5"):
+                        fees.append(fee_ton)
 
             if fees:
-                avg = sum(fees) / Decimal(len(fees))
-                return TonAmount(avg * Decimal("1.5"))
-        except:
-            pass
+                # Use median instead of average for more stability
+                fees.sort()
+                median_idx = len(fees) // 2
+                if len(fees) % 2 == 0:
+                    median = (fees[median_idx - 1] + fees[median_idx]) / Decimal("2")
+                else:
+                    median = fees[median_idx]
+                
+                estimated_fee = median * multiplier
+                
+                # Apply cap
+                if estimated_fee > max_fee_ton:
+                    logger.warning(f"TON fee estimate {estimated_fee} exceeds cap {max_fee_ton}, capping")
+                    estimated_fee = max_fee_ton
+                
+                return TonAmount(estimated_fee)
+        except Exception as e:
+            logger.warning(f"TON fee estimation failed: {e}")
 
-        return TonAmount(Decimal("0.01"))
+        # Fallback based on tier
+        fallback_fees = {
+            "fast": Decimal("0.02"),
+            "standard": Decimal("0.015"),
+            "economy": Decimal("0.01"),
+        }
+        return TonAmount(fallback_fees.get(tier.lower(), Decimal("0.015")))
 
 
     # ---------------- SEND ---------------- #
 
-    def send(self, destination: str, amount: TonAmount, order_id=None) -> tuple[str, float]:
+    def send(self, destination: str, amount: TonAmount, order_id=None, tier: str = "standard") -> tuple[str, float]:
         logger.info(f"Sending {amount} → {destination}")
 
         # --- Check receiver deployment state --- #
         receiver_active = self.is_deployed(destination)
         deploy_cost = TonAmount(Decimal("0.05"))
-        fee = self.estimate_fee()
+        fee = self.estimate_fee(tier)
 
         needed_total = amount + fee + (deploy_cost + fee if not receiver_active else TonAmount(Decimal("0")))
 
@@ -277,13 +318,19 @@ api = TonAPI(
 WALLET = TonWallet(mnemonic=os.getenv("TON_MNEMONIC").split(), api=api)
 
 
-def send_ton(receiver_address: str, amount_ton: float, order_id=None):
+def send_ton(receiver_address: str, amount_ton: float, order_id=None, tier: str = "standard"):
     """
     Backward-compatible adapter for old code.
     Converts float → TonAmount and calls the new service.
+    
+    Args:
+        receiver_address: TON address to send to
+        amount_ton: Amount in TON
+        order_id: Optional order ID
+        tier: Gas tier (fast/standard/economy)
     """
     amount = TonAmount.from_float(amount_ton)
-    return WALLET.send(receiver_address, amount, order_id)
+    return WALLET.send(receiver_address, amount, order_id, tier)
 
 def get_wallet_balance() -> float:
     """
