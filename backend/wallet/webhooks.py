@@ -22,6 +22,10 @@ from .services.flutterwave_service import FlutterwaveService
 
 logger = logging.getLogger(__name__)
 
+# Security Constants
+MAX_WEBHOOK_SIZE = 1024 * 1024  # 1MB - Maximum webhook payload size to prevent DoS
+MAX_AMOUNT = Decimal("10000000")  # 10M NGN - Maximum transaction amount
+
 # --------------------------------------------------------------
 # Helper: Make any object JSON-serializable (convert set → list)
 # --------------------------------------------------------------
@@ -47,8 +51,7 @@ def flutterwave_webhook(request):
     Flutterwave v4 Webhook Handler — secure + idempotent + fixed transaction ID.
     """
     try:
-        # SECURITY: Limit payload size to prevent DoS attacks (1MB max)
-        MAX_WEBHOOK_SIZE = 1024 * 1024  # 1MB
+        # SECURITY: Limit payload size to prevent DoS attacks
         raw = request.body or b""
         
         if len(raw) > MAX_WEBHOOK_SIZE:
@@ -109,7 +112,6 @@ def flutterwave_webhook(request):
             return Response({"status": "ignored"}, status=200)
 
         # SECURITY: Validate amount is positive and within reasonable limits
-        MAX_AMOUNT = Decimal("10000000")  # 10M NGN maximum
         amount = Decimal(str(data.get("amount", "0")))
         if amount <= 0 or amount > MAX_AMOUNT:
             logger.warning(

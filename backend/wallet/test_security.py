@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from .models import Wallet, VirtualAccount, Deposit
 from .services.flutterwave_service import FlutterwaveService
+from .webhooks import MAX_WEBHOOK_SIZE, MAX_AMOUNT
 
 User = get_user_model()
 
@@ -36,8 +37,8 @@ class FlutterwaveSecurityTestCase(TestCase):
         )
 
     def test_webhook_payload_size_limit(self):
-        """Test that webhook rejects payloads larger than 1MB"""
-        # Create a payload just over 1MB
+        """Test that webhook rejects payloads larger than MAX_WEBHOOK_SIZE"""
+        # Create a payload just over the maximum allowed size
         large_payload = json.dumps({
             "event": "virtualaccount.payment.completed",
             "data": {
@@ -45,7 +46,7 @@ class FlutterwaveSecurityTestCase(TestCase):
                 "account_number": "9876543210",
                 "amount": 1000,
                 "status": "success",
-                "padding": "x" * (1024 * 1024 + 1000)  # > 1MB
+                "padding": "x" * (MAX_WEBHOOK_SIZE + 1000)  # Exceed limit
             }
         }).encode()
 

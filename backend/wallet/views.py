@@ -1,5 +1,6 @@
 # wallet/views.py
 import logging
+import re
 from decimal import Decimal
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -183,7 +184,6 @@ class GenerateDVAAPIView(APIView):
             }, status=400)
 
         # SECURITY: Validate BVN/NIN format (BVN=11 digits, NIN=12 digits)
-        import re
         clean_id = re.sub(r"\D", "", str(bvn_or_nin))
         if len(clean_id) not in (11, 12):
             return Response({
