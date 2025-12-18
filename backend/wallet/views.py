@@ -1,5 +1,6 @@
 # wallet/views.py
 import logging
+import re
 from decimal import Decimal
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -180,6 +181,13 @@ class GenerateDVAAPIView(APIView):
         if not bvn_or_nin:
             return Response({
                 "error": "BVN or NIN is required for Flutterwave static VA."
+            }, status=400)
+
+        # SECURITY: Validate BVN/NIN format (BVN=11 digits, NIN=12 digits)
+        clean_id = re.sub(r"\D", "", str(bvn_or_nin))
+        if len(clean_id) not in (11, 12):
+            return Response({
+                "error": "Invalid BVN/NIN format. Must be 11 digits (BVN) or 12 digits (NIN)."
             }, status=400)
 
         # 3. Call Flutterwave

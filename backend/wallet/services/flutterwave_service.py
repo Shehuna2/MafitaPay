@@ -259,6 +259,13 @@ class FlutterwaveService:
     # ---------------------------------------------------------
     def verify_webhook_signature(self, raw_body: bytes, signature: str) -> bool:
         if not self.hash_secret:
+            logger.error(
+                "CRITICAL: Hash secret not configured. Cannot verify webhook signature."
+            )
+            return False
+
+        if not signature:
+            logger.warning("Webhook signature is empty or None")
             return False
 
         try:
