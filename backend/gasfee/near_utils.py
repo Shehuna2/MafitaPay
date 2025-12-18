@@ -118,10 +118,47 @@ def validate_near_account_id(account_id: str) -> bool:
     return True
 
 
-def send_near(receiver_account_id: str, amount_near, order_id=None) -> str:
+def estimate_near_gas_fee(tier: str = "standard") -> Decimal:
+    """
+    Estimate NEAR gas fee with tier-based pricing
+    
+    Args:
+        tier: Gas tier (fast/standard/economy)
+        
+    Returns:
+        Estimated gas fee in NEAR
+    """
+    # Base gas fees for NEAR (in NEAR)
+    base_fees = {
+        "fast": Decimal("0.0003"),      # Higher buffer for urgent
+        "standard": Decimal("0.0002"),  # Standard buffer
+        "economy": Decimal("0.00015"),  # Lower buffer for economy
+    }
+    
+    # Get fee from environment or use tier-based default
+    max_fee = Decimal(get_env_var("NEAR_GAS_FEE_MAX", required=False) or "0.001")
+    estimated = base_fees.get(tier.lower(), Decimal("0.0002"))
+    
+    # Apply cap
+    if estimated > max_fee:
+        logger.warning(f"NEAR gas fee {estimated} exceeds cap {max_fee}, capping")
+        estimated = max_fee
+    
+    return estimated
+
+
+def send_near(receiver_account_id: str, amount_near, order_id=None, tier: str = "standard") -> str:
     """
     Send NEAR from configured NEAR_ACCOUNT_ID to receiver_account_id.
-    amount_near may be Decimal, float, or numeric string. Returns tx hash on success.
+    
+    Args:
+        receiver_account_id: Recipient NEAR account ID
+        amount_near: Amount in NEAR (may be Decimal, float, or numeric string)
+        order_id: Optional order ID for tracking
+        tier: Gas tier (fast/standard/economy)
+        
+    Returns:
+        Transaction hash on success
     """
     try:
         # Normalize amount (Decimal for precision)
@@ -129,7 +166,7 @@ def send_near(receiver_account_id: str, amount_near, order_id=None) -> str:
     except Exception as e:
         raise ValueError(str(e))
 
-    logger.info(f"Initiating transfer: {Decimal(amount_yocto) / (Decimal(10) ** 24)} NEAR -> {receiver_account_id}")
+    logger.info(f"Initiating transfer: {Decimal(amount_yocto) / (Decimal(10) ** 24)} NEAR -> {receiver_account_id} (tier: {tier})")
 
     receiver_account_id = receiver_account_id.strip().lower()
     # Validate receiver account ID
@@ -146,9 +183,11 @@ def send_near(receiver_account_id: str, amount_near, order_id=None) -> str:
 
     # Check sender balance
     sender_balance_near = check_near_balance(NEAR_ACCOUNT_ID)
-    # Estimate gas conservatively (keep a buffer)
-    gas_fee_near = Decimal("0.0002")
+    
+    # Estimate gas with tier-based pricing
+    gas_fee_near = estimate_near_gas_fee(tier)
     total_needed = (Decimal(amount_yocto) / (Decimal(10) ** 24)) + gas_fee_near
+    
     if sender_balance_near < total_needed:
         raise ValueError(f"Insufficient balance: {sender_balance_near} NEAR, need {total_needed} NEAR")
 

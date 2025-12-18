@@ -69,32 +69,84 @@ BSC_SENDER_ADDRESS = w3_bsc.eth.account.from_key(BSC_PRIVATE_KEY).address
 # ==============================
 # BSC native send
 # ==============================
-def send_bsc(to_address: str, amount: Decimal, order_id: Optional[int] = None) -> str:
+def send_bsc(to_address: str, amount: Decimal, order_id: Optional[int] = None, tier: str = "standard") -> str:
+    """
+    Send BNB on BSC with improved gas handling
+    
+    Args:
+        to_address: Recipient address
+        amount: Amount in BNB
+        order_id: Optional order ID for tracking
+        tier: Gas tier (fast/standard/economy)
+        
+    Returns:
+        Transaction hash
+    """
     if not Web3.is_address(to_address):
         raise ValueError(f"Invalid BSC address: {to_address}")
     to_address = Web3.to_checksum_address(to_address)
+    
     try:
         value = w3_bsc.to_wei(amount, "ether")
     except Exception:
         raise ValueError(f"Invalid BNB amount: {amount}")
 
-    gas_price = w3_bsc.eth.gas_price
+    # Import gas oracle here to avoid circular imports
+    from .gas_oracle import GasOracle
+    
+    # Get gas fees using oracle
+    try:
+        fee_fields = GasOracle.get_gas_fees(w3_bsc, "BSC", tier)
+        # Remove type field if present
+        fee_fields.pop("type", None)
+    except Exception as e:
+        logger.warning(f"Gas oracle failed for BSC, using fallback: {e}")
+        gas_price = w3_bsc.eth.gas_price
+        fee_fields = {"gasPrice": gas_price}
+    
     gas_limit = 21000
-    tx_cost = gas_limit * gas_price
+    
+    # Calculate transaction cost
+    if "gasPrice" in fee_fields:
+        tx_cost = gas_limit * fee_fields["gasPrice"]
+    else:
+        # EIP-1559 (BSC supports it now)
+        tx_cost = gas_limit * fee_fields.get("maxFeePerGas", fee_fields.get("gasPrice", 0))
+    
+    # Check balance
     sender_balance = w3_bsc.eth.get_balance(BSC_SENDER_ADDRESS)
     if sender_balance < (value + tx_cost):
         raise ValueError("Insufficient BNB balance.")
 
+    # Get nonce (with retry for concurrent transactions)
     nonce = w3_bsc.eth.get_transaction_count(BSC_SENDER_ADDRESS)
+    
+    # Build transaction
     tx = {
         "nonce": nonce,
         "to": to_address,
         "value": value,
         "gas": gas_limit,
-        "gasPrice": gas_price,
         "chainId": 56,
     }
+    tx.update(fee_fields)
+    
+    # Apply gas cap
+    gas_cap_wei = w3_bsc.to_wei(GasOracle.get_gas_cap("BSC"), "gwei")
+    if "maxFeePerGas" in tx:
+        if tx["maxFeePerGas"] > gas_cap_wei:
+            logger.warning(f"BSC gas fee exceeds cap, capping at {GasOracle.get_gas_cap('BSC')} Gwei")
+            tx["maxFeePerGas"] = gas_cap_wei
+            tx["maxPriorityFeePerGas"] = min(tx.get("maxPriorityFeePerGas", 0), gas_cap_wei // 2)
+    elif "gasPrice" in tx:
+        if tx["gasPrice"] > gas_cap_wei:
+            logger.warning(f"BSC gas price exceeds cap, capping at {GasOracle.get_gas_cap('BSC')} Gwei")
+            tx["gasPrice"] = gas_cap_wei
+    
+    # Sign and send
     signed_tx = w3_bsc.eth.account.sign_transaction(tx, BSC_PRIVATE_KEY)
     tx_hash = w3_bsc.eth.send_raw_transaction(signed_tx.raw_transaction)
+    
+    logger.info(f"BSC transaction sent: {tx_hash.hex()}")
     return tx_hash.hex()
 

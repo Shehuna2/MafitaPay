@@ -351,6 +351,32 @@ TON_SEQNO_CHECK_INTERVAL = int(os.getenv("TON_SEQNO_CHECK_INTERVAL", "10"))
 TON_SEQNO_MAX_ATTEMPTS = int(os.getenv("TON_SEQNO_MAX_ATTEMPTS", "5"))
 
 # --------------------------------------------------
+# 14.5. GAS FEE SETTINGS
+# --------------------------------------------------
+# Gas price maximum caps (in Gwei) per chain
+ETH_GAS_PRICE_MAX_GWEI = os.getenv("ETH_GAS_PRICE_MAX_GWEI", "300")
+ARB_GAS_PRICE_MAX_GWEI = os.getenv("ARB_GAS_PRICE_MAX_GWEI", "10")
+BASE_GAS_PRICE_MAX_GWEI = os.getenv("BASE_GAS_PRICE_MAX_GWEI", "10")
+OP_GAS_PRICE_MAX_GWEI = os.getenv("OP_GAS_PRICE_MAX_GWEI", "10")
+POL_GAS_PRICE_MAX_GWEI = os.getenv("POL_GAS_PRICE_MAX_GWEI", "500")
+AVAX_GAS_PRICE_MAX_GWEI = os.getenv("AVAX_GAS_PRICE_MAX_GWEI", "100")
+LINEA_GAS_PRICE_MAX_GWEI = os.getenv("LINEA_GAS_PRICE_MAX_GWEI", "20")
+BSC_GAS_PRICE_MAX_GWEI = os.getenv("BSC_GAS_PRICE_MAX_GWEI", "20")
+
+# Gas oracle cache TTL (seconds)
+GAS_ORACLE_CACHE_TTL = int(os.getenv("GAS_ORACLE_CACHE_TTL", "30"))
+
+# Transaction retry settings
+TX_RETRY_MAX_ATTEMPTS = int(os.getenv("TX_RETRY_MAX_ATTEMPTS", "2"))
+TX_RETRY_GAS_BUMP_PERCENT = int(os.getenv("TX_RETRY_GAS_BUMP_PERCENT", "20"))
+
+# TON gas fee maximum (in TON)
+TON_GAS_FEE_MAX = os.getenv("TON_GAS_FEE_MAX", "0.5")
+
+# NEAR gas fee maximum (in NEAR)
+NEAR_GAS_FEE_MAX = os.getenv("NEAR_GAS_FEE_MAX", "0.001")
+
+# --------------------------------------------------
 # 15. FINAL
 # --------------------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
