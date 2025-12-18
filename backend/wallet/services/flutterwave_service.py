@@ -258,24 +258,21 @@ class FlutterwaveService:
     # WEBHOOK VERIFICATION
     # ---------------------------------------------------------
     def verify_webhook_signature(self, raw_body: bytes, signature: str) -> bool:
+        """
+        Flutterwave webhook verification.
+    
+        Flutterwave DOES NOT sign payloads.
+        It sends the secret hash directly in `verif-hash` header.
+        """
         if not self.hash_secret:
-            logger.error(
-                "CRITICAL: Hash secret not configured. Cannot verify webhook signature."
-            )
+            logger.error("CRITICAL: Flutterwave hash secret not configured.")
             return False
-
+    
         if not signature:
-            logger.warning("Webhook signature is empty or None")
+            logger.warning("Flutterwave webhook signature missing.")
             return False
-
-        try:
-            dig = hmac.new(
-                self.hash_secret.encode(),
-                raw_body,
-                hashlib.sha256,
-            ).digest()
-            expected = base64.b64encode(dig).decode()
-            return hmac.compare_digest(expected, signature)
-        except Exception:
-            logger.exception("Webhook signature verification failed.")
-            return False
+    
+        return hmac.compare_digest(
+            signature.strip(),
+            self.hash_secret.strip(),
+        )
