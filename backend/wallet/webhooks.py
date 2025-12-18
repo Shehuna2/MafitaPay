@@ -63,7 +63,7 @@ def flutterwave_webhook(request):
         
         # Log ALL incoming headers for debugging (mask sensitive values)
         # This helps us see exactly what Flutterwave sends
-        sensitive_value_headers = {"authorization", "cookie", "x-api-key", "verif-hash", "x-verif-hash"}
+        sensitive_value_headers = {"authorization", "cookie", "x-api-key", "verif-hash", "x-verif-hash", "flutterwave-signature"}
         logged_headers = {}
         for key, value in request.headers.items():
             if key.lower() in sensitive_value_headers:
@@ -75,14 +75,17 @@ def flutterwave_webhook(request):
             logged_headers
         )
         
-        # Check multiple header variations for verif-hash
+        # Check multiple header variations for signature
         # Django's request.headers is case-insensitive, but we check common variants
         # as well as Django's META format for completeness
+        # Flutterwave may use different header names depending on their version
         signature = (
             request.headers.get("verif-hash")
             or request.headers.get("x-verif-hash")
+            or request.headers.get("Flutterwave-Signature")
             or request.META.get("HTTP_VERIF_HASH")
             or request.META.get("HTTP_X_VERIF_HASH")
+            or request.META.get("HTTP_FLUTTERWAVE_SIGNATURE")
         )
 
         if not signature:
