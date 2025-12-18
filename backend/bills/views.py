@@ -314,6 +314,7 @@ class BuyAirtimeView(APIView):
         except (ValueError, TypeError):
             return Response({"message": "Invalid amount"}, status=400)
 
+        tx = None
         try:
             with transaction.atomic():
                 wallet = get_user_wallet(request.user)
@@ -353,11 +354,15 @@ class BuyAirtimeView(APIView):
             return Response({"message": "Airtime purchased successfully"})
 
         except ValueError as e:
-            tx.status = "failed"
-            tx.save()
+            if tx:
+                tx.status = "failed"
+                tx.save()
             return Response({"message": str(e)}, status=400)
         except Exception as e:
             logger.error(f"Airtime error: {e}", exc_info=True)
+            if tx:
+                tx.status = "failed"
+                tx.save()
             return Response({"message": "Purchase failed. Try again."}, status=500)
 
 

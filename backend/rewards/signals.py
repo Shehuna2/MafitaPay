@@ -117,7 +117,7 @@ def check_referral_completion(user):
 
         # ✅ All conditions met → fire referral reward
         RewardTriggerEngine.fire(
-            "referral_completed",
+            "referee_deposit_and_tx",
             user.referred_by,
             referee=user,
         )
