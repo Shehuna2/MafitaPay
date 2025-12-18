@@ -305,7 +305,7 @@ export default function WithdrawOffers() {
 
       <div className="w-full px-1 sm:px-4 py-4 text-white">
         {/* Sorting and Filtering Controls */}
-        <div className="mb-5 bg-gray-900 border border-gray-700 rounded-lg p-3 sm:p-4 shadow-lg">
+        {/* <div className="mb-5 bg-gray-900 border border-gray-700 rounded-lg p-3 sm:p-4 shadow-lg">
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <div className="flex items-center gap-2">
               <label htmlFor="sortBy" className="text-gray-400 whitespace-nowrap">Sort by:</label>
@@ -356,7 +356,7 @@ export default function WithdrawOffers() {
               </button>
             )}
           </div>
-        </div>
+        </div> */}
 
         <ToastContainer />
         <h2 className="text-xl sm:text-2xl font-bold mb-4 flex items-center gap-2">
