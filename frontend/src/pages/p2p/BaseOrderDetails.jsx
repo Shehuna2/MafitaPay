@@ -374,108 +374,98 @@ export default function BaseOrderDetails({ type }) {
           </div>
         </div>
 
-        <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
-          {/* Status Banner */}
-          <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-700/50 rounded-2xl p-6 text-center">
-            <div className="flex items-center justify-center gap-3">
-              <currentStatus.icon className="w-8 h-8" />
-              <span className="text-2xl font-bold">{currentStatus.label}</span>
+        <div className="space-y-6 mt-6">
+        <div className="max-w-4xl mx-auto px-3 py-4 space-y-3">
+          {/* Compact Status Banner */}
+          <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-700/50 rounded-xl p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <currentStatus.icon className="w-5 h-5" />
+                <span className="text-base font-bold">{currentStatus.label}</span>
+              </div>
+              {shouldShowCountdown && (
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-yellow-400" />
+                  <span className="font-mono text-lg text-yellow-400">{formatTime(timeLeft)}</span>
+                </div>
+              )}
             </div>
             {shouldShowCountdown && (
-              <div className="mt-5">
-                <p className="text-lg mb-3">
-                  <Clock className="inline w-5 h-5 text-yellow-400" /> Time left: {" "}
-                  <span className="font-mono text-2xl text-yellow-400">{formatTime(timeLeft)}</span>
-                </p>
-                <div className="w-full bg-gray-800 rounded-full h-4 overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-yellow-400 to-orange-500 transition-all duration-1000"
-                    style={{ width: `${(timeLeft / 900) * 100}%` }}
-                  />
-                </div>
+              <div className="w-full bg-gray-800 rounded-full h-2 mt-2 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-yellow-400 to-orange-500 transition-all duration-1000"
+                  style={{ width:  `${(timeLeft / 900) * 100}%` }}
+                />
               </div>
             )}
           </div>
 
-          {/* Grid */}
-          <div className="grid lg:grid-cols-2 gap-8">
-            <div className="bg-gray-900/80 backdrop-blur border border-gray-800 rounded-2xl p-6 space-y-6">
-              <h3 className="text-xl font-bold flex items-center gap-3">
-                <AlertTriangle className="w-6 h-6 text-indigo-400" />
-                Transaction Details
-              </h3>
-              <div className="space-y-4 text-lg">
-                <InfoRow label="Amount" value={`₦${Number(amount_requested).toLocaleString()}`} />
-                <InfoRow label="Rate" value={`₦${Number(detail?.price_per_unit || 0).toLocaleString()}`} />
-                <InfoRow label="Total" value={`₦${Number(total_price).toLocaleString()}`} bold />
-                <InfoRow label="Created" value={new Date(created_at).toLocaleString()} />
-                {role === "buyer" && <InfoRow label={type === "withdraw" ? "Seller" : "Merchant"} value={type === "withdraw" ? seller_email : detail?.merchant_email || "N/A"} />}
-                {role === "merchant" && <InfoRow label={type === "withdraw" ? "Seller" : "Buyer"} value={type === "withdraw" ? seller_email : buyer_email || "N/A"} />}
-                {role === "seller" && type === "withdraw" && <InfoRow label="Merchant" value={detail?.merchant_email || "N/A"} />}
-              </div>
+          {/* Combined Details Card - Single scrollable area */}
+          <div className="bg-gray-900/80 backdrop-blur border border-gray-800 rounded-xl p-4 space-y-3">
+            {/* Transaction Summary - Compact */}
+            <div className="flex justify-between items-center pb-2 border-b border-gray-700">
+              <span className="text-gray-400 text-sm">Amount</span>
+              <span className="font-bold text-lg">₦{Number(amount_requested).toLocaleString()}</span>
             </div>
-
-            <div className="bg-gray-900/80 backdrop-blur border border-gray-800 rounded-2xl p-6 space-y-6">
-              <h3 className="text-xl font-bold flex items-center gap-3">
-                <Banknote className="w-6 h-6 text-green-400" />
-                Payment Details
-              </h3>
-              <div className="bg-gray-800/70 rounded-xl p-5 space-y-4">
-                <InfoRow label="Name" value={bank?.full_name || "Not provided"} />
-                <InfoRow label="Bank" value={bank?.bank_name || detail?.bank_name || "Not provided"} />
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Account No</span>
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-lg">{bank?.account_no || "N/A"}</span>
-                    {bank?.account_no && (
-                      <button onClick={() => copyToClipboard(bank.account_no)} className="p-2 bg-gray-700 hover:bg-indigo-600 rounded-lg transition">
-                        <Copy className="w-5 h-5" />
-                      </button>
-                    )}
-                  </div>
+            <div className="flex justify-between items-center pb-2 border-b border-gray-700">
+              <span className="text-gray-400 text-sm">Total</span>
+              <span className="font-bold text-lg text-green-400">₦{Number(total_price).toLocaleString()}</span>
+            </div>
+            
+            {/* Payment Details - Inline */}
+            <div className="bg-gray-800/50 rounded-lg p-3 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Bank</span>
+                <span>{bank?.bank_name || "N/A"}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Name</span>
+                <span>{bank?.full_name || "N/A"}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 text-sm">Account</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono">{bank?.account_no || "N/A"}</span>
+                  {bank?.account_no && (
+                    <button onClick={() => copyToClipboard(bank. account_no)} className="p-1. 5 bg-gray-700 hover:bg-indigo-600 rounded transition">
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
-              {getWhatsAppLink() && (
-                <a href={getWhatsAppLink()} target="_blank" rel="noopener noreferrer"
-                  className="w-full inline-flex justify-center items-center gap-3 bg-green-600 hover:bg-green-500 py-4 rounded-xl font-semibold text-lg transition shadow-lg">
-                  <MessageCircle className="w-6 h-6" />
-                  Contact via WhatsApp
-                </a>
-              )}
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          {/* Action Buttons - Always visible without scrolling */}
+          <div className="flex flex-col gap-2">
             {canMarkPaid && (
               <button onClick={handleMarkPaid} disabled={loadingAction}
-                className="px-10 py-5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-60 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition shadow-xl">
-                {loadingAction ? <Loader2 className="w-6 h-6 animate-spin" /> : "I've Paid"}
+                className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-60 rounded-xl font-bold flex items-center justify-center gap-2">
+                {loadingAction ? <Loader2 className="w-5 h-5 animate-spin" /> : "I've Paid"}
               </button>
             )}
             {canConfirmRelease && (
               <button onClick={handleConfirmRelease} disabled={loadingAction}
-                className="px-10 py-5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:opacity-60 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition shadow-xl">
-                {loadingAction ? <Loader2 className="w-6 h-6 animate-spin" /> : "Release Funds"}
+                className="w-full py-3 bg-indigo-500 hover:from-green-400 hover:to-emerald-300 disabled:opacity-60 rounded-xl font-bold flex items-center justify-center gap-2 text-gray-900 shadow-lg shadow-green-500/30 transition-all">
+                {loadingAction ? <Loader2 className="w-5 h-5 animate-spin" /> : "Release Funds"}
               </button>
             )}
-            {canCancel && (
-              <button onClick={() => setShowCancelModal(true)}
-                className="px-10 py-5 bg-red-600 hover:bg-red-500 rounded-2xl font-bold text-lg transition shadow-xl">
-                Cancel Order
-              </button>
-            )}
-            {status === "completed" && (
-              <div className="text-center text-2xl font-bold text-green-400 flex items-center gap-3">
-                <CheckCircle className="w-10 h-10" /> Completed!
-              </div>
-            )}
-            {status === "cancelled" && (
-              <div className="text-center text-2xl font-bold text-red-400 flex items-center gap-3">
-                <XCircle className="w-10 h-10" /> Cancelled
-              </div>
-            )}
+            <div className="flex gap-2">
+              {getWhatsAppLink() && (
+                <a href={getWhatsAppLink()} target="_blank" rel="noopener noreferrer"
+                  className="flex-1 inline-flex justify-center items-center gap-2 bg-green-600 hover:bg-green-500 py-3 rounded-xl font-semibold transition">
+                  <MessageCircle className="w-5 h-5" /> Chat
+                </a>
+              )}
+              {canCancel && (
+                <button onClick={() => setShowCancelModal(true)}
+                  className="flex-1 py-3 bg-red-600/80 hover:bg-red-500 rounded-xl font-bold transition">
+                  Cancel
+                </button>
+              )}
+            </div>
           </div>
+        </div>
         </div>
 
         {/* Cancel Modal */}
