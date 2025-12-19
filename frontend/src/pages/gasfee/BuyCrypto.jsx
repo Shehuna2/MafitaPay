@@ -79,18 +79,18 @@ export default function BuyCrypto() {
   const fetchFreshRate = useCallback(async (options = {}) => {
     const { silent = false } = options;
     if (!silent) setRateLoading(true);
-
+    
     try {
       // Create abort controller for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), RATE_FETCH_TIMEOUT);
-
+      
       const res = await client.get(`/buy-crypto/${id}/`, {
         signal: controller.signal,
       });
-
+      
       clearTimeout(timeoutId);
-
+      
       const data = {
         price_usd: res.data.price_usd,
         usd_ngn_rate: res.data.usd_ngn_rate,
@@ -107,35 +107,35 @@ export default function BuyCrypto() {
       return true;
     } catch (err) {
       const cached = JSON.parse(localStorage.getItem(RATE_CACHE_KEY(id)) || "null");
-      const isTimeout = err.name === 'AbortError';
-
+      const isTimeout = err.name === 'AbortError' || err.code === 'ECONNABORTED';
+      
       if (cached) {
         // Keep cached values in state
         setPriceUsd(cached.price_usd);
         setExchangeRate(cached.usd_ngn_rate);
         setPriceNgn(cached.price_ngn);
-
+        
         if (isTimeout) {
-          setMessage({
-            type: "warning",
-            text: "Rate refresh timed out. Using cached rate. Click refresh to try again."
+          setMessage({ 
+            type: "warning", 
+            text: "Rate refresh timed out. Using cached rate. Click refresh to try again." 
           });
         } else {
-          setMessage({
-            type: "warning",
-            text: "Failed to refresh. Using last known rate."
+          setMessage({ 
+            type: "warning", 
+            text: "Failed to refresh. Using last known rate." 
           });
         }
       } else {
         if (isTimeout) {
-          setMessage({
-            type: "error",
-            text: "Rate request timed out. Please try again."
+          setMessage({ 
+            type: "error", 
+            text: "Rate request timed out. Please try again." 
           });
         } else {
-          setMessage({
-            type: "error",
-            text: "Failed to fetch rate. Please try again."
+          setMessage({ 
+            type: "error", 
+            text: "Failed to fetch rate. Please try again." 
           });
         }
       }
@@ -154,7 +154,7 @@ export default function BuyCrypto() {
       let cryptoFromCache = null;
       let rateFromCache = null;
       let hasValidCache = false;
-
+      
       const assetCache = JSON.parse(localStorage.getItem(ASSET_CACHE_KEY) || "null");
       if (assetCache?.assets) {
         cryptoFromCache = assetCache.assets.find((a) => String(a.id) === String(id));
@@ -183,19 +183,19 @@ export default function BuyCrypto() {
       // Step 3: Check staleness and decide whether to refresh
       const rateIsStale = !rateFromCache || isCacheStale(rateFromCache.timestamp, RATE_TTL);
       const assetsAreStale = !assetCache || isCacheStale(assetCache.timestamp, ASSET_TTL);
-
+      
       // Show notice if using stale cache
       if (hasValidCache && rateIsStale) {
-        setMessage({
-          type: "info",
-          text: "Refreshing rate in background..."
+        setMessage({ 
+          type: "info", 
+          text: "Refreshing rate in background..." 
         });
       }
 
       // Step 4: Parallelize network calls - don't block rendering
       try {
         const promises = [];
-
+        
         // Always refresh rate if stale or missing (in parallel)
         if (rateIsStale) {
           promises.push(
@@ -204,7 +204,7 @@ export default function BuyCrypto() {
             })
           );
         }
-
+        
         // Refresh assets if stale or missing (in parallel)
         if (assetsAreStale || !cryptoFromCache) {
           promises.push(
@@ -230,7 +230,7 @@ export default function BuyCrypto() {
               })
           );
         }
-
+        
         // Wait for all parallel requests
         if (promises.length > 0) {
           await Promise.allSettled(promises);
@@ -394,7 +394,7 @@ export default function BuyCrypto() {
     if (!crypto) return [];
     if (form.currency === "NGN") return [500, 1000, 2000, 5000, 10000, 20000];
     if (form.currency === "USDT") return [0.5, 1.0, 2.0, 5.0, 10.0, 20.0];
-    return [0.001, 0.005, 0.01, 0.02, 0.05, 0.10];
+    return [0.01, 0.05, 0.1, 0.2, 0.5, 1.0];
   };
 
   const validateForm = () => {
@@ -547,7 +547,7 @@ export default function BuyCrypto() {
                   message.type === "success"
                     ? "bg-green-600/20 text-green-400 border-green-500/50"
                     : message.type === "warning"
-                    ? "bg-yellow-600/20 text-indigo-400 border-indigo-500/50"
+                    ? "bg-yellow-600/20 text-yellow-400 border-yellow-500/50"
                     : message.type === "info"
                     ? "bg-blue-600/20 text-blue-400 border-blue-500/50"
                     : "bg-red-600/20 text-red-400 border-red-500/50"
