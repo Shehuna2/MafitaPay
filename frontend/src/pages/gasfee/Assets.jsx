@@ -16,7 +16,18 @@ const debounce = (func, delay) => {
 
 // Sanitize input to prevent XSS
 const sanitizeInput = (input) => {
-  return input.replace(/[<>]/g, "");
+  return input
+    .replace(/[<>'"&]/g, (char) => {
+      const escapeMap = {
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#x27;',
+        '&': '&amp;'
+      };
+      return escapeMap[char] || char;
+    })
+    .trim();
 };
 
 const triggerHaptic = () => {
@@ -119,7 +130,7 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite, isO
 
   return (
     <AssetCardErrorBoundary>
-      <div style={style} className="px-3">
+      <div style={{...style, paddingLeft: '12px', paddingRight: '12px'}}>
         <div
           onClick={handleClick}
           className="group relative w-full bg-gradient-to-br from-gray-800/90 to-gray-800/70 backdrop-blur-xl p-3 rounded-xl border border-gray-700/50 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:border-indigo-500/50 cursor-pointer"
@@ -233,6 +244,7 @@ export default function Assets() {
   const wsRef = useRef(null);
   const [scrollY, setScrollY] = useState(0);
   const [isSticky, setIsSticky] = useState(false);
+  const [containerHeight, setContainerHeight] = useState(600);
 
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -255,6 +267,24 @@ export default function Assets() {
     
     debouncedUpdate(search);
   }, [search]);
+
+  // ─────────────── Container Height with ResizeObserver ───────────────
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const updateHeight = () => {
+      const rect = container.getBoundingClientRect();
+      setContainerHeight(rect.height - 100); // Subtract header and padding
+    };
+
+    updateHeight();
+
+    const resizeObserver = new ResizeObserver(updateHeight);
+    resizeObserver.observe(container);
+
+    return () => resizeObserver.disconnect();
+  }, []);
 
   // ─────────────── Scroll tracking for sticky header ───────────────
   useEffect(() => {
@@ -334,11 +364,17 @@ export default function Assets() {
     }
   }, [isOffline, assets.length]);
 
+  // ─────────────── Initial fetch on mount ───────────────
+  useEffect(() => {
+    if (!isOffline) {
+      fetchAssets();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
+
   // ─────────────── WebSocket Live Updates with Memory Leak Fix ───────────────
   useEffect(() => {
     if (isOffline) return;
-    
-    fetchAssets();
     
     // Close existing WebSocket if any
     if (wsRef.current) {
@@ -410,7 +446,6 @@ export default function Assets() {
         wsRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOffline]);
 
   // ─────────────── Advanced Filtering & Sorting ───────────────
@@ -478,18 +513,24 @@ export default function Assets() {
   }, [fetchAssets]);
 
   // ─────────────── Virtual List Row Renderer ───────────────
-  const RowComponent = useCallback(({ index, style }) => {
+  const RowComponent = useCallback(({ ariaAttributes, index, style }) => {
     const asset = filteredAndSortedAssets[index];
+    
+    // Safety check for out-of-bounds access
+    if (!asset) return null;
+    
     return (
-      <AssetCard
-        key={asset.id}
-        asset={asset}
-        onView={handleView}
-        onToggleFavorite={toggleFavorite}
-        isFavorite={favorites.includes(asset.id)}
-        isOffline={isOffline}
-        style={style}
-      />
+      <div {...ariaAttributes}>
+        <AssetCard
+          key={asset.id}
+          asset={asset}
+          onView={handleView}
+          onToggleFavorite={toggleFavorite}
+          isFavorite={favorites.includes(asset.id)}
+          isOffline={isOffline}
+          style={style}
+        />
+      </div>
     );
   }, [filteredAndSortedAssets, handleView, toggleFavorite, favorites, isOffline]);
 
@@ -660,9 +701,8 @@ export default function Assets() {
 
           {/* Virtual Scrolling Asset List */}
           <div
-            className="flex-1 overflow-y-auto scrollbar-hide pb-20"
+            className="flex-1 pb-20"
             ref={scrollContainerRef}
-            style={{ WebkitOverflowScrolling: "touch" }}
           >
             <div className="flex items-center justify-between px-3 mb-3">
               <h2 className="text-sm font-bold text-gray-400 opacity-80 flex items-center gap-2">
@@ -672,7 +712,7 @@ export default function Assets() {
             </div>
             
             {loading ? (
-              <div className="space-y-3">
+              <div className="space-y-3 overflow-y-auto" style={{ maxHeight: `${containerHeight}px` }}>
                 {skeletonCards()}
               </div>
             ) : filteredAndSortedAssets.length === 0 ? (
@@ -686,12 +726,13 @@ export default function Assets() {
             ) : (
               <List
                 listRef={listRef}
-                defaultHeight={window.innerHeight - 300}
+                defaultHeight={containerHeight}
                 rowCount={filteredAndSortedAssets.length}
                 rowHeight={85}
                 rowComponent={RowComponent}
                 rowProps={{}}
                 overscanCount={5}
+                style={{ height: `${containerHeight}px` }}
               />
             )}
           </div>
