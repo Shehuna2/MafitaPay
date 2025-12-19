@@ -401,7 +401,9 @@ export default function BaseOrderDetails({ type }) {
           </div>
 
           {/* Combined Details Card - Single scrollable area */}
-          <div className="bg-gray-900/80 backdrop-blur border border-gray-800 rounded-xl p-4 space-y-3">
+          <div className="bg-gray-900/80 backdrop-blur border border-gray-800 rounded-xl p-4 space-y-5">
+            {/* Transaction Details Title */}
+            <h2 className="text-lg font-semibold text-indigo-300 mb-2">Transaction Details</h2>
             {/* Transaction Summary - Compact */}
             <div className="flex justify-between items-center pb-2 border-b border-gray-700">
               <span className="text-gray-400 text-sm">Amount</span>
@@ -412,6 +414,8 @@ export default function BaseOrderDetails({ type }) {
               <span className="font-bold text-lg text-green-400">₦{Number(total_price).toLocaleString()}</span>
             </div>
             
+            {/* Payment Details Title */}
+            <h2 className="text-lg font-semibold text-indigo-300 mt-4 mb-2">Payment Details</h2>
             {/* Payment Details - Inline */}
             <div className="bg-gray-800/50 rounded-lg p-3 space-y-2">
               <div className="flex justify-between text-sm">
@@ -427,7 +431,7 @@ export default function BaseOrderDetails({ type }) {
                 <div className="flex items-center gap-2">
                   <span className="font-mono">{bank?.account_no || "N/A"}</span>
                   {bank?.account_no && (
-                    <button onClick={() => copyToClipboard(bank. account_no)} className="p-1. 5 bg-gray-700 hover:bg-indigo-600 rounded transition">
+                    <button onClick={() => copyToClipboard(bank.account_no)} className="p-1.5 bg-gray-700 hover:bg-indigo-600 rounded transition">
                       <Copy className="w-4 h-4" />
                     </button>
                   )}
