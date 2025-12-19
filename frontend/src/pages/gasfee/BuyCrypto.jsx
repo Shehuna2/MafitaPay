@@ -1,8 +1,9 @@
 // src/pages/BuyCrypto.jsx
 import { useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import client from "../../api/client";
 import { Loader2, RefreshCw, ArrowLeft } from "lucide-react";
+// eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -14,6 +15,16 @@ const RATE_CACHE_KEY = (id) => `buycrypto_cache_${id}`;
 const MIN_AMOUNT = 200;
 const MAX_AMOUNT = 10000000;
 
+// TTL constants
+const RATE_TTL = 10 * 60 * 1000; // 10 minutes
+const ASSET_TTL = 2 * 60 * 60 * 1000; // 2 hours
+const RATE_FETCH_TIMEOUT = 6000; // 6 seconds
+
+// Helper functions for cache staleness checks
+function isCacheStale(timestamp, ttl) {
+  if (!timestamp) return true;
+  return Date.now() - timestamp > ttl;
+}
 
 function parseBackendError(err) {
   if (!err?.response?.data) return "Network error. Please try again.";
@@ -39,6 +50,7 @@ export default function BuyCrypto() {
   const [crypto, setCrypto] = useState(null);
   const [priceUsd, setPriceUsd] = useState(null);
   const [exchangeRate, setExchangeRate] = useState(null);
+  // eslint-disable-next-line no-unused-vars
   const [priceNgn, setPriceNgn] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [touched, setTouched] = useState({
@@ -63,86 +75,178 @@ export default function BuyCrypto() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [recentWallets, setRecentWallets] = useState([]);
 
-  // ---------------- FETCH RATE WITH CACHE ----------------
-  const fetchFreshRate = async () => {
-    setRateLoading(true);
+  // ---------------- FETCH RATE WITH CACHE AND TIMEOUT ----------------
+  const fetchFreshRate = useCallback(async (options = {}) => {
+    const { silent = false } = options;
+    if (!silent) setRateLoading(true);
+    
     try {
-      const res = await client.get(`/buy-crypto/${id}/`);
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), RATE_FETCH_TIMEOUT);
+      
+      const res = await client.get(`/buy-crypto/${id}/`, {
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
       const data = {
         price_usd: res.data.price_usd,
         usd_ngn_rate: res.data.usd_ngn_rate,
         price_ngn: res.data.price_ngn,
         timestamp: Date.now(),
+        // TODO: Add quote_expires_at when backend provides it
+        // quote_expires_at: res.data.quote_expires_at,
       };
       localStorage.setItem(RATE_CACHE_KEY(id), JSON.stringify(data));
       setPriceUsd(data.price_usd);
       setExchangeRate(data.usd_ngn_rate);
       setPriceNgn(data.price_ngn);
       setMessage(null);
+      return true;
     } catch (err) {
       const cached = JSON.parse(localStorage.getItem(RATE_CACHE_KEY(id)) || "null");
+      const isTimeout = err.name === 'AbortError' || err.code === 'ECONNABORTED';
+      
       if (cached) {
+        // Keep cached values in state
         setPriceUsd(cached.price_usd);
         setExchangeRate(cached.usd_ngn_rate);
         setPriceNgn(cached.price_ngn);
-        setMessage({ type: "error", text: "Failed to refresh. Using last known rate." });
+        
+        if (isTimeout) {
+          setMessage({ 
+            type: "warning", 
+            text: "Rate refresh timed out. Using cached rate. Click refresh to try again." 
+          });
+        } else {
+          setMessage({ 
+            type: "warning", 
+            text: "Failed to refresh. Using last known rate." 
+          });
+        }
       } else {
-        setMessage({ type: "error", text: "Failed to refresh rate." });
+        if (isTimeout) {
+          setMessage({ 
+            type: "error", 
+            text: "Rate request timed out. Please try again." 
+          });
+        } else {
+          setMessage({ 
+            type: "error", 
+            text: "Failed to fetch rate. Please try again." 
+          });
+        }
       }
+      return false;
     } finally {
-      setRateLoading(false);
+      if (!silent) setRateLoading(false);
     }
-  };
+  }, [id]);
 
-  // ---------------- INITIAL LOAD (CACHE FIRST) ----------------
+  // ---------------- INITIAL LOAD (CACHE FIRST WITH PARALLEL FETCHES) ----------------
   useEffect(() => {
     let mounted = true;
 
     async function load() {
-      setLoading(true);
+      // Step 1: Check cache and populate state immediately
+      let cryptoFromCache = null;
+      let rateFromCache = null;
+      let hasValidCache = false;
+      
+      const assetCache = JSON.parse(localStorage.getItem(ASSET_CACHE_KEY) || "null");
+      if (assetCache?.assets) {
+        cryptoFromCache = assetCache.assets.find((a) => String(a.id) === String(id));
+        if (cryptoFromCache) {
+          setCrypto(cryptoFromCache);
+        }
+      }
+
+      const cachedRate = JSON.parse(localStorage.getItem(RATE_CACHE_KEY(id)) || "null");
+      if (cachedRate) {
+        rateFromCache = cachedRate;
+        setPriceUsd(cachedRate.price_usd);
+        setExchangeRate(cachedRate.usd_ngn_rate);
+        setPriceNgn(cachedRate.price_ngn);
+        hasValidCache = true;
+      }
+
+      // Step 2: If we have cache, clear loading immediately to show the form
+      if (hasValidCache && cryptoFromCache) {
+        setLoading(false);
+      } else {
+        // Keep loading state for initial skeleton
+        setLoading(true);
+      }
+
+      // Step 3: Check staleness and decide whether to refresh
+      const rateIsStale = !rateFromCache || isCacheStale(rateFromCache.timestamp, RATE_TTL);
+      const assetsAreStale = !assetCache || isCacheStale(assetCache.timestamp, ASSET_TTL);
+      
+      // Show notice if using stale cache
+      if (hasValidCache && rateIsStale) {
+        setMessage({ 
+          type: "info", 
+          text: "Refreshing rate in background..." 
+        });
+      }
+
+      // Step 4: Parallelize network calls - don't block rendering
       try {
-        let cryptoFromCache = null;
-        const assetCache = JSON.parse(localStorage.getItem(ASSET_CACHE_KEY) || "null");
-        if (assetCache?.assets) {
-          cryptoFromCache = assetCache.assets.find((a) => String(a.id) === String(id));
-        }
-        if (mounted && cryptoFromCache) setCrypto(cryptoFromCache);
-
-        const cachedRate = JSON.parse(localStorage.getItem(RATE_CACHE_KEY(id)) || "null");
-        if (cachedRate) {
-          setPriceUsd(cachedRate.price_usd);
-          setExchangeRate(cachedRate.usd_ngn_rate);
-          setPriceNgn(cachedRate.price_ngn);
-        }
-
-        await fetchFreshRate();
-
-        if (!cryptoFromCache) {
-          const listRes = await client.get("/assets/");
-          const cryptos = listRes.data.cryptos || [];
-          const found = cryptos.find((c) => String(c.id) === String(id));
-          if (mounted && found) setCrypto(found);
-
-          localStorage.setItem(
-            ASSET_CACHE_KEY,
-            JSON.stringify({
-              assets: cryptos,
-              exchangeRate: listRes.data.exchange_rate,
-              timestamp: Date.now(),
+        const promises = [];
+        
+        // Always refresh rate if stale or missing (in parallel)
+        if (rateIsStale) {
+          promises.push(
+            fetchFreshRate({ silent: hasValidCache }).catch(() => {
+              // Error already handled in fetchFreshRate
             })
           );
         }
+        
+        // Refresh assets if stale or missing (in parallel)
+        if (assetsAreStale || !cryptoFromCache) {
+          promises.push(
+            client.get("/assets/")
+              .then((listRes) => {
+                if (!mounted) return;
+                const cryptos = listRes.data.cryptos || [];
+                const found = cryptos.find((c) => String(c.id) === String(id));
+                if (found) setCrypto(found);
+
+                localStorage.setItem(
+                  ASSET_CACHE_KEY,
+                  JSON.stringify({
+                    assets: cryptos,
+                    exchangeRate: listRes.data.exchange_rate,
+                    timestamp: Date.now(),
+                  })
+                );
+              })
+              .catch((err) => {
+                // Asset fetch failed, but don't block if we have cached crypto
+                console.error("Asset fetch failed:", err);
+              })
+          );
+        }
+        
+        // Wait for all parallel requests
+        if (promises.length > 0) {
+          await Promise.allSettled(promises);
+        }
       } catch (err) {
-        if (mounted)
-          setMessage({ type: "error", text: "Failed to load. Using cached data if available." });
+        // Catch-all for unexpected errors
+        console.error("Load error:", err);
       } finally {
+        // Always clear loading state
         if (mounted) setLoading(false);
       }
     }
 
     load();
     return () => (mounted = false);
-  }, [id]);
+  }, [id, fetchFreshRate]);
 
   // ---------------- RECENT WALLETS ----------------
   useEffect(() => {
@@ -178,7 +282,7 @@ export default function BuyCrypto() {
   // ---------------- LIVE VALIDATION ----------------
   const validateField = (name, value) => {
     switch (name) {
-      case "amount":
+      case "amount": {
         if (!value) return "Amount is required";
         if (isNaN(Number(value))) return "Amount must be a number";
 
@@ -191,9 +295,9 @@ export default function BuyCrypto() {
           return `Maximum amount is ₦${MAX_AMOUNT.toLocaleString()}`;
 
         return "";
+      }
 
-
-      case "wallet_address":
+      case "wallet_address": {
         if (!value) return "Wallet address is required";
 
         const symbol = crypto?.symbol?.toUpperCase();
@@ -256,6 +360,7 @@ export default function BuyCrypto() {
 
         /* ---------- Fallback (unknown asset) ---------- */
         return "Invalid wallet address format for this asset";
+      }
 
       default:
         return "";
@@ -441,6 +546,10 @@ export default function BuyCrypto() {
                 className={`p-3 rounded-xl mb-5 text-xs border ${
                   message.type === "success"
                     ? "bg-green-600/20 text-green-400 border-green-500/50"
+                    : message.type === "warning"
+                    ? "bg-yellow-600/20 text-yellow-400 border-yellow-500/50"
+                    : message.type === "info"
+                    ? "bg-blue-600/20 text-blue-400 border-blue-500/50"
                     : "bg-red-600/20 text-red-400 border-red-500/50"
                 }`}
               >
@@ -587,6 +696,8 @@ export default function BuyCrypto() {
                   submitted ||
                   !form.amount ||
                   !form.wallet_address ||
+                  !priceUsd ||
+                  !exchangeRate ||
                   Object.values(errors).some((e) => e)
                 }
                 className={`w-full py-3 rounded-xl font-medium text-white transition
@@ -594,6 +705,8 @@ export default function BuyCrypto() {
                     loading || submitted ||
                     !form.amount ||
                     !form.wallet_address ||
+                    !priceUsd ||
+                    !exchangeRate ||
                     Object.values(errors).some((e) => e)
                       ? "bg-gray-600 cursor-not-allowed"
                       : "bg-blue-600 hover:bg-blue-700"
