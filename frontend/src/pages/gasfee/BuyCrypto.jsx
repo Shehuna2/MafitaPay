@@ -104,7 +104,15 @@ export default function BuyCrypto() {
     formActivityRef. current = Date.now();
   }, []);
 
-  
+  // NEW: Validate cache age and show warning
+  const validateCacheAge = (timestamp) => {
+    if (!timestamp) return null;
+    const age = Date.now() - timestamp;
+    if (age > 30 * 60 * 1000) { // 30 minutes
+      return `⚠️ Rate is ${Math.round(age / 60000)} minutes old. Consider refreshing.`;
+    }
+    return null;
+  };
 
   // ---------------- FETCH RATE WITH CACHE, TIMEOUT, AND EXPIRATION CHECK ----------------
   const fetchFreshRate = useCallback(async (options = {}) => {
@@ -171,7 +179,7 @@ export default function BuyCrypto() {
         } else {
           setMessage({
             type: "warning",
-            text: `Using last known rate.`
+            text: "Using last known rate."
           });
         }
       } else {
@@ -240,7 +248,7 @@ export default function BuyCrypto() {
       if (hasValidCache && rateIsStale) {
         setMessage({
           type: "info",
-          text: "Refreshing rate..."
+          text: "Refreshing..."
         });
       }
 
@@ -253,6 +261,7 @@ export default function BuyCrypto() {
           promises.push(
             fetchFreshRate({ silent:  hasValidCache }).catch(() => {
               // Error already handled in fetchFreshRate
+
             })
           );
         }
@@ -582,7 +591,7 @@ export default function BuyCrypto() {
                 {/* NEW: Margin Transparency */}
                 {marginInfo && (
                   <p className="text-xs text-amber-300 mt-1">
-                    📊 <span className="capitalize">{marginInfo.margin_type}</span> + Fees included•
+                    📊 <span className="capitalize">{marginInfo.margin_type}</span> + fees • See full details at checkout
                   </p>
                 )}
               </div>
@@ -608,6 +617,13 @@ export default function BuyCrypto() {
                 }`}
               >
                 {message.text}
+              </div>
+            )}
+
+            {/* Cache Age Warning */}
+            {cacheAgeWarning && (
+              <div className="p-3 rounded-xl mb-5 text-xs bg-amber-600/20 text-amber-300 border border-amber-500/50">
+                {cacheAgeWarning}
               </div>
             )}
 
