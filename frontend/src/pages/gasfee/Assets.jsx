@@ -1,4 +1,4 @@
-// FULL PREMIUM Assets.jsx – Scrollable Asset List Version with WebSocket Reconnection
+// FULL PREMIUM Assets.jsx – Upgraded with Unshakeable Sticky Header
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, ArrowDown, Search, Clock, Star, ArrowLeft, AlertCircle } from "lucide-react";
@@ -61,7 +61,7 @@ const AssetCard = React.memo(function AssetCard({ asset, onView, onToggleFavorit
     <AssetCardErrorBoundary>
       <div
         onClick={handleClick}
-        className="group relative w-full bg-gray-800/80 backdrop-blur-xl p-3 rounded-xl border border-gray-700/50 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:border-indigo-500/50"
+        className="group relative w-full bg-gray-800/80 backdrop-blur-xl p-3 rounded-xl border border-gray-700/50 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:border-indigo-500/50 cursor-pointer"
       >
         <div className="absolute inset-0 rounded-xl bg-indigo-600/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         <div className="relative flex items-center gap-2 sm:gap-3">
@@ -124,7 +124,7 @@ const RecentViewedList = ({ recentViewed }) => {
   }, [recentViewed.length]);
 
   return (
-    <div className="mb-5">
+    <div className="mt-5">
       <p className="text-xs text-indigo-300 flex items-center gap-1.5 mb-2">
         <Clock className="w-4 h-4" /> Recently Viewed
       </p>
@@ -157,16 +157,14 @@ const RecentViewedList = ({ recentViewed }) => {
 export default function Assets() {
   const ASSET_CACHE_KEY = "asset_cache_v1";
   const PRICE_TIMESTAMP_KEY = "asset_price_timestamp";
-  const MAX_PRICE_AGE = 1 * 60 * 60 * 1000; // 1 hour max age for cached prices
-  const WS_RECONNECT_DELAY = 3000; // 3 seconds reconnect delay
+  const MAX_PRICE_AGE = 1 * 60 * 60 * 1000;
+  const WS_RECONNECT_DELAY = 3000;
   const WS_MAX_RETRIES = 5;
 
-  const scrollContainerRef = useRef(null);
-  const [scrollY, setScrollY] = useState(0);
-  const [isSticky, setIsSticky] = useState(false);
   const wsRef = useRef(null);
   const wsRetryCountRef = useRef(0);
   const wsReconnectTimeoutRef = useRef(null);
+  const retryRef = useRef(0);
 
   const [assets, setAssets] = useState([]);
   const [exchangeRate, setExchangeRate] = useState(null);
@@ -177,32 +175,30 @@ export default function Assets() {
   const [recentViewed, setRecentViewed] = useState(JSON.parse(localStorage.getItem("recentAssets") || "[]"));
   const [favorites, setFavorites] = useState(JSON.parse(localStorage.getItem("favoriteAssets") || "[]"));
   const [wsStatus, setWsStatus] = useState("disconnected");
-  const retryRef = useRef(0);
+  const [isScrolled, setIsScrolled] = useState(false);
 
-  // ─────────────── Scroll tracking for sticky header ───────────────
+  // Scroll detection for compact mode
+  const handleScroll = useCallback(() => {
+    const scrolled = window.scrollY > 80;
+    if (scrolled !== isScrolled) {
+      setIsScrolled(scrolled);
+    }
+  }, [isScrolled]);
+
   useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const handleScroll = () => setScrollY(container.scrollTop);
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  useEffect(() => setIsSticky(scrollY > 80), [scrollY]);
-
-  const progress = Math.min(scrollY / 180, 1);
-  const scale = 1 - progress * 0.08;
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [handleScroll]);
 
   // ─────────────── Network Status ───────────────
   useEffect(() => {
     const goOnline = () => {
       setIsOffline(false);
       fetchAssets();
-      if (wsRef.current?.readyState === WebSocket.CLOSED) {
-        connectWebSocket();
-      }
+      if (wsRef.current?.readyState === WebSocket.CLOSED) connectWebSocket();
     };
     const goOffline = () => setIsOffline(true);
+
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
     return () => {
@@ -214,16 +210,8 @@ export default function Assets() {
   // ─────────────── Cache Load ───────────────
   useEffect(() => {
     const cached = localStorage.getItem(ASSET_CACHE_KEY);
-    const timestamp = localStorage.getItem(PRICE_TIMESTAMP_KEY);
-
     if (cached) {
       const { assets: cachedAssets, exchangeRate: cachedRate } = JSON.parse(cached);
-
-      const priceAge = timestamp ? Date.now() - parseInt(timestamp) : Infinity;
-      if (priceAge > MAX_PRICE_AGE) {
-        console.warn(`[Assets] Cached prices are ${Math.round(priceAge / 1000 / 60)} minutes old`);
-      }
-
       setAssets(cachedAssets);
       setExchangeRate(cachedRate);
       setLoading(false);
@@ -257,7 +245,6 @@ export default function Assets() {
       localStorage.setItem(ASSET_CACHE_KEY, JSON.stringify({ assets: enriched, exchangeRate: res.data.exchange_rate }));
       localStorage.setItem(PRICE_TIMESTAMP_KEY, Date.now().toString());
       setAssets(enriched);
-
     } catch (err) {
       console.error("Failed to fetch assets:", err);
       if (retryRef.current < 3 && !isOffline) {
@@ -271,7 +258,7 @@ export default function Assets() {
     }
   }, [isOffline, assets.length]);
 
-  // ─────────────── WebSocket Live Updates with Reconnection ───────────────
+  // ─────────────── WebSocket Live Updates ───────────────
   const connectWebSocket = useCallback(() => {
     if (isOffline) return;
 
@@ -306,23 +293,14 @@ export default function Assets() {
         }
       };
 
-      wsRef.current.onerror = (error) => {
-        console.error("[WS] Error:", error);
-        setWsStatus("error");
-      };
+      wsRef.current.onerror = () => setWsStatus("error");
 
       wsRef.current.onclose = () => {
-        console.warn("[WS] Disconnected");
         setWsStatus("disconnected");
-
         if (!isOffline && wsRetryCountRef.current < WS_MAX_RETRIES) {
           wsRetryCountRef.current++;
           const delay = Math.min(WS_RECONNECT_DELAY * Math.pow(2, wsRetryCountRef.current - 1), 30000);
-          console.log(`[WS] Reconnecting in ${delay}ms (attempt ${wsRetryCountRef.current}/${WS_MAX_RETRIES})`);
-
-          wsReconnectTimeoutRef.current = setTimeout(() => {
-            connectWebSocket();
-          }, delay);
+          wsReconnectTimeoutRef.current = setTimeout(connectWebSocket, delay);
         }
       };
     } catch (err) {
@@ -334,15 +312,13 @@ export default function Assets() {
   useEffect(() => {
     fetchAssets();
     connectWebSocket();
-
     return () => {
-      if (wsRef.current) wsRef.current.close();
+      wsRef.current?.close();
       if (wsReconnectTimeoutRef.current) clearTimeout(wsReconnectTimeoutRef.current);
     };
-    // eslint-disable-next-line
   }, [fetchAssets, connectWebSocket]);
 
-  // ─────────────── Filtering ───────────────
+  // ─────────────── Filtering & Handlers ───────────────
   const filteredAssets = useMemo(() =>
     assets.filter(a =>
       a.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -351,7 +327,7 @@ export default function Assets() {
     [assets, search]
   );
 
-  const handleView = useCallback(asset => {
+  const handleView = useCallback((asset) => {
     setRecentViewed(prev => {
       const exists = prev.find(a => a.id === asset.id);
       const updated = exists ? prev : [asset, ...prev].slice(0, 6);
@@ -360,7 +336,7 @@ export default function Assets() {
     });
   }, []);
 
-  const toggleFavorite = useCallback(assetId => {
+  const toggleFavorite = useCallback((assetId) => {
     setFavorites(prev => {
       const updated = prev.includes(assetId) ? prev.filter(id => id !== assetId) : [...prev, assetId];
       localStorage.setItem("favoriteAssets", JSON.stringify(updated));
@@ -382,7 +358,6 @@ export default function Assets() {
       </div>
     ));
 
-  // ─────────────── Render ───────────────
   if (error && !assets.length) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-3 text-center bg-gray-950">
@@ -402,35 +377,28 @@ export default function Assets() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col text-white">
+    <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+      {/* Status Banners */}
       {isOffline && (
-        <div className="bg-yellow-600/20 border border-yellow-500/40 text-yellow-300 text-xs p-2.5 text-center">
+        <div className="bg-yellow-600/20 border-b border-yellow-500/40 text-yellow-300 text-xs p-2.5 text-center">
           Offline — showing cached prices
         </div>
       )}
-
       {wsStatus !== "connected" && !isOffline && (
-        <div className="bg-blue-600/20 border border-blue-500/40 text-blue-300 text-xs p-2.5 text-center">
+        <div className="bg-blue-600/20 border-b border-blue-500/40 text-blue-300 text-xs p-2.5 text-center">
           {wsStatus === "disconnected" ? "Reconnecting to live prices..." : "Live price update unavailable"}
         </div>
       )}
 
-      <div className="w-full flex flex-col h-screen">
-        {/* Sticky Header */}
-        <div className="sticky top-0 z-50 pointer-events-auto">
-          <div
-            className="rounded-2xl border border-gray-800/50 bg-gradient-to-b from-gray-900/80 to-gray-900/60 backdrop-blur-2xl shadow-2xl transition-all duration-500 ease-out m-3 p-4"
-            style={{
-              transform: `scale(${scale})`,
-              padding: isSticky ? "12px" : "20px",
-            }}
-          >
+      {/* Fixed Header - Unshakeable */}
+      <header className="fixed top-0 left-0 right-0 z-50 px-3 pt-3 pb-2 pointer-events-none">
+        <div className="pointer-events-auto max-w-2xl mx-auto">
+          <div className="rounded-2xl bg-gradient-to-b from-gray-900/90 to-gray-900/70 backdrop-blur-2xl border border-gray-800/60 shadow-2xl p-4 transition-all duration-300">
             <div className="flex items-center gap-3 mb-4">
               <ArrowLeft className="w-6 h-6 text-indigo-400 flex-shrink-0" />
-              <h1
-                className="text-2xl font-black bg-indigo-400 bg-clip-text text-transparent tracking-tight"
-                style={{ fontSize: `${2 - progress * 0.5}rem` }}
-              >
+              <h1 className={`font-black bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent tracking-tight transition-all duration-300 ${
+                isScrolled ? "text-xl" : "text-3xl"
+              }`}>
                 Assets
               </h1>
             </div>
@@ -442,36 +410,23 @@ export default function Assets() {
                 placeholder="Search 200+ assets..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-white/10 backdrop-blur-xl pl-12 pr-5 py-3.5 rounded-xl border border-gray-700/80 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                style={{
-                  height: isSticky ? "48px" : "56px",
-                  fontSize: isSticky ? "1rem" : "1.1rem",
-                }}
+                className="w-full bg-white/10 backdrop-blur-xl pl-12 pr-5 py-4 rounded-xl border border-gray-700/80 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
               />
             </div>
 
-            {recentViewed.length > 0 && (
-              <div
-                className="mt-5 transition-all duration-500 origin-top overflow-hidden"
-                style={{
-                  opacity: isSticky ? 0 : 1,
-                  transform: `scaleY(${isSticky ? 0.8 : 1})`,
-                  height: isSticky ? "0px" : "auto",
-                  marginTop: isSticky ? "0" : "20px",
-                }}
-              >
-                <RecentViewedList recentViewed={recentViewed} />
-              </div>
-            )}
+            {/* Recently Viewed - Collapses when scrolled */}
+            <div className={`overflow-hidden transition-all duration-500 ease-out ${
+              isScrolled ? "max-h-0 mt-0 opacity-0" : "max-h-32 mt-5 opacity-100"
+            }`}>
+              {recentViewed.length > 0 && <RecentViewedList recentViewed={recentViewed} />}
+            </div>
           </div>
         </div>
+      </header>
 
-        {/* Scrollable Asset List */}
-        <div
-          className="flex-1 overflow-y-auto scrollbar-hide px-3 pb-20"
-          ref={scrollContainerRef}
-          style={{ WebkitOverflowScrolling: "touch" }}
-        >
+      {/* Main Scrollable Content - Starts below header */}
+      <main className="flex-1 overflow-y-auto scrollbar-hide px-3 pt-40 pb-20" style={{ paddingTop: "180px" }}>
+        <div className="max-w-2xl mx-auto">
           <h2 className="text-lg font-bold text-gray-300 mb-5 opacity-80">Supported Assets</h2>
           <div className="space-y-3">
             {loading ? (
@@ -496,7 +451,7 @@ export default function Assets() {
             )}
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
