@@ -513,6 +513,28 @@ class ConfirmWithdrawOrderAPIView(APIView):
                 seller_wallet.lock_funds(amount)  # Rollback
                 return Response({"error": "Failed to credit merchant wallet."}, status=500)
 
+            # Record seller’s debit transaction (funds were locked earlier; now released to merchant)
+            with transaction.atomic():
+                from wallet.models import WalletTransaction  # Import here to avoid circular import
+                WalletTransaction.objects.create(
+                    user=seller_wallet.user,
+                    wallet=seller_wallet,
+                    tx_type="debit",
+                    category="withdrawal",
+                    amount=amount,
+                    balance_before=seller_wallet.balance,
+                    balance_after=seller_wallet.balance,  # balance already reduced at lock time
+                    reference=f"p2p-withdraw-{order.id}",
+                    status="success",
+                    metadata={
+                        "type": "p2p_withdraw",
+                        "role": "seller",
+                        "order_id": order.id,
+                        "offer_id": order.buyer_offer.id,
+                        "merchant_id": order.buyer_offer.merchant.id,
+                    },
+                )
+
             order.status = "completed"
             order.save(update_fields=["status"])
 
