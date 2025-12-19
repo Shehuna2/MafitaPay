@@ -394,7 +394,7 @@ export default function BuyCrypto() {
     if (!crypto) return [];
     if (form.currency === "NGN") return [500, 1000, 2000, 5000, 10000, 20000];
     if (form.currency === "USDT") return [0.5, 1.0, 2.0, 5.0, 10.0, 20.0];
-    return [0.01, 0.05, 0.1, 0.2, 0.5, 1.0];
+    return [0.001, 0.005, 0.01, 0.02, 0.05, 0.10];
   };
 
   const validateForm = () => {
@@ -547,7 +547,7 @@ export default function BuyCrypto() {
                   message.type === "success"
                     ? "bg-green-600/20 text-green-400 border-green-500/50"
                     : message.type === "warning"
-                    ? "bg-yellow-600/20 text-yellow-400 border-yellow-500/50"
+                    ? "bg-yellow-600/20 text-indigo-400 border-indigo-500/50"
                     : message.type === "info"
                     ? "bg-blue-600/20 text-blue-400 border-blue-500/50"
                     : "bg-red-600/20 text-red-400 border-red-500/50"
