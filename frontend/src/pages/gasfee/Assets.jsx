@@ -1,7 +1,7 @@
-// FULL PREMIUM Assets.jsx – Scrollable Asset List Version
+// FULL PREMIUM Assets.jsx – Scrollable Asset List Version with WebSocket Reconnection
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, ArrowDown, Search, Clock, Star, ArrowLeft } from "lucide-react";
+import { ArrowUpRight, ArrowDown, Search, Clock, Star, ArrowLeft, AlertCircle } from "lucide-react";
 import client from "../../api/client";
 
 const triggerHaptic = () => {
@@ -10,9 +10,16 @@ const triggerHaptic = () => {
 
 // ────────────────────────────── Error Boundary ──────────────────────────────
 class AssetCardErrorBoundary extends React.Component {
-  state = { hasError: false };
-  static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(e, i) { console.error("AssetCard error:", e, i); }
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(e, i) {
+    console.error("AssetCard error:", e, i);
+  }
   render() {
     return this.state.hasError ? (
       <div className="p-4 rounded-xl bg-red-900/20 border border-red-500/30 text-red-400 text-center text-xs">
@@ -23,7 +30,7 @@ class AssetCardErrorBoundary extends React.Component {
 }
 
 // ────────────────────────────── Asset Card ──────────────────────────────
-const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite, isOffline }) => {
+const AssetCard = React.memo(function AssetCard({ asset, onView, onToggleFavorite, isFavorite, isOffline }) {
   const navigate = useNavigate();
   const logo = `/images/${asset.symbol?.toLowerCase()}.png`;
   const fallbackLogo = asset.logo_url || "/images/default.png";
@@ -54,7 +61,7 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite, isO
     <AssetCardErrorBoundary>
       <div
         onClick={handleClick}
-        className="group relative w-full bg-gray-800/80 backdrop-blur-xl p-3 rounded-xl border border-gray-700/50 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:border-indigo-500/50 cursor-pointer"
+        className="group relative w-full bg-gray-800/80 backdrop-blur-xl p-3 rounded-xl border border-gray-700/50 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:border-indigo-500/50"
       >
         <div className="absolute inset-0 rounded-xl bg-indigo-600/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         <div className="relative flex items-center gap-2 sm:gap-3">
@@ -88,12 +95,14 @@ const AssetCard = React.memo(({ asset, onView, onToggleFavorite, isFavorite, isO
               </p>
             </div>
             <button
+              type="button"
               onClick={handleFavorite}
               className={`p-1.5 rounded-full transition-all duration-200 ${
                 isFavorite
                   ? "text-yellow-400 bg-yellow-400/20"
                   : "text-gray-500 hover:text-yellow-400 hover:bg-yellow-400/10"
               }`}
+              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
             >
               <Star className={`w-3.5 h-3.5 ${isFavorite ? "fill-current" : ""}`} />
             </button>
@@ -123,11 +132,12 @@ const RecentViewedList = ({ recentViewed }) => {
         {recentViewed.slice(0, maxItems).map((asset) => (
           <button
             key={asset.id}
+            type="button"
             onClick={() => {
               triggerHaptic();
               window.location.href = `/buy-crypto/${asset.id}`;
             }}
-            className="flex-shrink-0 flex items-center gap-2 bg-gray-800/60 backdrop-blur-md border border-gray-700/50 rounded-full px-2.5 py-1.5 text-xs font-bold text-gray-300 hover:bg-indigo-600/20 hover:border-indigo-500/50 hover:scale-105 transition-all duration-300"
+            className="flex-shrink-0 flex items-center gap-2 bg-gray-800/60 backdrop-blur-md border border-gray-700/50 rounded-full px-2.5 py-1.5 text-xs font-bold text-gray-300 hover:bg-indigo-600/20 transition"
           >
             <img
               src={`/images/${asset.symbol?.toLowerCase()}.png`}
@@ -146,9 +156,17 @@ const RecentViewedList = ({ recentViewed }) => {
 // ────────────────────────────── Main Component ──────────────────────────────
 export default function Assets() {
   const ASSET_CACHE_KEY = "asset_cache_v1";
+  const PRICE_TIMESTAMP_KEY = "asset_price_timestamp";
+  const MAX_PRICE_AGE = 1 * 60 * 60 * 1000; // 1 hour max age for cached prices
+  const WS_RECONNECT_DELAY = 3000; // 3 seconds reconnect delay
+  const WS_MAX_RETRIES = 5;
+
   const scrollContainerRef = useRef(null);
   const [scrollY, setScrollY] = useState(0);
   const [isSticky, setIsSticky] = useState(false);
+  const wsRef = useRef(null);
+  const wsRetryCountRef = useRef(0);
+  const wsReconnectTimeoutRef = useRef(null);
 
   const [assets, setAssets] = useState([]);
   const [exchangeRate, setExchangeRate] = useState(null);
@@ -158,6 +176,7 @@ export default function Assets() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [recentViewed, setRecentViewed] = useState(JSON.parse(localStorage.getItem("recentAssets") || "[]"));
   const [favorites, setFavorites] = useState(JSON.parse(localStorage.getItem("favoriteAssets") || "[]"));
+  const [wsStatus, setWsStatus] = useState("disconnected");
   const retryRef = useRef(0);
 
   // ─────────────── Scroll tracking for sticky header ───────────────
@@ -176,7 +195,13 @@ export default function Assets() {
 
   // ─────────────── Network Status ───────────────
   useEffect(() => {
-    const goOnline = () => { setIsOffline(false); fetchAssets(); };
+    const goOnline = () => {
+      setIsOffline(false);
+      fetchAssets();
+      if (wsRef.current?.readyState === WebSocket.CLOSED) {
+        connectWebSocket();
+      }
+    };
     const goOffline = () => setIsOffline(true);
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
@@ -189,8 +214,16 @@ export default function Assets() {
   // ─────────────── Cache Load ───────────────
   useEffect(() => {
     const cached = localStorage.getItem(ASSET_CACHE_KEY);
+    const timestamp = localStorage.getItem(PRICE_TIMESTAMP_KEY);
+
     if (cached) {
       const { assets: cachedAssets, exchangeRate: cachedRate } = JSON.parse(cached);
+
+      const priceAge = timestamp ? Date.now() - parseInt(timestamp) : Infinity;
+      if (priceAge > MAX_PRICE_AGE) {
+        console.warn(`[Assets] Cached prices are ${Math.round(priceAge / 1000 / 60)} minutes old`);
+      }
+
       setAssets(cachedAssets);
       setExchangeRate(cachedRate);
       setLoading(false);
@@ -222,6 +255,7 @@ export default function Assets() {
       });
 
       localStorage.setItem(ASSET_CACHE_KEY, JSON.stringify({ assets: enriched, exchangeRate: res.data.exchange_rate }));
+      localStorage.setItem(PRICE_TIMESTAMP_KEY, Date.now().toString());
       setAssets(enriched);
 
     } catch (err) {
@@ -230,33 +264,83 @@ export default function Assets() {
         retryRef.current++;
         setTimeout(fetchAssets, 1500 * retryRef.current);
       } else {
-        setError("Failed to load assets.");
+        setError("Failed to load assets. Using cached data.");
       }
     } finally {
       setLoading(false);
     }
   }, [isOffline, assets.length]);
 
-  // ─────────────── WebSocket Live Updates ───────────────
-  useEffect(() => {
+  // ─────────────── WebSocket Live Updates with Reconnection ───────────────
+  const connectWebSocket = useCallback(() => {
     if (isOffline) return;
+
+    try {
+      wsRef.current = new WebSocket("wss://stream.binance.com:9443/ws/!ticker@arr");
+
+      wsRef.current.onopen = () => {
+        console.log("[WS] Connected");
+        setWsStatus("connected");
+        wsRetryCountRef.current = 0;
+      };
+
+      wsRef.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          setAssets(prev =>
+            prev.map(asset => {
+              const ticker = data.find(t => t.s === asset.symbol + "USDT");
+              if (ticker) {
+                const newPrice = parseFloat(ticker.c);
+                return {
+                  ...asset,
+                  price: newPrice,
+                  changePct: ((newPrice - asset.price) / asset.price) * 100
+                };
+              }
+              return asset;
+            })
+          );
+        } catch (parseErr) {
+          console.warn("[WS] Failed to parse message:", parseErr);
+        }
+      };
+
+      wsRef.current.onerror = (error) => {
+        console.error("[WS] Error:", error);
+        setWsStatus("error");
+      };
+
+      wsRef.current.onclose = () => {
+        console.warn("[WS] Disconnected");
+        setWsStatus("disconnected");
+
+        if (!isOffline && wsRetryCountRef.current < WS_MAX_RETRIES) {
+          wsRetryCountRef.current++;
+          const delay = Math.min(WS_RECONNECT_DELAY * Math.pow(2, wsRetryCountRef.current - 1), 30000);
+          console.log(`[WS] Reconnecting in ${delay}ms (attempt ${wsRetryCountRef.current}/${WS_MAX_RETRIES})`);
+
+          wsReconnectTimeoutRef.current = setTimeout(() => {
+            connectWebSocket();
+          }, delay);
+        }
+      };
+    } catch (err) {
+      console.error("[WS] Connection failed:", err);
+      setWsStatus("error");
+    }
+  }, [isOffline]);
+
+  useEffect(() => {
     fetchAssets();
-    const ws = new WebSocket("wss://stream.binance.com:9443/ws/!ticker@arr");
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      setAssets(prev =>
-        prev.map(asset => {
-          const ticker = data.find(t => t.s === asset.symbol + "USDT");
-          if (ticker) {
-            const newPrice = parseFloat(ticker.c);
-            return { ...asset, price: newPrice, changePct: ((newPrice - asset.price) / asset.price) * 100 };
-          }
-          return asset;
-        })
-      );
+    connectWebSocket();
+
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+      if (wsReconnectTimeoutRef.current) clearTimeout(wsReconnectTimeoutRef.current);
     };
-    return () => ws.close();
-  }, [fetchAssets, isOffline]);
+    // eslint-disable-next-line
+  }, [fetchAssets, connectWebSocket]);
 
   // ─────────────── Filtering ───────────────
   const filteredAssets = useMemo(() =>
@@ -299,12 +383,17 @@ export default function Assets() {
     ));
 
   // ─────────────── Render ───────────────
-  if (error) {
+  if (error && !assets.length) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-3 text-center bg-gray-950">
         <div className="bg-red-900/20 backdrop-blur-xl p-8 rounded-2xl border border-red-500/30 max-w-sm">
+          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
           <p className="text-red-400 font-medium">{error}</p>
-          <button onClick={fetchAssets} className="mt-6 px-6 py-3 bg-indigo-600 rounded-xl font-bold hover:bg-indigo-500 transition-all shadow-lg">
+          <button
+            type="button"
+            onClick={fetchAssets}
+            className="mt-6 px-6 py-3 bg-indigo-600 rounded-xl font-bold hover:bg-indigo-500 transition-all shadow-lg"
+          >
             Retry
           </button>
         </div>
@@ -313,99 +402,101 @@ export default function Assets() {
   }
 
   return (
-    <>
-      <div className="min-h-screen flex flex-col text-white">
+    <div className="min-h-screen flex flex-col text-white">
+      {isOffline && (
+        <div className="bg-yellow-600/20 border border-yellow-500/40 text-yellow-300 text-xs p-2.5 text-center">
+          Offline — showing cached prices
+        </div>
+      )}
 
-        {isOffline && (
-          <div className="bg-yellow-600/20 border border-yellow-500/40 text-yellow-300 text-xs p-2.5 text-center">
-            Offline — showing cached prices
-          </div>
-        )}
+      {wsStatus !== "connected" && !isOffline && (
+        <div className="bg-blue-600/20 border border-blue-500/40 text-blue-300 text-xs p-2.5 text-center">
+          {wsStatus === "disconnected" ? "Reconnecting to live prices..." : "Live price update unavailable"}
+        </div>
+      )}
 
-        <div className="w-full flex flex-col h-screen">
-
-          {/* Sticky Header */}
-          <div className="sticky top-0 z-50 pointer-events-auto">
-            <div
-              className="rounded-2xl border border-gray-800/50 bg-gradient-to-b from-gray-900/80 to-gray-900/60 backdrop-blur-2xl shadow-2xl transition-all duration-500 ease-out m-3 p-4"
-              style={{
-                transform: `scale(${scale})`,
-                padding: isSticky ? "12px" : "20px",
-              }}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <ArrowLeft className="w-6 h-6 text-indigo-400 flex-shrink-0" />
-                <h1
-                  className="text-2xl font-black bg-indigo-400 bg-clip-text text-transparent tracking-tight"
-                  style={{ fontSize: `${2 - progress * 0.5}rem` }}
-                >
-                  Assets
-                </h1>
-              </div>
-
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Search 200+ assets..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-white/10 backdrop-blur-xl pl-12 pr-5 py-3.5 rounded-xl border border-gray-700/80 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/70 focus:border-indigo-500 transition-all font-medium"
-                  style={{
-                    height: isSticky ? "48px" : "56px",
-                    fontSize: isSticky ? "1rem" : "1.1rem",
-                  }}
-                />
-              </div>
-
-              {recentViewed.length > 0 && (
-                <div
-                  className="mt-5 transition-all duration-500 origin-top overflow-hidden"
-                  style={{
-                    opacity: isSticky ? 0 : 1,
-                    transform: `scaleY(${isSticky ? 0.8 : 1})`,
-                    height: isSticky ? "0px" : "auto",
-                    marginTop: isSticky ? "0" : "20px",
-                  }}
-                >
-                  <RecentViewedList recentViewed={recentViewed} />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Scrollable Asset List */}
+      <div className="w-full flex flex-col h-screen">
+        {/* Sticky Header */}
+        <div className="sticky top-0 z-50 pointer-events-auto">
           <div
-            className="flex-1 overflow-y-auto scrollbar-hide px-3 pb-20"
-            ref={scrollContainerRef}
-            style={{ WebkitOverflowScrolling: "touch" }}
+            className="rounded-2xl border border-gray-800/50 bg-gradient-to-b from-gray-900/80 to-gray-900/60 backdrop-blur-2xl shadow-2xl transition-all duration-500 ease-out m-3 p-4"
+            style={{
+              transform: `scale(${scale})`,
+              padding: isSticky ? "12px" : "20px",
+            }}
           >
-            <h2 className="text-lg font-bold text-gray-300 mb-5 opacity-80">Supported Assets</h2>
-            <div className="space-y-3">
-              {loading ? (
-                skeletonCards()
-              ) : filteredAssets.length === 0 ? (
-                <div className="text-center py-16">
-                  <Search className="w-12 h-12 mx-auto mb-3 text-gray-600" />
-                  <p className="text-gray-500">No assets match your search</p>
-                </div>
-              ) : (
-                filteredAssets.map((asset, i) => (
-                  <div key={asset.id} className="animate-fade-in-up" style={{ animationDelay: `${i * 40}ms` }}>
-                    <AssetCard
-                      asset={asset}
-                      onView={handleView}
-                      onToggleFavorite={toggleFavorite}
-                      isFavorite={favorites.includes(asset.id)}
-                      isOffline={isOffline}
-                    />
-                  </div>
-                ))
-              )}
+            <div className="flex items-center gap-3 mb-4">
+              <ArrowLeft className="w-6 h-6 text-indigo-400 flex-shrink-0" />
+              <h1
+                className="text-2xl font-black bg-indigo-400 bg-clip-text text-transparent tracking-tight"
+                style={{ fontSize: `${2 - progress * 0.5}rem` }}
+              >
+                Assets
+              </h1>
             </div>
+
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search 200+ assets..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-white/10 backdrop-blur-xl pl-12 pr-5 py-3.5 rounded-xl border border-gray-700/80 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                style={{
+                  height: isSticky ? "48px" : "56px",
+                  fontSize: isSticky ? "1rem" : "1.1rem",
+                }}
+              />
+            </div>
+
+            {recentViewed.length > 0 && (
+              <div
+                className="mt-5 transition-all duration-500 origin-top overflow-hidden"
+                style={{
+                  opacity: isSticky ? 0 : 1,
+                  transform: `scaleY(${isSticky ? 0.8 : 1})`,
+                  height: isSticky ? "0px" : "auto",
+                  marginTop: isSticky ? "0" : "20px",
+                }}
+              >
+                <RecentViewedList recentViewed={recentViewed} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Scrollable Asset List */}
+        <div
+          className="flex-1 overflow-y-auto scrollbar-hide px-3 pb-20"
+          ref={scrollContainerRef}
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          <h2 className="text-lg font-bold text-gray-300 mb-5 opacity-80">Supported Assets</h2>
+          <div className="space-y-3">
+            {loading ? (
+              skeletonCards()
+            ) : filteredAssets.length === 0 ? (
+              <div className="text-center py-16">
+                <Search className="w-12 h-12 mx-auto mb-3 text-gray-600" />
+                <p className="text-gray-500">No assets match your search</p>
+              </div>
+            ) : (
+              filteredAssets.map((asset, i) => (
+                <div key={asset.id} className="animate-fade-in-up" style={{ animationDelay: `${i * 40}ms` }}>
+                  <AssetCard
+                    asset={asset}
+                    onView={handleView}
+                    onToggleFavorite={toggleFavorite}
+                    isFavorite={favorites.includes(asset.id)}
+                    isOffline={isOffline}
+                  />
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
