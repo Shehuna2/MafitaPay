@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import client from "../../api/client";
 import {
@@ -27,7 +27,7 @@ export default function MerchantDepositOrders() {
   const { playNotification } = useAudioNotification();
 
   // ✅ Fetch merchant orders
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       const res = await client.get("p2p/merchant-orders/");
       const data = Array.isArray(res.data)
@@ -57,13 +57,13 @@ export default function MerchantDepositOrders() {
       setLoading(false);
       setIsInitialLoading(false);
     }
-  };
+  }, [isInitialLoading, prevOrders, playNotification]);
 
   useEffect(() => {
     fetchOrders();
     const interval = setInterval(fetchOrders, 10000); // auto-refresh every 10s
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchOrders]);
 
   const handleConfirmOrder = async (orderId) => {
     try {

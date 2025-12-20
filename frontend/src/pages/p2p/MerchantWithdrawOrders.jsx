@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import client from "../../api/client";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -25,7 +25,7 @@ export default function MerchantWithdrawOrders() {
   const { playNotification } = useAudioNotification();
 
   // Fetch merchant withdraw orders
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
       const res = await client.get(P2P("merchant-withdraw-orders/"));
@@ -53,14 +53,14 @@ export default function MerchantWithdrawOrders() {
       setLoading(false);
       setIsInitialLoading(false);
     }
-  };
+  }, [isInitialLoading, prevOrders, playNotification]);
 
   useEffect(() => {
     fetchOrders();
     // Poll for new orders every 10 seconds
     const interval = setInterval(fetchOrders, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchOrders]);
 
   // Confirm release
   const confirmRelease = async (id) => {

@@ -147,6 +147,12 @@ export default function useAudioNotification(
    * @param {number} newVolume - Volume level between 0 and 1
    */
   const setVolume = useCallback((newVolume) => {
+    // Validate input is a number
+    if (typeof newVolume !== 'number' || isNaN(newVolume)) {
+      console.warn('setVolume expects a number between 0 and 1');
+      return;
+    }
+    
     const clampedVolume = Math.max(0, Math.min(1, newVolume));
     setCurrentVolume(clampedVolume);
     if (audioRef.current) {
