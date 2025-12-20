@@ -47,6 +47,7 @@ export default function MerchantWithdrawOrders() {
       setOrders(ordersArray);
       setPrevOrders(ordersArray);
     } catch (err) {
+      console.error("Failed to load merchant withdraw orders:", err);
       toast.error("Failed to load merchant withdraw orders.");
     } finally {
       setLoading(false);
@@ -70,6 +71,7 @@ export default function MerchantWithdrawOrders() {
       toast.success("Funds released successfully.");
       await fetchOrders();
     } catch (err) {
+      console.error("Failed to confirm release:", err);
       toast.error(err?.response?.data?.detail || "Failed to confirm release.");
     } finally {
       setProcessingId(null);

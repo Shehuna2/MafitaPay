@@ -145,6 +145,7 @@ export default function MerchantDepositOrders() {
                   <p className="font-semibold text-lg">Order #{order.id}</p>
 
                 {renderStatusBadge(order.status)}
+              </div>
                 <p className="text-sm text-gray-400">
                   Buyer: <span className="text-white">{buyer}</span>
                 </p>
