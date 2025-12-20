@@ -20,6 +20,9 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
+# Active order statuses that block duplicate order creation with the same amount
+ACTIVE_ORDER_STATUSES = ['pending', 'paid']
+
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10  # Number of offers per page
     page_size_query_param = 'page_size'
@@ -148,11 +151,10 @@ class CreateDepositOrderAPIView(APIView):
             )
 
         # Check for active deposit orders with the same amount
-        active_statuses = ['pending', 'paid']
         existing_order = DepositOrder.objects.filter(
             buyer=user,
             amount_requested=amount,
-            status__in=active_statuses
+            status__in=ACTIVE_ORDER_STATUSES
         ).first()
         if existing_order:
             return Response(
@@ -440,11 +442,10 @@ class CreateWithdrawOrderAPIView(APIView):
             )
 
         # Check for active withdraw orders with the same amount
-        active_statuses = ['pending', 'paid']
         existing_order = WithdrawOrder.objects.filter(
             seller=user,
             amount_requested=amount,
-            status__in=active_statuses
+            status__in=ACTIVE_ORDER_STATUSES
         ).first()
         if existing_order:
             return Response(
