@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Wallet, WalletTransaction, VirtualAccount
+from .models import Wallet, WalletTransaction, VirtualAccount, Deposit
 
 class WalletAdmin(admin.ModelAdmin):
     list_display = ("user", "balance", "locked_balance")
@@ -11,9 +11,6 @@ class WalletAdmin(admin.ModelAdmin):
         for wallet in queryset:
             wallet.deposit(5000)  # Add NGN 5000 for testing
         self.message_user(request, "Added NGN 5000 to selected wallets.")
-
-
-
 
     add_funds.short_description = "Add NGN 5000 to selected wallets"
 
@@ -46,3 +43,12 @@ class VirtualAccountAdmin(admin.ModelAdmin):
         }),
     )
 
+
+class DepositAdmin(admin.ModelAdmin):
+    list_display = ("user", "amount", "status", "created_at")
+    list_filter  = ("status", "created_at")
+    search_fields = ("user__username", "user__email", "reference")
+    ordering     = ("-created_at",)
+    # readonly_fields = ("user", "amount", "status", "reference", "created_at")
+
+admin.site.register(Deposit, DepositAdmin)
