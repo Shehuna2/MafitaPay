@@ -22,7 +22,7 @@ class WalletTransactionAdmin(admin.ModelAdmin):
     list_filter  = ("tx_type", "status", "created_at")
     search_fields = ("order__id", "order__user__username")
     ordering     = ("-created_at",)
-    readonly_fields = ("amount",)
+    # readonly_fields = ("amount",)
 
 
 @admin.register(VirtualAccount)
