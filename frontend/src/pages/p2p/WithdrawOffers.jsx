@@ -7,6 +7,7 @@ import "react-toastify/dist/ReactToastify.css";
 import { Tooltip } from "react-tooltip";
 import "react-tooltip/dist/react-tooltip.css";
 import DuplicateOrderAlert from "../../components/DuplicateOrderAlert";
+import { parseDuplicateOrderError } from "../../utils/orderErrors";
 
 export default function WithdrawOffers() {
   const [offers, setOffers] = useState([]);
@@ -143,14 +144,11 @@ export default function WithdrawOffers() {
       const errorMessage = err.response?.data?.error || "";
       
       // Check if this is a duplicate order error
-      const duplicateOrderRegex = /You already have an active withdraw order.*Order #(\d+)/;
-      const match = errorMessage.match(duplicateOrderRegex);
+      const duplicateError = parseDuplicateOrderError(errorMessage, "withdraw");
       
-      if (match && err.response?.status === 400) {
-        // Extract order ID from error message
-        const orderId = match[1];
+      if (duplicateError && err.response?.status === 400) {
         setDuplicateOrderInfo({
-          orderId,
+          orderId: duplicateError.orderId,
           amount: amountNum,
         });
       } else {
