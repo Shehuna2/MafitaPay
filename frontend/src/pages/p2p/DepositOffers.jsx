@@ -6,6 +6,8 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { Tooltip } from "react-tooltip";
 import "react-tooltip/dist/react-tooltip.css";
+import DuplicateOrderAlert from "../../components/DuplicateOrderAlert";
+import { parseDuplicateOrderError } from "../../utils/orderErrors";
 
 export default function DepositOffers() {
   const [offers, setOffers] = useState([]);
@@ -19,6 +21,7 @@ export default function DepositOffers() {
   const [minTrades, setMinTrades] = useState("");
   const [page, setPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
+  const [duplicateOrderInfo, setDuplicateOrderInfo] = useState(null);
   const navigate = useNavigate();
 
   // Load user and offers with pagination
@@ -63,7 +66,10 @@ export default function DepositOffers() {
   // Close modal on Escape key press
   useEffect(() => {
     const handleEsc = (e) => {
-      if (e.key === "Escape") setSelectedOffer(null);
+      if (e.key === "Escape") {
+        setSelectedOffer(null);
+        setDuplicateOrderInfo(null);
+      }
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
@@ -97,13 +103,26 @@ export default function DepositOffers() {
       toast.success("Order created successfully!", { position: "top-right", autoClose: 3000 });
       navigate(`/p2p/order/${res.data.order_id}`);
     } catch (err) {
-      const errorMessage =
-        err.response?.status === 400
-          ? err.response?.data?.error || "Invalid order request."
-          : err.response?.status === 401
-          ? "Authentication failed. Please log in again."
-          : "Failed to create order.";
-      toast.error(errorMessage, { position: "top-right", autoClose: 3000 });
+      const errorMessage = err.response?.data?.error || "";
+      
+      // Check if this is a duplicate order error
+      const duplicateError = parseDuplicateOrderError(errorMessage, "deposit");
+      
+      if (duplicateError && err.response?.status === 400) {
+        setDuplicateOrderInfo({
+          orderId: duplicateError.orderId,
+          amount: amountNum,
+        });
+      } else {
+        // Show toast for other errors
+        const fallbackMessage =
+          err.response?.status === 400
+            ? errorMessage || "Invalid order request."
+            : err.response?.status === 401
+            ? "Authentication failed. Please log in again."
+            : "Failed to create order.";
+        toast.error(fallbackMessage, { position: "top-right", autoClose: 3000 });
+      }
     }
   };
 
@@ -358,14 +377,20 @@ export default function DepositOffers() {
       {selectedOffer && (
         <div
           className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
-          onClick={() => setSelectedOffer(null)}
+          onClick={() => {
+            setSelectedOffer(null);
+            setDuplicateOrderInfo(null);
+          }}
         >
           <div
             className="bg-gray-900 p-6 rounded-2xl w-full max-w-sm relative border border-gray-700 shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
             <button
-              onClick={() => setSelectedOffer(null)}
+              onClick={() => {
+                setSelectedOffer(null);
+                setDuplicateOrderInfo(null);
+              }}
               aria-label="Close deposit modal"
               className="absolute top-3 right-3 text-gray-400 hover:text-white text-lg"
             >
@@ -392,6 +417,29 @@ export default function DepositOffers() {
                 {(selectedOffer.merchant_profile.success_rate || 0).toFixed(2)}%
               </span>
             </p>
+            
+            {/* Duplicate Order Alert */}
+            {duplicateOrderInfo && (
+              <DuplicateOrderAlert
+                orderId={duplicateOrderInfo.orderId}
+                amount={duplicateOrderInfo.amount}
+                orderType="deposit"
+                onViewOrder={() => {
+                  navigate(`/p2p/order/${duplicateOrderInfo.orderId}`);
+                }}
+                onCancelOrder={() => {
+                  // Navigate to the order page where they can cancel it
+                  navigate(`/p2p/order/${duplicateOrderInfo.orderId}`);
+                }}
+                onTryDifferentAmount={() => {
+                  // Reset the form
+                  setAmount("");
+                  setDuplicateOrderInfo(null);
+                }}
+                onClose={() => setDuplicateOrderInfo(null)}
+              />
+            )}
+            
             <input
               type="number"
               placeholder="Enter amount (₦)"
