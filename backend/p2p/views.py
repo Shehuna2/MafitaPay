@@ -147,6 +147,21 @@ class CreateDepositOrderAPIView(APIView):
                 status=400,
             )
 
+        # Check for active deposit orders with the same amount
+        active_statuses = ['pending', 'paid']
+        existing_order = DepositOrder.objects.filter(
+            buyer=user,
+            amount_requested=amount,
+            status__in=active_statuses
+        ).first()
+        if existing_order:
+            return Response(
+                {
+                    "error": f"You already have an active deposit order with amount ₦{amount}. Please complete or cancel your existing order (Order #{existing_order.id}) before placing a new one with the same amount."
+                },
+                status=400,
+            )
+
         with transaction.atomic():
             sell_offer = Deposit_P2P_Offer.objects.select_for_update().get(id=sell_offer.id)
             if sell_offer.amount_available < amount:
@@ -420,6 +435,21 @@ class CreateWithdrawOrderAPIView(APIView):
             return Response(
                 {
                     "error": f"Amount must be between {buy_offer.min_amount} and {buy_offer.max_amount}"
+                },
+                status=400,
+            )
+
+        # Check for active withdraw orders with the same amount
+        active_statuses = ['pending', 'paid']
+        existing_order = WithdrawOrder.objects.filter(
+            seller=user,
+            amount_requested=amount,
+            status__in=active_statuses
+        ).first()
+        if existing_order:
+            return Response(
+                {
+                    "error": f"You already have an active withdraw order with amount ₦{amount}. Please complete or cancel your existing order (Order #{existing_order.id}) before placing a new one with the same amount."
                 },
                 status=400,
             )
