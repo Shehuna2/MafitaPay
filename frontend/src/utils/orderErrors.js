@@ -9,13 +9,19 @@ export function parseDuplicateOrderError(errorMessage, orderType) {
     return null;
   }
   
-  // Create regex pattern based on order type
-  const pattern = new RegExp(
+  // Try primary pattern first (exact match)
+  const exactPattern = new RegExp(
     `You already have an active ${orderType} order.*Order #(\\d+)`,
     'i'
   );
   
-  const match = errorMessage.match(pattern);
+  let match = errorMessage.match(exactPattern);
+  
+  // Fallback to more generic pattern if exact doesn't match
+  if (!match) {
+    const genericPattern = /already have an active.*order.*#(\d+)/i;
+    match = errorMessage.match(genericPattern);
+  }
   
   if (match && match[1]) {
     return {

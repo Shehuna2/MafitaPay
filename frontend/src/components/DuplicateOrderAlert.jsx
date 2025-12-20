@@ -48,7 +48,7 @@ export default function DuplicateOrderAlert({
         You already have an active {orderType} order with amount{" "}
         <span className="font-semibold">₦{amount.toLocaleString()}</span>.
         Please complete or cancel your existing order{" "}
-        <span className="font-semibold">(Order #{orderId})</span> before
+        <span className="font-semibold">(Order #{String(orderId)})</span> before
         placing a new one with the same amount.
       </p>
 
