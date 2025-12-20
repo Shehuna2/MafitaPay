@@ -6,6 +6,7 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { Tooltip } from "react-tooltip";
 import "react-tooltip/dist/react-tooltip.css";
+import DuplicateOrderAlert from "../../components/DuplicateOrderAlert";
 
 export default function WithdrawOffers() {
   const [offers, setOffers] = useState([]);
@@ -20,6 +21,7 @@ export default function WithdrawOffers() {
   const [page, setPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
   const [placingOrder, setPlacingOrder] = useState(false);
+  const [duplicateOrderInfo, setDuplicateOrderInfo] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -61,7 +63,10 @@ export default function WithdrawOffers() {
 
   useEffect(() => {
     const handleEsc = (e) => {
-      if (e.key === "Escape") setSelectedOffer(null);
+      if (e.key === "Escape") {
+        setSelectedOffer(null);
+        setDuplicateOrderInfo(null);
+      }
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
@@ -135,13 +140,29 @@ export default function WithdrawOffers() {
       if (orderId) navigate(`/p2p/withdraw-orders/${orderId}`);
       else await (async () => await fetchLatestAndNavigate())();
     } catch (err) {
-      const errorMessage =
-        err.response?.status === 400
-          ? err.response?.data?.error || "Invalid order request."
-          : err.response?.status === 401
-          ? "Authentication failed. Please log in again."
-          : "Failed to create order.";
-      toast.error(errorMessage, { position: "top-right", autoClose: 3000 });
+      const errorMessage = err.response?.data?.error || "";
+      
+      // Check if this is a duplicate order error
+      const duplicateOrderRegex = /You already have an active withdraw order.*Order #(\d+)/;
+      const match = errorMessage.match(duplicateOrderRegex);
+      
+      if (match && err.response?.status === 400) {
+        // Extract order ID from error message
+        const orderId = match[1];
+        setDuplicateOrderInfo({
+          orderId,
+          amount: amountNum,
+        });
+      } else {
+        // Show toast for other errors
+        const fallbackMessage =
+          err.response?.status === 400
+            ? errorMessage || "Invalid order request."
+            : err.response?.status === 401
+            ? "Authentication failed. Please log in again."
+            : "Failed to create order.";
+        toast.error(fallbackMessage, { position: "top-right", autoClose: 3000 });
+      }
     } finally {
       setPlacingOrder(false);
     }
@@ -383,14 +404,20 @@ export default function WithdrawOffers() {
         {selectedOffer && (
           <div
             className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
-            onClick={() => setSelectedOffer(null)}
+            onClick={() => {
+              setSelectedOffer(null);
+              setDuplicateOrderInfo(null);
+            }}
           >
             <div
               className="bg-gray-900 p-6 rounded-2xl w-full max-w-sm relative border border-gray-700 shadow-lg"
               onClick={(e) => e.stopPropagation()}
             >
               <button
-                onClick={() => setSelectedOffer(null)}
+                onClick={() => {
+                  setSelectedOffer(null);
+                  setDuplicateOrderInfo(null);
+                }}
                 className="absolute top-3 right-3 text-gray-400 hover:text-white text-lg"
               >
                 X
@@ -416,6 +443,28 @@ export default function WithdrawOffers() {
                   {((selectedOffer.merchant_profile?.success_rate || 0) * 1).toFixed(2)}%
                 </span>
               </p>
+
+              {/* Duplicate Order Alert */}
+              {duplicateOrderInfo && (
+                <DuplicateOrderAlert
+                  orderId={duplicateOrderInfo.orderId}
+                  amount={duplicateOrderInfo.amount}
+                  orderType="withdraw"
+                  onViewOrder={() => {
+                    navigate(`/p2p/withdraw-orders/${duplicateOrderInfo.orderId}`);
+                  }}
+                  onCancelOrder={() => {
+                    // Navigate to the order page where they can cancel it
+                    navigate(`/p2p/withdraw-orders/${duplicateOrderInfo.orderId}`);
+                  }}
+                  onTryDifferentAmount={() => {
+                    // Reset the form
+                    setAmount("");
+                    setDuplicateOrderInfo(null);
+                  }}
+                  onClose={() => setDuplicateOrderInfo(null)}
+                />
+              )}
 
               {/* Warn user if they have no receiving account and give CTA */}
               {!hasReceivingAccount && (
