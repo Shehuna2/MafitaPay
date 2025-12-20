@@ -13,6 +13,7 @@ import {
 import { Dialog } from "@headlessui/react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import useAudioNotification from "../../hooks/useAudioNotification";
 
 export default function MerchantOrders() {
   const navigate = useNavigate();
@@ -30,9 +31,8 @@ export default function MerchantOrders() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelTarget, setCancelTarget] = useState(null);
 
-
-  // Audio for new order notification
-  const notificationSound = new Audio("/assets/sounds/notification.mp3");
+  // Use audio notification hook
+  const { playNotification } = useAudioNotification();
 
   // Retrieve user from localStorage
   const getStoredUser = () => {
@@ -83,7 +83,7 @@ export default function MerchantOrders() {
              (o.type === "withdraw" && o.status === "pending"))
         );
         if (newOrders.length > 0) {
-          notificationSound.play().catch((err) => console.error("Audio play failed:", err));
+          playNotification();
         }
       }
 

@@ -13,12 +13,18 @@ import {
 } from "lucide-react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import useAudioNotification from "../../hooks/useAudioNotification";
 
 export default function MerchantDepositOrders() {
   const [orders, setOrders] = useState([]);
+  const [prevOrders, setPrevOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+
+  // Use audio notification hook
+  const { playNotification } = useAudioNotification();
 
   // ✅ Fetch merchant orders
   const fetchOrders = async () => {
@@ -29,12 +35,27 @@ export default function MerchantDepositOrders() {
         : Array.isArray(res.data.results)
         ? res.data.results
         : [];
+      
+      // Detect new paid orders for audio notification
+      if (!isInitialLoading && prevOrders.length > 0) {
+        const prevOrderIds = new Set(prevOrders.map((o) => o.id));
+        const newPaidOrders = data.filter(
+          (o) => !prevOrderIds.has(o.id) && o.status === "paid"
+        );
+        if (newPaidOrders.length > 0) {
+          playNotification();
+          toast.info(`${newPaidOrders.length} new paid order(s) received!`);
+        }
+      }
+      
       setOrders(data);
+      setPrevOrders(data);
     } catch (err) {
       console.error("❌ Error loading orders:", err);
       setError(err.response?.data?.error || "Failed to load orders.");
     } finally {
       setLoading(false);
+      setIsInitialLoading(false);
     }
   };
 
@@ -124,7 +145,6 @@ export default function MerchantDepositOrders() {
                   <p className="font-semibold text-lg">Order #{order.id}</p>
 
                 {renderStatusBadge(order.status)}
-              </div>
                 <p className="text-sm text-gray-400">
                   Buyer: <span className="text-white">{buyer}</span>
                 </p>
