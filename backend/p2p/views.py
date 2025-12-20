@@ -20,6 +20,9 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
+# Active order statuses that block duplicate order creation with the same amount
+ACTIVE_ORDER_STATUSES = ['pending', 'paid']
+
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10  # Number of offers per page
     page_size_query_param = 'page_size'
@@ -143,6 +146,20 @@ class CreateDepositOrderAPIView(APIView):
             return Response(
                 {
                     "error": f"Amount must be between ₦{sell_offer.min_amount} and ₦{sell_offer.max_amount}"
+                },
+                status=400,
+            )
+
+        # Check for active deposit orders with the same amount
+        existing_order = DepositOrder.objects.filter(
+            buyer=user,
+            amount_requested=amount,
+            status__in=ACTIVE_ORDER_STATUSES
+        ).first()
+        if existing_order:
+            return Response(
+                {
+                    "error": f"You already have an active deposit order with amount ₦{amount}. Please complete or cancel your existing order (Order #{existing_order.id}) before placing a new one with the same amount."
                 },
                 status=400,
             )
@@ -420,6 +437,20 @@ class CreateWithdrawOrderAPIView(APIView):
             return Response(
                 {
                     "error": f"Amount must be between {buy_offer.min_amount} and {buy_offer.max_amount}"
+                },
+                status=400,
+            )
+
+        # Check for active withdraw orders with the same amount
+        existing_order = WithdrawOrder.objects.filter(
+            seller=user,
+            amount_requested=amount,
+            status__in=ACTIVE_ORDER_STATUSES
+        ).first()
+        if existing_order:
+            return Response(
+                {
+                    "error": f"You already have an active withdraw order with amount ₦{amount}. Please complete or cancel your existing order (Order #{existing_order.id}) before placing a new one with the same amount."
                 },
                 status=400,
             )
