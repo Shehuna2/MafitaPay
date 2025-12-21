@@ -269,12 +269,20 @@ class TonWallet:
 # -----------------------------------------------------------
 
 # Create singleton TON wallet instance
-api = TonAPI(
-    primary="https://toncenter.com/api/v2/jsonRPC",
-    secondary="https://tonapi.io/api/v2/jsonRPC",
-    api_key=os.getenv("TON_API_KEY")
-)
-WALLET = TonWallet(mnemonic=os.getenv("TON_MNEMONIC").split(), api=api)
+TON_MNEMONIC = os.getenv("TON_MNEMONIC")
+TON_API_KEY = os.getenv("TON_API_KEY")
+
+if TON_MNEMONIC and TON_API_KEY:
+    api = TonAPI(
+        primary="https://toncenter.com/api/v2/jsonRPC",
+        secondary="https://tonapi.io/api/v2/jsonRPC",
+        api_key=TON_API_KEY
+    )
+    WALLET = TonWallet(mnemonic=TON_MNEMONIC.split(), api=api)
+else:
+    api = None
+    WALLET = None
+    logger.warning("TON credentials not available - TON features disabled")
 
 
 def send_ton(receiver_address: str, amount_ton: float, order_id=None):
@@ -282,6 +290,8 @@ def send_ton(receiver_address: str, amount_ton: float, order_id=None):
     Backward-compatible adapter for old code.
     Converts float → TonAmount and calls the new service.
     """
+    if not WALLET:
+        raise ValueError("TON wallet not initialized - credentials missing")
     amount = TonAmount.from_float(amount_ton)
     return WALLET.send(receiver_address, amount, order_id)
 

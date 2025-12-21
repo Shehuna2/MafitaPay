@@ -11,9 +11,13 @@ from .utils import get_env_var
 logger = logging.getLogger(__name__)
 
 # NEAR configuration
-NEAR_RPC_URL = get_env_var("NEAR_RPC_URL", required=True)  # e.g., "https://rpc.mainnet.near.org"
-NEAR_PRIVATE_KEY = get_env_var("NEAR_PRIVATE_KEY", required=True).strip('"')
-NEAR_ACCOUNT_ID = get_env_var("NEAR_ACCOUNT_ID", required=True)
+NEAR_RPC_URL = get_env_var("NEAR_RPC_URL", required=False)
+NEAR_PRIVATE_KEY = get_env_var("NEAR_PRIVATE_KEY", required=False)
+NEAR_ACCOUNT_ID = get_env_var("NEAR_ACCOUNT_ID", required=False)
+
+if NEAR_PRIVATE_KEY:
+    NEAR_PRIVATE_KEY = NEAR_PRIVATE_KEY.strip('"')
+
 
 
 # Persistent background event loop for all NEAR RPC activity

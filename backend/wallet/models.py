@@ -281,4 +281,44 @@ class Notification(models.Model):
         return f"{self.user.email}: {self.message[:50]}"
 
 
+class TransactionSecurityLog(models.Model):
+    """Audit log for transaction security events (PIN/biometric verification)"""
+    ACTION_CHOICES = [
+        ('pin_verify_success', 'PIN Verification Success'),
+        ('pin_verify_failed', 'PIN Verification Failed'),
+        ('pin_setup', 'PIN Setup'),
+        ('pin_change', 'PIN Change'),
+        ('pin_reset_request', 'PIN Reset Request'),
+        ('pin_reset_complete', 'PIN Reset Complete'),
+        ('pin_locked', 'PIN Locked'),
+        ('pin_unlocked', 'PIN Unlocked'),
+        ('biometric_verify_success', 'Biometric Verification Success'),
+        ('biometric_verify_failed', 'Biometric Verification Failed'),
+        ('biometric_enrolled', 'Biometric Enrolled'),
+        ('biometric_disabled', 'Biometric Disabled'),
+        ('transaction_approved', 'Transaction Approved'),
+        ('transaction_denied', 'Transaction Denied'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='security_logs')
+    action = models.CharField(max_length=30, choices=ACTION_CHOICES)
+    transaction_type = models.CharField(max_length=20, blank=True, null=True)  # withdrawal, payment, etc.
+    transaction_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    verification_method = models.CharField(max_length=20, blank=True, null=True)  # pin, biometric
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    user_agent = models.CharField(max_length=255, blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'action']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.get_action_display()} at {self.created_at}"
+
+
 

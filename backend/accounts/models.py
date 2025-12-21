@@ -3,9 +3,12 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.contrib.auth.hashers import make_password, check_password
+from django.utils import timezone
 from wallet.models import Wallet
 import logging
 import uuid
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +53,18 @@ class User(AbstractUser):
     webauthn_public_key = models.TextField(blank=True, null=True)
     webauthn_sign_count = models.PositiveIntegerField(default=0)  # optional: track replay attacks
 
+    # Transaction PIN fields
+    transaction_pin = models.CharField(max_length=128, blank=True, null=True)
+    pin_attempts = models.PositiveIntegerField(default=0)
+    pin_locked_until = models.DateTimeField(null=True, blank=True)
+    last_pin_change = models.DateTimeField(null=True, blank=True)
+    pin_reset_token = models.CharField(max_length=32, blank=True, null=True)
+    pin_reset_token_expiry = models.DateTimeField(null=True, blank=True)
+
+    # Biometric authentication fields
+    biometric_enabled = models.BooleanField(default=False)
+    biometric_registered_at = models.DateTimeField(null=True, blank=True)
+
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
@@ -73,6 +88,80 @@ class User(AbstractUser):
     def __str__(self):
         role = "Merchant" if self.is_merchant else "Regular User"
         return f"{self.email} - {role}"
+
+    def set_transaction_pin(self, pin):
+        """Set the transaction PIN (hashed)"""
+        if not pin or len(str(pin)) != 4 or not str(pin).isdigit():
+            raise ValueError("PIN must be exactly 4 digits")
+        self.transaction_pin = make_password(str(pin))
+        self.last_pin_change = timezone.now()
+        self.pin_attempts = 0
+        self.pin_locked_until = None
+        self.save(update_fields=['transaction_pin', 'last_pin_change', 'pin_attempts', 'pin_locked_until'])
+        logger.info(f"Transaction PIN set for user {self.email}")
+
+    def check_transaction_pin(self, pin):
+        """Verify the transaction PIN"""
+        # Check if PIN is locked
+        if self.pin_locked_until and timezone.now() < self.pin_locked_until:
+            remaining = (self.pin_locked_until - timezone.now()).seconds // 60
+            raise ValueError(f"PIN is locked. Try again in {remaining} minutes")
+
+        # Check if PIN is set
+        if not self.transaction_pin:
+            raise ValueError("Transaction PIN not set")
+
+        # Verify PIN
+        is_valid = check_password(str(pin), self.transaction_pin)
+        
+        if is_valid:
+            # Reset attempts on successful verification
+            self.pin_attempts = 0
+            self.save(update_fields=['pin_attempts'])
+            logger.info(f"Transaction PIN verified for user {self.email}")
+            return True
+        else:
+            # Increment failed attempts
+            self.pin_attempts += 1
+            
+            # Lock PIN after 5 failed attempts
+            if self.pin_attempts >= 5:
+                self.pin_locked_until = timezone.now() + timedelta(minutes=30)
+                logger.warning(f"Transaction PIN locked for user {self.email} due to too many failed attempts")
+            
+            self.save(update_fields=['pin_attempts', 'pin_locked_until'])
+            logger.warning(f"Failed PIN attempt for user {self.email}. Attempts: {self.pin_attempts}")
+            return False
+
+    def has_transaction_pin(self):
+        """Check if user has set a transaction PIN"""
+        return bool(self.transaction_pin)
+
+    def is_pin_locked(self):
+        """Check if PIN is currently locked"""
+        if self.pin_locked_until and timezone.now() < self.pin_locked_until:
+            return True
+        return False
+
+    def unlock_pin(self):
+        """Unlock the PIN (admin or after timeout)"""
+        self.pin_attempts = 0
+        self.pin_locked_until = None
+        self.save(update_fields=['pin_attempts', 'pin_locked_until'])
+        logger.info(f"Transaction PIN unlocked for user {self.email}")
+
+    def enable_biometric(self):
+        """Enable biometric authentication"""
+        self.biometric_enabled = True
+        self.biometric_registered_at = timezone.now()
+        self.save(update_fields=['biometric_enabled', 'biometric_registered_at'])
+        logger.info(f"Biometric authentication enabled for user {self.email}")
+
+    def disable_biometric(self):
+        """Disable biometric authentication"""
+        self.biometric_enabled = False
+        self.save(update_fields=['biometric_enabled'])
+        logger.info(f"Biometric authentication disabled for user {self.email}")
         
 
 class UserProfile(models.Model):
