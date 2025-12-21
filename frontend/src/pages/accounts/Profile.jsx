@@ -1,457 +1,326 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import './Profile.css';
+// src/pages/accounts/Profile.jsx
+import React, { useEffect, useState, useCallback } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import client from "../../api/client";
+import {
+  User,
+  Loader2,
+  CheckCircle2,
+  LogOut,
+  MessageCircle,
+  ArrowLeft,
+} from "lucide-react";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { useAuth } from "../../context/AuthContext";
 
-const Profile = () => {
+export default function Profile() {
+  const { user: authUser, logout } = useAuth();
   const navigate = useNavigate();
-  const [profileData, setProfileData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phoneNumber: '',
-    profilePicture: '',
-  });
-  
-  const [securitySettings, setSecuritySettings] = useState({
-    pinEnabled: false,
-    biometricEnabled: false,
-    pinSetup: false,
-    biometricSetup: false,
+
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [isEdited, setIsEdited] = useState(false);
+
+  const [formData, setFormData] = useState({
+    full_name: "",
+    phone_number: "",
+    date_of_birth: "",
+    account_no: "",
+    bank_name: "",
   });
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [showPINModal, setShowPINModal] = useState(false);
-  const [showBiometricModal, setShowBiometricModal] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-  const [pinConfirm, setPinConfirm] = useState('');
-  const [pinError, setPinError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const normalizeProfile = (data) => {
+    // Build a normalized profile object that always has full_name
+    const first = data.first_name || data.profile?.first_name || "";
+    const last = data.last_name || data.profile?.last_name || "";
+    const apiFull = (data.full_name || "").trim();
+    const computedFull = `${first} ${last}`.trim();
+    const full_name = apiFull || computedFull || "";
 
-  useEffect(() => {
-    fetchProfileData();
-    fetchSecuritySettings();
+    return {
+      ...data,
+      full_name,
+    };
+  };
+
+  const fetchProfile = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data: raw } = await client.get("profile-api/");
+      const data = normalizeProfile(raw || {});
+      setProfile(data);
+
+      // EXACT same field names as your original — guaranteed no breakage
+      setFormData({
+        full_name: data.full_name || "",
+        phone_number: data.phone_number || "",
+        date_of_birth: data.date_of_birth ? data.date_of_birth.split("T")[0] : "",
+        account_no: data.account_no || "",
+        bank_name: data.bank_name || "",
+      });
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to load profile");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const fetchProfileData = async () => {
-    try {
-      const response = await axios.get('/api/accounts/profile', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      setProfileData(response.data);
-    } catch (error) {
-      console.error('Error fetching profile data:', error);
-      setErrorMessage('Failed to load profile data');
-    }
-  };
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
-  const fetchSecuritySettings = async () => {
-    try {
-      const response = await axios.get('/api/accounts/security-settings', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      setSecuritySettings(response.data);
-    } catch (error) {
-      console.error('Error fetching security settings:', error);
-    }
-  };
+  // Detect unsaved changes safely
+  useEffect(() => {
+    if (!profile) return;
+    const hasChanges = Object.keys(formData).some(key => {
+      const current = formData[key];
+      const original = key === "date_of_birth"
+        ? (profile[key]?.split?.("T")?.[0] || "")
+        : (profile[key] || "");
+      return String(current) !== String(original);
+    });
+    setIsEdited(hasChanges);
+  }, [formData, profile]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setProfileData({
-      ...profileData,
-      [name]: value,
-    });
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSaveProfile = async () => {
-    setIsSavingProfile(true);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!isEdited) return;
+
+    setSubmitting(true);
     try {
-      const response = await axios.put('/api/accounts/profile', profileData, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
+      const data = new FormData();
+      // Only send fields that have values — exactly like your original
+      Object.keys(formData).forEach(key => {
+        if (formData[key]) {
+          data.append(key, formData[key]);
+        }
       });
-      setProfileData(response.data);
-      setIsEditing(false);
-      setSuccessMessage('Profile updated successfully!');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
-      console.error('Error saving profile:', error);
-      setErrorMessage('Failed to save profile');
+
+      const response = await client.patch("profile-api/", data, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const normalized = normalizeProfile(response.data || {});
+      setProfile(normalized);
+      toast.success("Profile updated successfully!");
+      setIsEdited(false);
+
+      // Sync localstorage + global user if needed
+      try {
+        const stored = JSON.parse(localStorage.getItem("user") || "{}");
+        const merged = { ...stored, ...normalized };
+        localStorage.setItem("user", JSON.stringify(merged));
+        // notify other tabs
+        window.dispatchEvent(new Event("userUpdated"));
+      } catch (e) {
+        // ignore localStorage sync errors
+      }
+    } catch (err) {
+      const msg = err.response?.data?.detail ||
+        (err.response?.data && Object.values(err.response.data)[0]) ||
+        "Failed to update profile";
+      toast.error(msg);
     } finally {
-      setIsSavingProfile(false);
+      setSubmitting(false);
     }
   };
 
-  const handlePINSetup = async () => {
-    if (!pinInput || !pinConfirm) {
-      setPinError('Both PIN fields are required');
-      return;
-    }
-
-    if (pinInput !== pinConfirm) {
-      setPinError('PINs do not match');
-      return;
-    }
-
-    if (pinInput.length < 4 || pinInput.length > 6) {
-      setPinError('PIN must be between 4 and 6 digits');
-      return;
-    }
-
-    if (!/^\d+$/.test(pinInput)) {
-      setPinError('PIN must contain only numbers');
-      return;
-    }
-
-    try {
-      await axios.post(
-        '/api/accounts/security-settings/setup-pin',
-        { pin: pinInput },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        }
-      );
-
-      setSecuritySettings({
-        ...securitySettings,
-        pinEnabled: true,
-        pinSetup: true,
-      });
-
-      setPinInput('');
-      setPinConfirm('');
-      setPinError('');
-      setShowPINModal(false);
-      setSuccessMessage('PIN setup successfully!');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
-      console.error('Error setting up PIN:', error);
-      setPinError(error.response?.data?.message || 'Failed to setup PIN');
-    }
+  const handleLogout = () => {
+    logout();
+    toast.success("Logged out successfully");
+    navigate("/login");
   };
 
-  const handleBiometricToggle = async () => {
-    try {
-      const endpoint = securitySettings.biometricEnabled
-        ? '/api/accounts/security-settings/disable-biometric'
-        : '/api/accounts/security-settings/enable-biometric';
+  const whatsappMessage = authUser
+    ? encodeURIComponent(`Hi, I am ${authUser.email}. I want to apply to become a merchant on MafitaPay.`)
+    : encodeURIComponent("Hi, I want to apply to become a merchant on MafitaPay.");
 
-      await axios.post(
-        endpoint,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        }
-      );
+  if (loading) return <ProfileSkeleton />;
+  if (!profile) return <div className="text-center text-gray-400 py-20">Profile not found.</div>;
 
-      setSecuritySettings({
-        ...securitySettings,
-        biometricEnabled: !securitySettings.biometricEnabled,
-      });
-
-      const action = securitySettings.biometricEnabled ? 'disabled' : 'enabled';
-      setSuccessMessage(`Biometric authentication ${action} successfully!`);
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
-      console.error('Error toggling biometric:', error);
-      setErrorMessage('Failed to update biometric settings');
-    }
-  };
-
-  const handleDisablePIN = async () => {
-    try {
-      await axios.post(
-        '/api/accounts/security-settings/disable-pin',
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        }
-      );
-
-      setSecuritySettings({
-        ...securitySettings,
-        pinEnabled: false,
-      });
-
-      setSuccessMessage('PIN disabled successfully!');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
-      console.error('Error disabling PIN:', error);
-      setErrorMessage('Failed to disable PIN');
-    }
-  };
+  const successRate = profile.success_rate?.toFixed(1) || "0.0";
 
   return (
-    <div className="profile-container">
-      <div className="profile-header">
-        <h1>My Account</h1>
-      </div>
+    <>
+      <ToastContainer position="top-center" theme="dark" autoClose={3000} />
 
-      {successMessage && (
-        <div className="alert alert-success">
-          {successMessage}
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="alert alert-error">
-          {errorMessage}
-        </div>
-      )}
-
-      {/* Profile Information Section */}
-      <div className="profile-section">
-        <h2>Profile Information</h2>
-        
-        {isEditing ? (
-          <div className="profile-form">
-            <div className="form-group">
-              <label htmlFor="firstName">First Name</label>
-              <input
-                type="text"
-                id="firstName"
-                name="firstName"
-                value={profileData.firstName}
-                onChange={handleInputChange}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="lastName">Last Name</label>
-              <input
-                type="text"
-                id="lastName"
-                name="lastName"
-                value={profileData.lastName}
-                onChange={handleInputChange}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="email">Email</label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={profileData.email}
-                onChange={handleInputChange}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="phoneNumber">Phone Number</label>
-              <input
-                type="tel"
-                id="phoneNumber"
-                name="phoneNumber"
-                value={profileData.phoneNumber}
-                onChange={handleInputChange}
-              />
-            </div>
-
-            <div className="form-actions">
-              <button
-                className="btn btn-primary"
-                onClick={handleSaveProfile}
-                disabled={isSavingProfile}
-              >
-                {isSavingProfile ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                className="btn btn-secondary"
-                onClick={() => {
-                  setIsEditing(false);
-                  fetchProfileData();
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="profile-view">
-            <div className="profile-item">
-              <span className="label">First Name:</span>
-              <span className="value">{profileData.firstName}</span>
-            </div>
-            <div className="profile-item">
-              <span className="label">Last Name:</span>
-              <span className="value">{profileData.lastName}</span>
-            </div>
-            <div className="profile-item">
-              <span className="label">Email:</span>
-              <span className="value">{profileData.email}</span>
-            </div>
-            <div className="profile-item">
-              <span className="label">Phone Number:</span>
-              <span className="value">{profileData.phoneNumber}</span>
-            </div>
-
-            <button
-              className="btn btn-primary"
-              onClick={() => setIsEditing(true)}
-            >
-              Edit Profile
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Security Settings Section */}
-      <div className="profile-section security-section">
-        <h2>Security Settings</h2>
-
-        {/* PIN Settings */}
-        <div className="security-setting">
-          <div className="setting-info">
-            <h3>PIN Protection</h3>
-            <p>Protect your account with a personal identification number</p>
-            <p className="status">
-              Status: {securitySettings.pinEnabled ? (
-                <span className="status-enabled">Enabled</span>
-              ) : (
-                <span className="status-disabled">Disabled</span>
-              )}
-            </p>
-          </div>
-
-          <div className="setting-actions">
-            {securitySettings.pinEnabled ? (
-              <button
-                className="btn btn-danger"
-                onClick={handleDisablePIN}
-              >
-                Disable PIN
-              </button>
-            ) : (
-              <button
-                className="btn btn-primary"
-                onClick={() => setShowPINModal(true)}
-              >
-                Setup PIN
-              </button>
-            )}
+      <div className="min-h-screen bg-gray-950 text-white">
+        {/* Sticky Header */}
+        <div className="sticky top-0 z-10 bg-gray-950/95 backdrop-blur border-b border-gray-800">
+          <div className="max-w-5xl mx-auto px-4 py-5 flex items-center justify-between">
+            <h1 className="text-2xl font-bold flex items-center gap-3">
+              <User className="w-7 h-7 text-indigo-400" />
+              My Profile
+            </h1>
+            <Link to="/dashboard" className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 text-sm">
+              <ArrowLeft className="w-5 h-5" />
+              <span className="hidden xs:inline">Dashboard</span>
+            </Link>
           </div>
         </div>
 
-        {/* Biometric Settings */}
-        <div className="security-setting">
-          <div className="setting-info">
-            <h3>Biometric Authentication</h3>
-            <p>Use fingerprint or face recognition for quick access</p>
-            <p className="status">
-              Status: {securitySettings.biometricEnabled ? (
-                <span className="status-enabled">Enabled</span>
-              ) : (
-                <span className="status-disabled">Disabled</span>
-              )}
-            </p>
-          </div>
-
-          <div className="setting-actions">
-            <button
-              className={`btn ${securitySettings.biometricEnabled ? 'btn-danger' : 'btn-primary'}`}
-              onClick={handleBiometricToggle}
-            >
-              {securitySettings.biometricEnabled ? 'Disable' : 'Enable'} Biometric
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* PIN Setup Modal */}
-      {showPINModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h2>Setup PIN</h2>
-              <button
-                className="close-btn"
-                onClick={() => {
-                  setShowPINModal(false);
-                  setPinInput('');
-                  setPinConfirm('');
-                  setPinError('');
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="modal-body">
-              {pinError && (
-                <div className="alert alert-error">
-                  {pinError}
-                </div>
-              )}
-
-              <div className="form-group">
-                <label htmlFor="pin">Enter PIN (4-6 digits)</label>
-                <input
-                  type="password"
-                  id="pin"
-                  value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value)}
-                  placeholder="Enter your PIN"
-                  maxLength="6"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="pinConfirm">Confirm PIN</label>
-                <input
-                  type="password"
-                  id="pinConfirm"
-                  value={pinConfirm}
-                  onChange={(e) => setPinConfirm(e.target.value)}
-                  placeholder="Confirm your PIN"
-                  maxLength="6"
-                />
-              </div>
-
-              <p className="pin-hint">
-                Your PIN will be required for sensitive transactions and settings changes
+        <div className="max-w-5xl mx-auto px-4 py-6 space-y-8">
+          {/* Merchant CTA */}
+          {!authUser?.is_merchant && (
+            <div className="bg-gradient-to-r from-emerald-900/40 to-teal-900/30 border border-emerald-700/50 rounded-2xl p-6 text-center">
+              <h3 className="text-lg font-bold mb-2">Become a Merchant</h3>
+              <p className="text-gray-300 mb-5 text-sm">
+                Contact support to start accepting payments
               </p>
+              <a
+                href={`https://wa.me/+2348168623961?text=${whatsappMessage}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-3 bg-green-600 hover:bg-green-500 px-6 py-3.5 rounded-xl font-medium transition"
+              >
+                <MessageCircle className="w-5 h-5" />
+                Contact Support
+              </a>
+            </div>
+          )}
+
+          {/* Responsive Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            {/* Left: Summary Card */}
+            <div className="lg:col-span-1">
+              <div className="bg-gray-900/90 backdrop-blur border border-gray-800 rounded-2xl p-6 sticky top-24">
+                <div className="text-center mb-6">
+                  <div className="w-28 h-28 mx-auto mb-4 bg-gray-800 rounded-full flex items-center justify-center text-4xl font-bold text-gray-500">
+                    {profile.full_name ? profile.full_name.charAt(0).toUpperCase() : "U"}
+                  </div>
+                  <h3 className="mt-4 text-xl font-bold">{profile.full_name || "User"}</h3>
+                  <p className="text-gray-400 text-sm">{profile.email}</p>
+                </div>
+
+                <div className="space-y-4 text-sm">
+                  <InfoRow label="Role" value={profile.is_merchant ? "Merchant" : "Regular User"} />
+                  <InfoRow label="Total Trades" value={profile.total_trades || 0} />
+                  <InfoRow label="Successful" value={profile.successful_trades || 0} />
+                  <InfoRow 
+                    label="Success Rate" 
+                    value={<span className={parseFloat(successRate) >= 80 ? "text-green-400" : "text-yellow-400"}>{successRate}%</span>} 
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="modal-footer">
-              <button
-                className="btn btn-secondary"
-                onClick={() => {
-                  setShowPINModal(false);
-                  setPinInput('');
-                  setPinConfirm('');
-                  setPinError('');
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={handlePINSetup}
-              >
-                Setup PIN
-              </button>
+            {/* Right: Edit Form */}
+            <div className="lg:col-span-3">
+              <form onSubmit={handleSubmit} className="bg-gray-900/90 backdrop-blur border border-gray-800 rounded-2xl p-6">
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
+                  <User className="w-6 h-6 text-indigo-400" />
+                  Edit Profile
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {[
+                    { label: "Full Name", name: "full_name", type: "text", placeholder: "Enter full name" },
+                    { label: "Phone Number", name: "phone_number", type: "text", placeholder: "e.g., +2341234567890" },
+                    { label: "Date of Birth", name: "date_of_birth", type: "date", placeholder: "" },
+                    { label: "Bank Name", name: "bank_name", type: "text", placeholder: "Enter bank name" },
+                    { label: "Account Number", name: "account_no", type: "text", placeholder: "Enter account number" },
+                  ].map(({ label, name, type, placeholder }) => (
+                    <div key={name} className="space-y-2">
+                      <label className="text-sm text-gray-400">{label}</label>
+                      <input
+                        type={type}
+                        name={name}
+                        value={formData[name]}
+                        onChange={handleInputChange}
+                        placeholder={placeholder}
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+                  <button
+                    type="submit"
+                    disabled={submitting || !isEdited}
+                    className="px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 rounded-xl font-medium flex items-center justify-center gap-3 transition"
+                  >
+                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+                    {submitting ? "Saving..." : "Save Changes"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="px-8 py-3.5 bg-red-600 hover:bg-red-500 rounded-xl font-medium flex items-center justify-center gap-3 transition"
+                  >
+                    <LogOut className="w-5 h-5" />
+                    Logout
+                  </button>
+                </div>
+
+                {isEdited && (
+                  <p className="text-center text-green-400 text-sm mt-4 animate-pulse">
+                    You have unsaved changes
+                  </p>
+                )}
+              </form>
             </div>
           </div>
+
+          {/* Mobile Bottom Bar */}
+          <div className="fixed bottom-0 left-0 right-0 bg-gray-950/95 backdrop-blur border-t border-gray-800 px-4 py-4 sm:hidden z-10">
+            <Link to="/dashboard" className="flex items-center justify-center gap-2 text-indigo-400 font-medium">
+              <ArrowLeft className="w-5 h-5" />
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
-      )}
+      </div>
+    </>
+  );
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <div className="flex justify-between py-3 border-b border-gray-800 last:border-none">
+      <span className="text-gray-400">{label}:</span>
+      <span className="font-medium">{value}</span>
     </div>
   );
-};
+}
 
-export default Profile;
+function ProfileSkeleton() {
+  return (
+    <div className="min-h-screen bg-gray-950">
+      <style jsx>{`
+        @keyframes shimmer {
+          0% { background-position: -1000px 0; }
+          100% { background-position: 1000px 0; }
+        }
+        .shimmer { background: linear-gradient(to right, #1f2937 8%, #374151 18%, #1f2937 33%); background-size: 1000px 100%; animation: shimmer 1.8s infinite linear; }
+      `}</style>
+      <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+        <div className="h-10 w-64 bg-gray-800 rounded-2xl shimmer mx-auto" />
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          <div className="bg-gray-900/80 rounded-2xl p-6 space-y-6">
+            <div className="w-28 h-28 mx-auto bg-gray-800 rounded-full shimmer" />
+            <div className="space-y-3"><div className="h-6 w-32 mx-auto bg-gray-800 rounded shimmer" /></div>
+          </div>
+          <div className="lg:col-span-3 bg-gray-900/80 rounded-2xl p-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {Array(5).fill().map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <div className="h-4 w-24 bg-gray-800 rounded shimmer" />
+                  <div className="h-12 w-full bg-gray-800 rounded-xl shimmer" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
