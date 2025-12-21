@@ -343,13 +343,12 @@ class PINResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
     def validate_email(self, value):
+        """
+        Validate email format only. 
+        Don't reveal whether email exists to prevent user enumeration.
+        Actual validation happens in the view.
+        """
         value = value.lower().strip()
-        try:
-            user = User.objects.get(email=value)
-            if not user.has_transaction_pin():
-                raise serializers.ValidationError("No transaction PIN set for this account.")
-        except User.DoesNotExist:
-            raise serializers.ValidationError("No account found with this email.")
         return value
 
 

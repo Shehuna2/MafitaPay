@@ -6,6 +6,7 @@ import {
   FingerprintIcon,
   CheckCircleIcon,
   XCircleIcon,
+  XIcon,
   AlertTriangleIcon,
   SettingsIcon
 } from 'lucide-react';

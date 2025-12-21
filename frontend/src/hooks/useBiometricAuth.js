@@ -79,17 +79,29 @@ export default function useBiometricAuth() {
       const token = localStorage.getItem("access");
       const user = JSON.parse(localStorage.getItem("user") || "{}");
 
+      // NOTE: In production, the challenge should be fetched from the server
+      // to prevent replay attacks. This is a simplified implementation for MVP.
+      // TODO: Implement server-side challenge generation endpoint
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      
+      // Generate a unique user ID from email (deterministic)
+      const userIdString = user.email || "user@mafitapay.com";
+      const encoder = new TextEncoder();
+      const userIdBuffer = encoder.encode(userIdString).slice(0, 16);
+      const userId = new Uint8Array(16);
+      userId.set(userIdBuffer);
+
       // Create credential
       const publicKeyCredentialCreationOptions = {
-        challenge: new Uint8Array(32), // Should come from server in production
+        challenge: challenge,
         rp: {
           name: "MafitaPay",
           id: window.location.hostname,
         },
         user: {
-          id: new Uint8Array(16),
-          name: user.email || "user@mafitapay.com",
-          displayName: user.email || "MafitaPay User",
+          id: userId,
+          name: userIdString,
+          displayName: userIdString,
         },
         pubKeyCredParams: [
           { alg: -7, type: "public-key" }, // ES256
@@ -172,9 +184,13 @@ export default function useBiometricAuth() {
     try {
       setChecking(true);
 
-      // Get challenge from server
+      // NOTE: In production, the challenge should be fetched from the server
+      // to prevent replay attacks. This is a simplified implementation for MVP.
+      // TODO: Implement server-side challenge generation and verification
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      
       const publicKeyCredentialRequestOptions = {
-        challenge: new Uint8Array(32),
+        challenge: challenge,
         timeout: 60000,
         userVerification: "required",
       };

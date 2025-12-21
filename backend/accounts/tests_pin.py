@@ -36,8 +36,8 @@ class PINManagementTestCase(TestCase):
     def test_pin_setup_success(self):
         """Test successful PIN setup"""
         response = self.client.post('/api/pin/setup/', {
-            'pin': '1234',
-            'pin_confirmation': '1234'
+            'pin': '8765',
+            'pin_confirmation': '8765'
         })
         
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -50,7 +50,7 @@ class PINManagementTestCase(TestCase):
     def test_pin_setup_mismatch(self):
         """Test PIN setup with mismatched confirmation"""
         response = self.client.post('/api/pin/setup/', {
-            'pin': '1234',
+            'pin': '8765',
             'pin_confirmation': '5678'
         })
         
