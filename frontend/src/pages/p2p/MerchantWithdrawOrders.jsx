@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import client from "../../api/client";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -10,31 +10,57 @@ import {
   RefreshCcw,
 } from "lucide-react";
 import "react-toastify/dist/ReactToastify.css";
+import useAudioNotification from "../../hooks/useAudioNotification";
 
 const P2P = (path) => `p2p/${path}`;
 
 export default function MerchantWithdrawOrders() {
   const [orders, setOrders] = useState([]);
+  const [prevOrders, setPrevOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
 
+  // Use audio notification hook
+  const { playNotification } = useAudioNotification();
+
   // Fetch merchant withdraw orders
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
       const res = await client.get(P2P("merchant-withdraw-orders/"));
       const data = res.data?.results || res.data || [];
-      setOrders(Array.isArray(data) ? data : []);
+      const ordersArray = Array.isArray(data) ? data : [];
+      
+      // Detect new pending orders for audio notification
+      if (!isInitialLoading && prevOrders.length > 0) {
+        const prevOrderIds = new Set(prevOrders.map((o) => o.id));
+        const newPendingOrders = ordersArray.filter(
+          (o) => !prevOrderIds.has(o.id) && o.status === "pending"
+        );
+        if (newPendingOrders.length > 0) {
+          playNotification();
+          toast.info(`${newPendingOrders.length} new pending withdraw order(s) received!`);
+        }
+      }
+      
+      setOrders(ordersArray);
+      setPrevOrders(ordersArray);
     } catch (err) {
+      console.error("Failed to load merchant withdraw orders:", err);
       toast.error("Failed to load merchant withdraw orders.");
     } finally {
       setLoading(false);
+      setIsInitialLoading(false);
     }
-  };
+  }, [isInitialLoading, prevOrders, playNotification]);
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+    // Poll for new orders every 10 seconds
+    const interval = setInterval(fetchOrders, 10000);
+    return () => clearInterval(interval);
+  }, [fetchOrders]);
 
   // Confirm release
   const confirmRelease = async (id) => {
@@ -45,6 +71,7 @@ export default function MerchantWithdrawOrders() {
       toast.success("Funds released successfully.");
       await fetchOrders();
     } catch (err) {
+      console.error("Failed to confirm release:", err);
       toast.error(err?.response?.data?.detail || "Failed to confirm release.");
     } finally {
       setProcessingId(null);
@@ -102,11 +129,16 @@ export default function MerchantWithdrawOrders() {
         <div className="text-gray-400">No withdraw orders yet.</div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {orders.map((o) => (
-            <div
-              key={o.id}
-              className="bg-gray-800 p-5 rounded-2xl shadow-md hover:shadow-lg transition space-y-3"
-            >
+          {orders.map((o) => {
+            const shouldAnimate = o.status === "pending";
+            
+            return (
+              <div
+                key={o.id}
+                className={`bg-gray-800 p-5 rounded-2xl shadow-md hover:shadow-lg transition space-y-3 ${
+                  shouldAnimate ? "animate-pulse-glow" : ""
+                }`}
+              >
               <div className="flex justify-between items-start">
                 <h3 className="text-lg font-semibold text-indigo-400">
                   ₦{Number(o.amount || 0).toLocaleString()}
@@ -154,7 +186,8 @@ export default function MerchantWithdrawOrders() {
                 </div>
               </div>
             </div>
-          ))}
+          );
+        })}
         </div>
       )}
     </div>

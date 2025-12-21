@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import client from "../../api/client";
 import {
@@ -13,15 +13,21 @@ import {
 } from "lucide-react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import useAudioNotification from "../../hooks/useAudioNotification";
 
 export default function MerchantDepositOrders() {
   const [orders, setOrders] = useState([]);
+  const [prevOrders, setPrevOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
+  // Use audio notification hook
+  const { playNotification } = useAudioNotification();
+
   // ✅ Fetch merchant orders
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       const res = await client.get("p2p/merchant-orders/");
       const data = Array.isArray(res.data)
@@ -29,20 +35,35 @@ export default function MerchantDepositOrders() {
         : Array.isArray(res.data.results)
         ? res.data.results
         : [];
+      
+      // Detect new paid orders for audio notification
+      if (!isInitialLoading && prevOrders.length > 0) {
+        const prevOrderIds = new Set(prevOrders.map((o) => o.id));
+        const newPaidOrders = data.filter(
+          (o) => !prevOrderIds.has(o.id) && o.status === "paid"
+        );
+        if (newPaidOrders.length > 0) {
+          playNotification();
+          toast.info(`${newPaidOrders.length} new paid order(s) received!`);
+        }
+      }
+      
       setOrders(data);
+      setPrevOrders(data);
     } catch (err) {
       console.error("❌ Error loading orders:", err);
       setError(err.response?.data?.error || "Failed to load orders.");
     } finally {
       setLoading(false);
+      setIsInitialLoading(false);
     }
-  };
+  }, [isInitialLoading, prevOrders, playNotification]);
 
   useEffect(() => {
     fetchOrders();
     const interval = setInterval(fetchOrders, 10000); // auto-refresh every 10s
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchOrders]);
 
   const handleConfirmOrder = async (orderId) => {
     try {
