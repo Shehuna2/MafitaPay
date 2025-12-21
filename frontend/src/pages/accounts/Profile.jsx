@@ -193,7 +193,7 @@ export default function Profile() {
               <div>
                 <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
                   <Shield className="w-5 h-5 text-blue-400" />
-                  Security &amp; Authentication
+                  Security & Authentication
                 </h3>
                 <p className="text-gray-300 text-sm">
                   Manage your PIN and biometric authentication settings
