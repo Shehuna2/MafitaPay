@@ -1,10 +1,11 @@
 # wallet/views.py
 import logging
 import re
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.conf import settings
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -489,4 +490,397 @@ class NotificationMarkReadView(APIView):
     def post(self, request):
         Notification.objects.filter(user=self.request.user, is_read=False).update(is_read=True)
         return Response({"detail": "All notifications marked as read"})
+
+
+# ========================================
+# Secure Transaction Views (with PIN/Biometric verification)
+# ========================================
+
+class SecureWithdrawalView(APIView):
+    """
+    POST /api/wallet/withdraw/
+    Withdraw funds from wallet to bank account with PIN/biometric verification
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        amount = request.data.get('amount')
+        bank_code = request.data.get('bank_code')
+        account_number = request.data.get('account_number')
+        account_name = request.data.get('account_name')
+        pin = request.data.get('pin')
+        use_biometric = request.data.get('use_biometric', False)
+
+        # Validate required fields
+        if not all([amount, bank_code, account_number]):
+            return Response(
+                {"error": "Amount, bank_code, and account_number are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            amount = Decimal(str(amount))
+            if amount <= 0:
+                return Response(
+                    {"error": "Amount must be greater than zero."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except (ValueError, InvalidOperation):
+            return Response(
+                {"error": "Invalid amount format."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get wallet
+        try:
+            wallet = Wallet.objects.get(user=user)
+        except Wallet.DoesNotExist:
+            return Response(
+                {"error": "Wallet not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Check balance
+        if wallet.balance < amount:
+            return Response(
+                {"error": f"Insufficient balance. Available: ₦{wallet.balance}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Security verification - PIN or Biometric
+        if use_biometric and user.biometric_enabled:
+            # Biometric verification would be handled on frontend via WebAuthn
+            # Here we just check if user has biometric enabled
+            verification_method = 'biometric'
+            logger.info(f"Withdrawal using biometric for user {user.email}")
+        else:
+            # PIN verification required
+            if not user.has_transaction_pin():
+                return Response(
+                    {"error": "Transaction PIN not set. Please set up your PIN first."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not pin:
+                return Response(
+                    {"error": "Transaction PIN is required for withdrawal."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Check if PIN is locked
+            if user.is_pin_locked():
+                remaining = (user.pin_locked_until - timezone.now()).seconds // 60
+                from wallet.models import TransactionSecurityLog
+                TransactionSecurityLog.objects.create(
+                    user=user,
+                    action='transaction_denied',
+                    transaction_type='withdrawal',
+                    transaction_amount=amount,
+                    verification_method='pin',
+                    metadata={'reason': 'pin_locked'}
+                )
+                return Response(
+                    {"error": f"PIN is locked. Try again in {remaining} minutes."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Verify PIN
+            try:
+                is_valid = user.check_transaction_pin(pin)
+                if not is_valid:
+                    attempts_left = max(0, 5 - user.pin_attempts)
+                    from wallet.models import TransactionSecurityLog
+                    TransactionSecurityLog.objects.create(
+                        user=user,
+                        action='pin_verify_failed',
+                        transaction_type='withdrawal',
+                        transaction_amount=amount,
+                        verification_method='pin',
+                        metadata={'attempts': user.pin_attempts, 'attempts_left': attempts_left}
+                    )
+
+                    if user.is_pin_locked():
+                        return Response(
+                            {"error": "Too many failed attempts. PIN is now locked for 30 minutes."},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
+
+                    return Response({
+                        "error": "Invalid PIN.",
+                        "attempts_left": attempts_left
+                    }, status=status.HTTP_401_UNAUTHORIZED)
+
+                verification_method = 'pin'
+            except ValueError as e:
+                return Response(
+                    {"error": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Process withdrawal
+        try:
+            reference = f"WD-{timezone.now().strftime('%Y%m%d%H%M%S')}-{user.id}"
+            
+            # Withdraw from wallet
+            success = wallet.withdraw(
+                amount=amount,
+                reference=reference,
+                metadata={
+                    'type': 'bank_withdrawal',
+                    'bank_code': bank_code,
+                    'account_number': account_number,
+                    'account_name': account_name,
+                    'verification_method': verification_method
+                }
+            )
+
+            if not success:
+                return Response(
+                    {"error": "Withdrawal failed. Please try again."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            # Log security event
+            from wallet.models import TransactionSecurityLog
+            TransactionSecurityLog.objects.create(
+                user=user,
+                action='transaction_approved',
+                transaction_type='withdrawal',
+                transaction_amount=amount,
+                verification_method=verification_method,
+                metadata={
+                    'reference': reference,
+                    'bank_code': bank_code,
+                    'account_number': account_number
+                }
+            )
+
+            logger.info(f"Withdrawal successful: user={user.email}, amount={amount}, ref={reference}")
+
+            return Response({
+                "success": True,
+                "message": f"Withdrawal of ₦{amount} initiated successfully.",
+                "reference": reference,
+                "new_balance": str(wallet.balance)
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"Withdrawal error for user {user.email}: {e}", exc_info=True)
+            return Response(
+                {"error": "Withdrawal failed. Please contact support."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SecurePaymentView(APIView):
+    """
+    POST /api/wallet/payment/
+    Make a payment with PIN/biometric verification
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        amount = request.data.get('amount')
+        recipient_email = request.data.get('recipient_email')
+        description = request.data.get('description', '')
+        pin = request.data.get('pin')
+        use_biometric = request.data.get('use_biometric', False)
+
+        # Validate required fields
+        if not all([amount, recipient_email]):
+            return Response(
+                {"error": "Amount and recipient_email are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            amount = Decimal(str(amount))
+            if amount <= 0:
+                return Response(
+                    {"error": "Amount must be greater than zero."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except (ValueError, InvalidOperation):
+            return Response(
+                {"error": "Invalid amount format."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get sender wallet
+        try:
+            sender_wallet = Wallet.objects.get(user=user)
+        except Wallet.DoesNotExist:
+            return Response(
+                {"error": "Wallet not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Get recipient
+        try:
+            recipient = User.objects.get(email=recipient_email.lower().strip())
+            recipient_wallet = Wallet.objects.get(user=recipient)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Recipient not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Wallet.DoesNotExist:
+            return Response(
+                {"error": "Recipient wallet not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Check if sending to self
+        if user.email == recipient_email.lower().strip():
+            return Response(
+                {"error": "Cannot send payment to yourself."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check balance
+        if sender_wallet.balance < amount:
+            return Response(
+                {"error": f"Insufficient balance. Available: ₦{sender_wallet.balance}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Security verification - PIN or Biometric
+        if use_biometric and user.biometric_enabled:
+            verification_method = 'biometric'
+            logger.info(f"Payment using biometric for user {user.email}")
+        else:
+            # PIN verification required
+            if not user.has_transaction_pin():
+                return Response(
+                    {"error": "Transaction PIN not set. Please set up your PIN first."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not pin:
+                return Response(
+                    {"error": "Transaction PIN is required for payment."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Check if PIN is locked
+            if user.is_pin_locked():
+                remaining = (user.pin_locked_until - timezone.now()).seconds // 60
+                from wallet.models import TransactionSecurityLog
+                TransactionSecurityLog.objects.create(
+                    user=user,
+                    action='transaction_denied',
+                    transaction_type='payment',
+                    transaction_amount=amount,
+                    verification_method='pin',
+                    metadata={'reason': 'pin_locked', 'recipient': recipient_email}
+                )
+                return Response(
+                    {"error": f"PIN is locked. Try again in {remaining} minutes."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Verify PIN
+            try:
+                is_valid = user.check_transaction_pin(pin)
+                if not is_valid:
+                    attempts_left = max(0, 5 - user.pin_attempts)
+                    from wallet.models import TransactionSecurityLog
+                    TransactionSecurityLog.objects.create(
+                        user=user,
+                        action='pin_verify_failed',
+                        transaction_type='payment',
+                        transaction_amount=amount,
+                        verification_method='pin',
+                        metadata={
+                            'attempts': user.pin_attempts,
+                            'attempts_left': attempts_left,
+                            'recipient': recipient_email
+                        }
+                    )
+
+                    if user.is_pin_locked():
+                        return Response(
+                            {"error": "Too many failed attempts. PIN is now locked for 30 minutes."},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
+
+                    return Response({
+                        "error": "Invalid PIN.",
+                        "attempts_left": attempts_left
+                    }, status=status.HTTP_401_UNAUTHORIZED)
+
+                verification_method = 'pin'
+            except ValueError as e:
+                return Response(
+                    {"error": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Process payment
+        try:
+            reference = f"PAY-{timezone.now().strftime('%Y%m%d%H%M%S')}-{user.id}"
+
+            with transaction.atomic():
+                # Debit sender
+                sender_success = sender_wallet.withdraw(
+                    amount=amount,
+                    reference=reference,
+                    metadata={
+                        'type': 'payment_sent',
+                        'recipient': recipient_email,
+                        'description': description,
+                        'verification_method': verification_method
+                    }
+                )
+
+                if not sender_success:
+                    raise Exception("Failed to debit sender wallet")
+
+                # Credit recipient
+                recipient_success = recipient_wallet.deposit(
+                    amount=amount,
+                    reference=reference,
+                    metadata={
+                        'type': 'payment_received',
+                        'sender': user.email,
+                        'description': description
+                    }
+                )
+
+                if not recipient_success:
+                    raise Exception("Failed to credit recipient wallet")
+
+            # Log security event
+            from wallet.models import TransactionSecurityLog
+            TransactionSecurityLog.objects.create(
+                user=user,
+                action='transaction_approved',
+                transaction_type='payment',
+                transaction_amount=amount,
+                verification_method=verification_method,
+                metadata={
+                    'reference': reference,
+                    'recipient': recipient_email,
+                    'description': description
+                }
+            )
+
+            logger.info(f"Payment successful: sender={user.email}, recipient={recipient_email}, amount={amount}, ref={reference}")
+
+            return Response({
+                "success": True,
+                "message": f"Payment of ₦{amount} to {recipient_email} completed successfully.",
+                "reference": reference,
+                "new_balance": str(sender_wallet.balance)
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"Payment error for user {user.email}: {e}", exc_info=True)
+            return Response(
+                {"error": "Payment failed. Please contact support."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 

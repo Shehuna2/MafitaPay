@@ -1,9 +1,11 @@
 from django.urls import path
 from .views import (
     WalletView, WalletTransactionListView, NotificationListView, NotificationMarkReadView,
-    GenerateDVAAPIView, RequeryDVAAPIView # PaystackDVAWebhookAPIView
+    GenerateDVAAPIView, RequeryDVAAPIView,
+    SecureWithdrawalView, SecurePaymentView  # New secure transaction views
 )
 from .webhooks import paystack_webhook, psb_webhook, flutterwave_webhook
+
 urlpatterns = [
     path("wallet/", WalletView.as_view(), name="wallet"),
 
@@ -23,5 +25,9 @@ urlpatterns = [
 
     path("api/wallet/generate-dva/", GenerateDVAAPIView.as_view(), name="generate-dva"),
     path("api/wallet/requery-dva/", RequeryDVAAPIView.as_view(), name="requery-dva"),
+
+    # Secure transaction endpoints with PIN/biometric verification
+    path("api/wallet/withdraw/", SecureWithdrawalView.as_view(), name="secure-withdrawal"),
+    path("api/wallet/payment/", SecurePaymentView.as_view(), name="secure-payment"),
 
 ]

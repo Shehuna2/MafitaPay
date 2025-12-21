@@ -271,3 +271,121 @@ class ReferralSerializer(serializers.ModelSerializer):
             }
             for u in obj.referrals.all()
         ]
+
+
+# ========================================
+# PIN Management Serializers
+# ========================================
+
+class PINSetupSerializer(serializers.Serializer):
+    """Serializer for setting up a new transaction PIN"""
+    pin = serializers.CharField(min_length=4, max_length=4, write_only=True)
+    pin_confirmation = serializers.CharField(min_length=4, max_length=4, write_only=True)
+
+    def validate_pin(self, value):
+        if not value.isdigit():
+            raise serializers.ValidationError("PIN must contain only digits.")
+        if len(value) != 4:
+            raise serializers.ValidationError("PIN must be exactly 4 digits.")
+        # Check for weak PINs
+        if value in ['0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999']:
+            raise serializers.ValidationError("PIN is too weak. Please choose a different PIN.")
+        if value in ['1234', '4321', '0123', '3210']:
+            raise serializers.ValidationError("PIN is too common. Please choose a different PIN.")
+        return value
+
+    def validate(self, data):
+        if data['pin'] != data['pin_confirmation']:
+            raise serializers.ValidationError({"pin_confirmation": "PINs do not match."})
+        return data
+
+
+class PINVerificationSerializer(serializers.Serializer):
+    """Serializer for verifying transaction PIN"""
+    pin = serializers.CharField(min_length=4, max_length=4, write_only=True)
+
+    def validate_pin(self, value):
+        if not value.isdigit():
+            raise serializers.ValidationError("PIN must contain only digits.")
+        if len(value) != 4:
+            raise serializers.ValidationError("PIN must be exactly 4 digits.")
+        return value
+
+
+class PINChangeSerializer(serializers.Serializer):
+    """Serializer for changing existing transaction PIN"""
+    old_pin = serializers.CharField(min_length=4, max_length=4, write_only=True)
+    new_pin = serializers.CharField(min_length=4, max_length=4, write_only=True)
+    new_pin_confirmation = serializers.CharField(min_length=4, max_length=4, write_only=True)
+
+    def validate_new_pin(self, value):
+        if not value.isdigit():
+            raise serializers.ValidationError("PIN must contain only digits.")
+        if len(value) != 4:
+            raise serializers.ValidationError("PIN must be exactly 4 digits.")
+        # Check for weak PINs
+        if value in ['0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999']:
+            raise serializers.ValidationError("PIN is too weak. Please choose a different PIN.")
+        if value in ['1234', '4321', '0123', '3210']:
+            raise serializers.ValidationError("PIN is too common. Please choose a different PIN.")
+        return value
+
+    def validate(self, data):
+        if data['new_pin'] != data['new_pin_confirmation']:
+            raise serializers.ValidationError({"new_pin_confirmation": "PINs do not match."})
+        if data['old_pin'] == data['new_pin']:
+            raise serializers.ValidationError({"new_pin": "New PIN must be different from old PIN."})
+        return data
+
+
+class PINResetRequestSerializer(serializers.Serializer):
+    """Serializer for requesting PIN reset"""
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        value = value.lower().strip()
+        try:
+            user = User.objects.get(email=value)
+            if not user.has_transaction_pin():
+                raise serializers.ValidationError("No transaction PIN set for this account.")
+        except User.DoesNotExist:
+            raise serializers.ValidationError("No account found with this email.")
+        return value
+
+
+class PINResetConfirmSerializer(serializers.Serializer):
+    """Serializer for confirming PIN reset with token"""
+    token = serializers.CharField(max_length=32)
+    new_pin = serializers.CharField(min_length=4, max_length=4, write_only=True)
+    new_pin_confirmation = serializers.CharField(min_length=4, max_length=4, write_only=True)
+
+    def validate_new_pin(self, value):
+        if not value.isdigit():
+            raise serializers.ValidationError("PIN must contain only digits.")
+        if len(value) != 4:
+            raise serializers.ValidationError("PIN must be exactly 4 digits.")
+        # Check for weak PINs
+        if value in ['0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999']:
+            raise serializers.ValidationError("PIN is too weak. Please choose a different PIN.")
+        if value in ['1234', '4321', '0123', '3210']:
+            raise serializers.ValidationError("PIN is too common. Please choose a different PIN.")
+        return value
+
+    def validate(self, data):
+        if data['new_pin'] != data['new_pin_confirmation']:
+            raise serializers.ValidationError({"new_pin_confirmation": "PINs do not match."})
+        return data
+
+
+class BiometricEnrollmentSerializer(serializers.Serializer):
+    """Serializer for enrolling biometric authentication"""
+    credential_id = serializers.CharField(max_length=255)
+    public_key = serializers.CharField()
+
+    def validate(self, data):
+        # Basic validation - actual cryptographic validation happens in the view
+        if not data.get('credential_id'):
+            raise serializers.ValidationError({"credential_id": "Credential ID is required."})
+        if not data.get('public_key'):
+            raise serializers.ValidationError({"public_key": "Public key is required."})
+        return data

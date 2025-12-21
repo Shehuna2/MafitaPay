@@ -40,20 +40,24 @@ def get_env_var(var_name, required=True):
 
 
 # Solana setup (unchanged)
-SOLANA_PRIVATE_KEY_B58 = get_env_var("SOLANA_PRIVATE_KEY", required=True).strip('"')
-SOLANA_RPC_URL = get_env_var("SOLANA_RPC_URL", required=True)
-SOLANA_SENDER_KEYPAIR = Keypair.from_bytes(base58.b58decode(SOLANA_PRIVATE_KEY_B58))
+SOLANA_PRIVATE_KEY_B58 = get_env_var("SOLANA_PRIVATE_KEY", required=False)
+SOLANA_RPC_URL = get_env_var("SOLANA_RPC_URL", required=False)
 
-solana_client = Client(SOLANA_RPC_URL)
-
-if not SOLANA_PRIVATE_KEY_B58:
-    raise ValueError("SOLANA_PRIVATE_KEY is empty")
-try:
-    decoded_key = base58.b58decode(SOLANA_PRIVATE_KEY_B58)
-    SOLANA_SENDER_KEYPAIR = Keypair.from_bytes(decoded_key)
-except Exception as e:
-    logger.error(f"Invalid SOLANA_PRIVATE_KEY: {e}")
-    raise ValueError(f"Invalid SOLANA_PRIVATE_KEY format: {e}")
+# Only initialize if credentials are available
+if SOLANA_PRIVATE_KEY_B58 and SOLANA_RPC_URL:
+    try:
+        SOLANA_PRIVATE_KEY_B58 = SOLANA_PRIVATE_KEY_B58.strip('"')
+        decoded_key = base58.b58decode(SOLANA_PRIVATE_KEY_B58)
+        SOLANA_SENDER_KEYPAIR = Keypair.from_bytes(decoded_key)
+        solana_client = Client(SOLANA_RPC_URL)
+    except Exception as e:
+        logger.error(f"Invalid SOLANA_PRIVATE_KEY: {e}")
+        SOLANA_SENDER_KEYPAIR = None
+        solana_client = None
+else:
+    SOLANA_SENDER_KEYPAIR = None
+    solana_client = None
+    logger.warning("Solana credentials not available - Solana features disabled")
 
 
 # Solana functions (unchanged)

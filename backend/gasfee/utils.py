@@ -56,12 +56,21 @@ def get_asset_price_ngn(asset_id: str, margin_type: str) -> Decimal:
 # EVM / BSC SENDERS
 # ==============================
 # BSC global provider
-BSC_RPC_URL = get_env_var("BSC_RPC_URL")
-w3_bsc = Web3(HTTPProvider(BSC_RPC_URL))
-if not w3_bsc.is_connected():
-    raise ConnectionError(f"Failed to connect to BSC RPC: {BSC_RPC_URL}")
-BSC_PRIVATE_KEY = get_env_var("BSC_PRIVATE_KEY")
-BSC_SENDER_ADDRESS = w3_bsc.eth.account.from_key(BSC_PRIVATE_KEY).address
+BSC_RPC_URL = get_env_var("BSC_RPC_URL", required=False)
+BSC_PRIVATE_KEY = get_env_var("BSC_PRIVATE_KEY", required=False)
+
+# Initialize BSC connection only if credentials are available
+if BSC_RPC_URL and BSC_PRIVATE_KEY:
+    w3_bsc = Web3(HTTPProvider(BSC_RPC_URL))
+    if not w3_bsc.is_connected():
+        logger.warning(f"Failed to connect to BSC RPC: {BSC_RPC_URL}")
+        w3_bsc = None
+        BSC_SENDER_ADDRESS = None
+    else:
+        BSC_SENDER_ADDRESS = w3_bsc.eth.account.from_key(BSC_PRIVATE_KEY).address
+else:
+    w3_bsc = None
+    BSC_SENDER_ADDRESS = None
 
 
 
