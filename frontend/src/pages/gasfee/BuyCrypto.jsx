@@ -482,7 +482,7 @@ export default function BuyCrypto() {
 
   // NEW: Show cache age indicator
   const cachedRate = JSON.parse(localStorage.getItem(RATE_CACHE_KEY(id)) || "null");
-  const cacheAgeWarning = cachedRate ?  validateCacheAge(cachedRate. timestamp) : null;
+  const cacheAgeWarning = cachedRate ? validateCacheAge(cachedRate.timestamp) : null;
 
   // ---------------- SUBMIT - Show PIN Modal Directly ----------------
   const handleSubmit = (e) => {
