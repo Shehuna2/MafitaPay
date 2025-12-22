@@ -123,92 +123,110 @@ const PINVerificationModal = ({
     <div
       className="
         fixed inset-0 z-50
-        bg-black/60 backdrop-blur-sm
+        bg-black/70 backdrop-blur-md
         flex items-end sm:items-center justify-center
         px-3
         pb-[env(safe-area-inset-bottom)]
         pt-[env(safe-area-inset-top)]
+        animate-in fade-in duration-200
       "
     >
       <div
         className="
-          bg-white dark:bg-gray-900
-          w-full sm:max-w-md
-          rounded-t-2xl sm:rounded-2xl
-          shadow-2xl
-          max-h-[85vh]
+          bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900
+          w-full sm:max-w-sm
+          rounded-t-3xl sm:rounded-3xl
+          shadow-2xl shadow-indigo-500/20
+          border border-gray-700/50
+          max-h-[80vh]
           overflow-hidden
+          animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300
         "
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-green-100 dark:bg-green-900/30">
-              <ShieldCheckIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+        {/* Premium Header with Gradient */}
+        <div className="relative px-4 py-3 bg-gradient-to-r from-indigo-600/20 via-purple-600/20 to-pink-600/20 border-b border-gray-700/50 backdrop-blur-xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/30">
+                <ShieldCheckIcon className="w-4 h-4 text-white" />
+              </div>
+              <h2 className="text-sm font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                Verify Transaction
+              </h2>
             </div>
-            <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100">
-              Verify Transaction
-            </h2>
+            {!loading && !biometricLoading && (
+              <button
+                onClick={onClose}
+                className="p-1 rounded-full hover:bg-white/10 transition-all duration-200 active:scale-95"
+              >
+                <XIcon className="w-4 h-4 text-gray-400 hover:text-white" />
+              </button>
+            )}
           </div>
-          {!loading && !biometricLoading && (
-            <button
-              onClick={onClose}
-              className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            >
-              <XIcon className="w-5 h-5 text-gray-500" />
-            </button>
-          )}
         </div>
 
         {/* Scrollable Content */}
-        <div className="overflow-y-auto px-4 py-4 space-y-5">
-          {/* Transaction Details */}
+        <div className="overflow-y-auto px-4 py-3 space-y-3">
+          {/* Transaction Details - Premium Card */}
           {transactionDetails && (
-            <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-2">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Transaction Details</h3>
+            <div className="relative overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700/50 rounded-xl p-3 space-y-2 shadow-lg">
+              {/* Subtle gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 pointer-events-none" />
               
-              {transactionDetails.type && (
-                <div className="flex justify-between text-xs sm:text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Type:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100 capitalize">
-                    {transactionDetails.type}
-                  </span>
-                </div>
-              )}
-              
-              {transactionDetails.amount && (
-                <div className="flex justify-between text-xs sm:text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Amount:</span>
-                  <span className="font-bold text-gray-900 dark:text-gray-100 text-base sm:text-lg">
-                    ₦{Number(transactionDetails.amount).toLocaleString()}
-                  </span>
-                </div>
-              )}
-              
-              {transactionDetails.recipient && (
-                <div className="flex justify-between text-xs sm:text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Recipient:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">
-                    {transactionDetails.recipient}
-                  </span>
-                </div>
-              )}
-              
-              {transactionDetails.description && (
-                <div className="flex justify-between text-xs sm:text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Description:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">
-                    {transactionDetails.description}
-                  </span>
-                </div>
-              )}
+              <div className="relative space-y-2">
+                <h3 className="text-xs font-bold text-gray-300 mb-2 flex items-center gap-1">
+                  <span className="w-1 h-3 bg-gradient-to-b from-indigo-500 to-purple-500 rounded-full" />
+                  Transaction Details
+                </h3>
+                
+                {transactionDetails.type && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-400">Type:</span>
+                    <span className="font-medium text-gray-200 capitalize">
+                      {transactionDetails.type}
+                    </span>
+                  </div>
+                )}
+                
+                {transactionDetails.amount && (
+                  <div className="flex justify-between text-xs items-center">
+                    <span className="text-gray-400">Amount:</span>
+                    <span className="font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent text-base">
+                      ₦{Number(transactionDetails.amount).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                
+                {transactionDetails.recipient && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-400">Recipient:</span>
+                    <span className="font-medium text-gray-200 truncate ml-2 max-w-[60%]">
+                      {transactionDetails.recipient}
+                    </span>
+                  </div>
+                )}
+                
+                {transactionDetails.description && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-400">Description:</span>
+                    <span className="font-medium text-gray-200 truncate ml-2 max-w-[60%]">
+                      {transactionDetails.description}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Security Notice */}
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-            <p className="text-xs sm:text-sm text-yellow-800 dark:text-yellow-200">
-              <strong>⚠️ Security Check:</strong> {biometricLoading ? 'Verifying biometric...' : 'Enter your transaction PIN or use biometric authentication to authorize this transaction.'}
+          {/* Security Notice - Premium Style */}
+          <div className="relative overflow-hidden bg-gradient-to-br from-amber-900/30 to-orange-900/30 border border-amber-600/30 rounded-xl p-2.5 backdrop-blur-sm">
+            <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 to-orange-500/5 pointer-events-none" />
+            <p className="relative text-[11px] text-amber-200/90 flex items-start gap-1.5">
+              <span className="text-amber-400 text-sm mt-0.5">⚠️</span>
+              <span>
+                <strong className="text-amber-300">Security Check:</strong>{' '}
+                {biometricLoading ? 'Verifying biometric...' : 'Enter your transaction PIN or use biometric authentication to authorize this transaction.'}
+              </span>
             </p>
           </div>
 
@@ -225,20 +243,20 @@ const PINVerificationModal = ({
             biometricLoading={biometricLoading}
           />
 
-          {/* Attempts Counter */}
+          {/* Attempts Counter - Premium Style */}
           {attemptsLeft < 5 && attemptsLeft > 0 && (
-            <div className="text-center">
-              <p className="text-xs sm:text-sm text-orange-600 dark:text-orange-400 font-medium">
+            <div className="text-center py-1">
+              <p className="text-xs font-semibold bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
                 {attemptsLeft} {attemptsLeft === 1 ? 'attempt' : 'attempts'} remaining
               </p>
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-4 pb-4">
-          <div className="flex items-start gap-2 text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
-            <AlertCircleIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />
+        {/* Premium Footer */}
+        <div className="px-4 pb-3 pt-2 bg-gray-900/50 backdrop-blur-sm border-t border-gray-700/30">
+          <div className="flex items-start gap-2 text-[10px] text-gray-400">
+            <AlertCircleIcon className="w-3 h-3 mt-0.5 flex-shrink-0 text-gray-500" />
             <p>
               Your PIN is required to complete this transaction. After 5 failed attempts,
               your PIN will be locked for 30 minutes for security reasons.

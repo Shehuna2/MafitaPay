@@ -98,18 +98,20 @@ const PINInput = ({
   };
 
   return (
-    <div className="flex flex-col items-center space-y-6 w-full max-w-md mx-auto">
+    <div className="flex flex-col items-center space-y-4 w-full max-w-md mx-auto">
 
-      {/* Title */}
+      {/* Premium Title */}
       <div className="flex items-center space-x-2">
-        <LockIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
+        <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/30">
+          <LockIcon className="w-4 h-4 text-white" />
+        </div>
+        <h3 className="text-sm font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
           {title}
         </h3>
       </div>
 
-      {/* PIN Boxes */}
-      <div className="flex items-center space-x-3">
+      {/* Premium PIN Boxes */}
+      <div className="flex items-center space-x-2.5">
         {pin.map((digit, index) => (
           <input
             key={index}
@@ -118,132 +120,126 @@ const PINInput = ({
             pattern="\d*"
             maxLength={1}
             value={digit}
-            onChange={(e) => handleChange(index, e. target.value)}
+            onChange={(e) => handleChange(index, e.target.value)}
             onKeyDown={(e) => handleKeyDown(index, e)}
             onPaste={handlePaste}
             disabled={loading}
             readOnly
             className={`
-              w-14 h-14 text-center text-2xl font-bold rounded-lg border-2
-              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-              transition-all duration-200
+              w-12 h-12 text-center text-xl font-bold rounded-xl border-2
+              focus:outline-none transition-all duration-300
               ${
                 digit
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                  : 'border-gray-300 bg-white dark:bg-gray-800 dark:border-gray-600'
+                  ? 'border-indigo-500 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 shadow-lg shadow-indigo-500/20 scale-105'
+                  : 'border-gray-700 bg-gray-800/50'
               }
               ${
                 error
-                  ? 'border-red-500 bg-red-50 dark:bg-red-900/30'
+                  ? 'border-red-500 bg-gradient-to-br from-red-500/10 to-orange-500/10 shadow-lg shadow-red-500/20'
                   : ''
               }
-              text-gray-900 dark:text-gray-100
-              ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-text'}
+              text-white placeholder-gray-500
+              ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-text hover:border-indigo-400'}
             `}
           />
         ))}
 
-        {/* Show / Hide */}
+        {/* Show / Hide Button - Premium */}
         <button
           type="button"
           onClick={() => setShowPin(!showPin)}
-          className="ml-2 p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+          className="ml-1 p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/50 transition-all duration-200 active:scale-95"
           aria-label={showPin ? 'Hide PIN' : 'Show PIN'}
         >
-          {showPin ? <EyeOffIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+          {showPin ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
         </button>
       </div>
 
-      {/* Error */}
+      {/* Error Message - Premium */}
       {error && (
-        <p className="text-sm text-red-600 dark: text-red-400 font-medium">
+        <p className="text-xs font-medium bg-gradient-to-r from-red-400 to-orange-400 bg-clip-text text-transparent animate-pulse">
           {error}
         </p>
       )}
 
-      {/* Keypad */}
+      {/* Premium Keypad */}
       {showKeypad && (
         <div className="w-full">
-          <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto">
-            {[1,2,3,4,5,6,7,8,9]. map(num => (
+          <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
+            {[1,2,3,4,5,6,7,8,9].map(num => (
               <button
                 key={num}
                 type="button"
                 onClick={() => handleKeypadClick(String(num))}
                 disabled={loading}
                 className={`
-                  h-14 text-xl font-semibold rounded-lg border-2
-                  bg-white text-gray-900 border-gray-300
-                  dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600
-                  hover:bg-blue-50 hover:border-blue-500
-                  dark:hover:bg-gray-700 dark:hover:border-blue-400
-                  active:bg-blue-100 dark:active:bg-gray-600
-                  transition-all duration-150
-                  ${loading ? 'opacity-50 cursor-not-allowed' :  'cursor-pointer'}
+                  h-12 text-lg font-bold rounded-xl border
+                  bg-gradient-to-br from-gray-800 to-gray-900 text-white border-gray-700
+                  hover:from-indigo-600/20 hover:to-purple-600/20 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/20
+                  active:scale-95 active:from-indigo-600/30 active:to-purple-600/30
+                  transition-all duration-200
+                  ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                 `}
               >
                 {num}
               </button>
             ))}
 
-            {/* Clear */}
+            {/* Clear Button - Premium */}
             <button
               type="button"
               onClick={handleClear}
               disabled={loading}
               className={`
-                h-14 text-sm font-medium rounded-lg border-2
-                bg-gray-100 text-gray-800 border-gray-300
-                dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600
-                hover:bg-gray-200 dark:hover:bg-gray-600
-                active:bg-gray-300 dark:active:bg-gray-500
-                transition-all duration-150
-                ${loading ?  'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                h-12 text-xs font-semibold rounded-xl border
+                bg-gradient-to-br from-gray-700 to-gray-800 text-gray-300 border-gray-600
+                hover:from-gray-600 hover:to-gray-700 hover:text-white hover:border-gray-500
+                active:scale-95
+                transition-all duration-200
+                ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
               `}
             >
               Clear
             </button>
 
-            {/* 0 */}
+            {/* 0 Button - Premium */}
             <button
               type="button"
               onClick={() => handleKeypadClick('0')}
               disabled={loading || biometricLoading}
               className={`
-                h-14 text-xl font-semibold rounded-lg border-2
-                bg-white text-gray-900 border-gray-300
-                dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600
-                hover:bg-blue-50 hover:border-blue-500
-                dark:hover:bg-gray-700 dark:hover:border-blue-400
-                active:bg-blue-100 dark:active:bg-gray-600
-                transition-all duration-150
+                h-12 text-lg font-bold rounded-xl border
+                bg-gradient-to-br from-gray-800 to-gray-900 text-white border-gray-700
+                hover:from-indigo-600/20 hover:to-purple-600/20 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/20
+                active:scale-95 active:from-indigo-600/30 active:to-purple-600/30
+                transition-all duration-200
                 ${loading || biometricLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
               `}
             >
               0
             </button>
 
-            {/* Biometric Button or Empty Space */}
+            {/* Premium Biometric Button - More Prominent */}
             {showBiometric && onBiometricClick ? (
               <button
                 type="button"
                 onClick={onBiometricClick}
                 disabled={loading || biometricLoading}
                 className={`
-                  h-14 rounded-lg border-2
-                  bg-gradient-to-br from-purple-600 to-purple-700 text-white border-purple-500
-                  dark:from-purple-700 dark:to-purple-800 dark:border-purple-600
-                  hover:from-purple-500 hover:to-purple-600 hover:shadow-lg hover:shadow-purple-500/30
-                  dark:hover:from-purple-600 dark:hover:to-purple-700
-                  active:from-purple-700 active:to-purple-800
-                  transition-all duration-150 transform hover:scale-105
+                  h-12 rounded-xl border-2 relative overflow-hidden
+                  bg-gradient-to-br from-purple-600 via-pink-600 to-indigo-600 text-white border-purple-500
+                  hover:from-purple-500 hover:via-pink-500 hover:to-indigo-500 hover:shadow-2xl hover:shadow-purple-500/50 hover:scale-105
+                  active:scale-95
+                  transition-all duration-300 transform
                   flex items-center justify-center
                   ${loading || biometricLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                   ${biometricLoading ? 'animate-pulse' : ''}
                 `}
                 aria-label="Use biometric authentication"
               >
-                <FingerprintIcon className={`w-7 h-7 ${biometricLoading ? 'animate-spin' : ''}`} />
+                {/* Animated gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+                <FingerprintIcon className={`w-6 h-6 relative z-10 ${biometricLoading ? 'animate-spin' : 'animate-pulse'}`} />
               </button>
             ) : (
               <div />
@@ -252,9 +248,9 @@ const PINInput = ({
         </div>
       )}
 
-      {/* Footer */}
-      <p className="text-xs text-gray-500 dark: text-gray-400 text-center max-w-xs">
-        Your PIN is encrypted and never stored in plain text
+      {/* Premium Footer */}
+      <p className="text-[10px] text-gray-500 text-center max-w-xs">
+        🔒 Your PIN is encrypted and never stored in plain text
       </p>
     </div>
   );
