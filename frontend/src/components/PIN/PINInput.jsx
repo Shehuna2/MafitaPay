@@ -18,7 +18,7 @@ const PINInput = ({
   const inputRefs = [useRef(), useRef(), useRef(), useRef()];
 
   useEffect(() => {
-    if (autoFocus && inputRefs[0].current) {
+    if (autoFocus && inputRefs[0]. current) {
       inputRefs[0].current.focus();
     }
   }, [autoFocus]);
@@ -31,23 +31,33 @@ const PINInput = ({
     setPin(newPin);
 
     if (value && index < 3) {
-      inputRefs[index + 1].current?.focus();
+      inputRefs[index + 1]. current?. focus();
     }
 
-    if (newPin.every(d => d !== '') && onComplete) {
-      onComplete(newPin.join(''));
+    if (newPin. every(d => d !== '') && onComplete) {
+      onComplete(newPin. join(''));
     }
   };
 
   const handleKeyDown = (index, e) => {
+    // Only allow numeric input and navigation keys
+    if (!/^\d$/.test(e.key) && 
+        ! ['Backspace', 'ArrowLeft', 'ArrowRight', 'Tab']. includes(e.key)) {
+      e.preventDefault();
+      return;
+    }
+
     if (e.key === 'Backspace') {
-      if (!pin[index] && index > 0) {
+      const newPin = [...pin];
+      newPin[index] = '';
+      setPin(newPin);
+      if (index > 0) {
         inputRefs[index - 1].current?.focus();
       }
     } else if (e.key === 'ArrowLeft' && index > 0) {
-      inputRefs[index - 1].current?.focus();
+      inputRefs[index - 1]. current?.focus();
     } else if (e.key === 'ArrowRight' && index < 3) {
-      inputRefs[index + 1].current?.focus();
+      inputRefs[index + 1].current?. focus();
     }
   };
 
@@ -67,7 +77,7 @@ const PINInput = ({
     setPin(newPin);
 
     const nextEmpty = newPin.findIndex(d => d === '');
-    inputRefs[(nextEmpty >= 0 ? nextEmpty : 3)]?.current?.focus();
+    inputRefs[(nextEmpty >= 0 ? nextEmpty :  3)]?.current?.focus();
 
     if (newPin.every(d => d !== '') && onComplete) {
       onComplete(newPin.join(''));
@@ -102,14 +112,14 @@ const PINInput = ({
             key={index}
             ref={inputRefs[index]}
             type={showPin ? 'text' : 'password'}
-            inputMode="numeric"
             pattern="\d*"
             maxLength={1}
             value={digit}
-            onChange={(e) => handleChange(index, e.target.value)}
+            onChange={(e) => handleChange(index, e. target.value)}
             onKeyDown={(e) => handleKeyDown(index, e)}
             onPaste={handlePaste}
             disabled={loading}
+            readOnly
             className={`
               w-14 h-14 text-center text-2xl font-bold rounded-lg border-2
               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
@@ -143,7 +153,7 @@ const PINInput = ({
 
       {/* Error */}
       {error && (
-        <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+        <p className="text-sm text-red-600 dark: text-red-400 font-medium">
           {error}
         </p>
       )}
@@ -152,7 +162,7 @@ const PINInput = ({
       {showKeypad && (
         <div className="w-full">
           <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto">
-            {[1,2,3,4,5,6,7,8,9].map(num => (
+            {[1,2,3,4,5,6,7,8,9]. map(num => (
               <button
                 key={num}
                 type="button"
@@ -166,7 +176,7 @@ const PINInput = ({
                   dark:hover:bg-gray-700 dark:hover:border-blue-400
                   active:bg-blue-100 dark:active:bg-gray-600
                   transition-all duration-150
-                  ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                  ${loading ? 'opacity-50 cursor-not-allowed' :  'cursor-pointer'}
                 `}
               >
                 {num}
@@ -185,7 +195,7 @@ const PINInput = ({
                 hover:bg-gray-200 dark:hover:bg-gray-600
                 active:bg-gray-300 dark:active:bg-gray-500
                 transition-all duration-150
-                ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                ${loading ?  'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
               `}
             >
               Clear
@@ -200,9 +210,9 @@ const PINInput = ({
                 h-14 text-xl font-semibold rounded-lg border-2
                 bg-white text-gray-900 border-gray-300
                 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600
-                hover:bg-blue-50 hover:border-blue-500
+                hover: bg-blue-50 hover: border-blue-500
                 dark:hover:bg-gray-700 dark:hover:border-blue-400
-                active:bg-blue-100 dark:active:bg-gray-600
+                active:bg-blue-100 dark:active: bg-gray-600
                 transition-all duration-150
                 ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
               `}
@@ -216,7 +226,7 @@ const PINInput = ({
       )}
 
       {/* Footer */}
-      <p className="text-xs text-gray-500 dark:text-gray-400 text-center max-w-xs">
+      <p className="text-xs text-gray-500 dark: text-gray-400 text-center max-w-xs">
         Your PIN is encrypted and never stored in plain text
       </p>
     </div>
