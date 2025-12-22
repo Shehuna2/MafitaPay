@@ -2,8 +2,15 @@
 import { useState, useCallback, useEffect } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { Capacitor } from "@capacitor/core";
+import { BiometricAuth } from "@aparajita/capacitor-biometric-auth";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+
+// Platform detection
+const isNativePlatform = () => {
+  return Capacitor.isNativePlatform();
+};
 
 export default function useBiometricAuth() {
   const [isSupported, setIsSupported] = useState(false);
@@ -19,12 +26,19 @@ export default function useBiometricAuth() {
   useEffect(() => {
     const checkSupport = async () => {
       try {
-        const hasWebAuthn = typeof window.PublicKeyCredential !== "undefined";
-        if (hasWebAuthn) {
-          const available = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-          setIsSupported(available);
+        if (isNativePlatform()) {
+          // Use Capacitor Biometric Auth for native platforms
+          const result = await BiometricAuth.checkBiometry();
+          setIsSupported(result.isAvailable);
         } else {
-          setIsSupported(false);
+          // Use WebAuthn for web browsers
+          const hasWebAuthn = typeof window.PublicKeyCredential !== "undefined";
+          if (hasWebAuthn) {
+            const available = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+            setIsSupported(available);
+          } else {
+            setIsSupported(false);
+          }
         }
       } catch (error) {
         console.error("Error checking biometric support:", error);
@@ -67,7 +81,7 @@ export default function useBiometricAuth() {
     fetchBiometricStatus();
   }, [fetchBiometricStatus]);
 
-  // Enroll biometric (register WebAuthn credential)
+  // Enroll biometric (register WebAuthn credential or Capacitor biometric)
   const enrollBiometric = useCallback(async () => {
     if (!isSupported) {
       toast.error("Biometric authentication is not supported on this device");
@@ -79,66 +93,115 @@ export default function useBiometricAuth() {
       const token = localStorage.getItem("access");
       const user = JSON.parse(localStorage.getItem("user") || "{}");
 
-      // NOTE: In production, the challenge should be fetched from the server
-      // to prevent replay attacks. This is a simplified implementation for MVP.
-      // TODO: Implement server-side challenge generation endpoint
-      const challenge = crypto.getRandomValues(new Uint8Array(32));
-      
-      // Generate a unique user ID from email (deterministic)
-      const userIdString = user.email || "user@mafitapay.com";
-      const encoder = new TextEncoder();
-      const userIdBuffer = encoder.encode(userIdString).slice(0, 16);
-      const userId = new Uint8Array(16);
-      userId.set(userIdBuffer);
+      if (isNativePlatform()) {
+        // Native platform: Use Capacitor Biometric Auth
+        try {
+          // Authenticate to enroll
+          await BiometricAuth.authenticate({
+            reason: "Enroll biometric authentication for MafitaPay",
+            cancelTitle: "Cancel",
+            allowDeviceCredential: false,
+            iosFallbackTitle: "Use passcode",
+            androidTitle: "Biometric Enrollment",
+            androidSubtitle: "Authenticate to enroll biometric",
+            androidConfirmationRequired: true,
+          });
 
-      // Create credential
-      const publicKeyCredentialCreationOptions = {
-        challenge: challenge,
-        rp: {
-          name: "MafitaPay",
-          id: window.location.hostname,
-        },
-        user: {
-          id: userId,
-          name: userIdString,
-          displayName: userIdString,
-        },
-        pubKeyCredParams: [
-          { alg: -7, type: "public-key" }, // ES256
-          { alg: -257, type: "public-key" }, // RS256
-        ],
-        authenticatorSelection: {
-          authenticatorAttachment: "platform",
-          userVerification: "required",
-        },
-        timeout: 60000,
-        attestation: "none",
-      };
+          // On successful authentication, register with backend
+          // For native, we just store a flag that biometric is enabled
+          // The actual biometric verification is handled by the OS
+          const response = await axios.post(
+            `${API_BASE}/biometric/enroll/`,
+            {
+              credential_id: `native_${user.email || 'user'}_${Date.now()}`,
+              public_key: "native_biometric", // Placeholder for native
+              platform: Capacitor.getPlatform(),
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
 
-      const credential = await navigator.credentials.create({
-        publicKey: publicKeyCredentialCreationOptions,
-      });
-
-      // Send credential to backend
-      const response = await axios.post(
-        `${API_BASE}/biometric/enroll/`,
-        {
-          credential_id: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
-          public_key: btoa(String.fromCharCode(...new Uint8Array(credential.response.getPublicKey()))),
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
+          if (response.data.success) {
+            toast.success("Biometric authentication enrolled successfully!");
+            await fetchBiometricStatus();
+            setChecking(false);
+            return { success: true };
+          }
+        } catch (error) {
+          console.error("Native biometric enrollment error:", error);
+          const errorMsg = error.message || "Failed to enroll biometric authentication";
+          toast.error(errorMsg);
+          setChecking(false);
+          return { success: false, error: errorMsg };
         }
-      );
+      } else {
+        // Web platform: Use WebAuthn
+        // NOTE: In production, the challenge should be fetched from the server
+        // to prevent replay attacks. This is a simplified implementation for MVP.
+        // TODO: Implement server-side challenge generation endpoint
+        const challenge = crypto.getRandomValues(new Uint8Array(32));
+        
+        // Generate a unique user ID from email (deterministic)
+        const userIdString = user.email || "user@mafitapay.com";
+        const encoder = new TextEncoder();
+        const userIdBuffer = encoder.encode(userIdString).slice(0, 16);
+        const userId = new Uint8Array(16);
+        userId.set(userIdBuffer);
 
-      if (response.data.success) {
-        toast.success("Biometric authentication enrolled successfully!");
-        await fetchBiometricStatus();
-        setChecking(false);
-        return { success: true };
+        // Create credential
+        const publicKeyCredentialCreationOptions = {
+          challenge: challenge,
+          rp: {
+            name: "MafitaPay",
+            id: window.location.hostname,
+          },
+          user: {
+            id: userId,
+            name: userIdString,
+            displayName: userIdString,
+          },
+          pubKeyCredParams: [
+            { alg: -7, type: "public-key" }, // ES256
+            { alg: -257, type: "public-key" }, // RS256
+          ],
+          authenticatorSelection: {
+            authenticatorAttachment: "platform",
+            userVerification: "required",
+          },
+          timeout: 60000,
+          attestation: "none",
+        };
+
+        const credential = await navigator.credentials.create({
+          publicKey: publicKeyCredentialCreationOptions,
+        });
+
+        // Send credential to backend
+        const response = await axios.post(
+          `${API_BASE}/biometric/enroll/`,
+          {
+            credential_id: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
+            public_key: btoa(String.fromCharCode(...new Uint8Array(credential.response.getPublicKey()))),
+            platform: "web",
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (response.data.success) {
+          toast.success("Biometric authentication enrolled successfully!");
+          await fetchBiometricStatus();
+          setChecking(false);
+          return { success: true };
+        }
       }
     } catch (error) {
       console.error("Biometric enrollment error:", error);
@@ -184,24 +247,47 @@ export default function useBiometricAuth() {
     try {
       setChecking(true);
 
-      // NOTE: In production, the challenge should be fetched from the server
-      // to prevent replay attacks. This is a simplified implementation for MVP.
-      // TODO: Implement server-side challenge generation and verification
-      const challenge = crypto.getRandomValues(new Uint8Array(32));
-      
-      const publicKeyCredentialRequestOptions = {
-        challenge: challenge,
-        timeout: 60000,
-        userVerification: "required",
-      };
+      if (isNativePlatform()) {
+        // Native platform: Use Capacitor Biometric Auth
+        try {
+          await BiometricAuth.authenticate({
+            reason: "Verify your identity to authorize this transaction",
+            cancelTitle: "Cancel",
+            allowDeviceCredential: false,
+            iosFallbackTitle: "Use passcode",
+            androidTitle: "Transaction Authentication",
+            androidSubtitle: "Verify your identity",
+            androidConfirmationRequired: true,
+          });
 
-      const assertion = await navigator.credentials.get({
-        publicKey: publicKeyCredentialRequestOptions,
-      });
+          setChecking(false);
+          return { success: true };
+        } catch (error) {
+          console.error("Native biometric verification error:", error);
+          setChecking(false);
+          return { success: false, error: error.message || "Authentication failed" };
+        }
+      } else {
+        // Web platform: Use WebAuthn
+        // NOTE: In production, the challenge should be fetched from the server
+        // to prevent replay attacks. This is a simplified implementation for MVP.
+        // TODO: Implement server-side challenge generation and verification
+        const challenge = crypto.getRandomValues(new Uint8Array(32));
+        
+        const publicKeyCredentialRequestOptions = {
+          challenge: challenge,
+          timeout: 60000,
+          userVerification: "required",
+        };
 
-      if (assertion) {
-        setChecking(false);
-        return { success: true };
+        const assertion = await navigator.credentials.get({
+          publicKey: publicKeyCredentialRequestOptions,
+        });
+
+        if (assertion) {
+          setChecking(false);
+          return { success: true };
+        }
       }
     } catch (error) {
       console.error("Biometric verification error:", error);
@@ -216,31 +302,69 @@ export default function useBiometricAuth() {
 
     setChecking(true);
     try {
-      // 1️⃣ Get challenge
-      const challengeRes = await axios.post(`${API_BASE}/webauthn/challenge/`, { email });
-      const challenge = challengeRes.data;
+      if (isNativePlatform()) {
+        // Native platform: Use Capacitor Biometric Auth
+        try {
+          // 1️⃣ Authenticate with biometric
+          await BiometricAuth.authenticate({
+            reason: "Login to MafitaPay",
+            cancelTitle: "Cancel",
+            allowDeviceCredential: false,
+            iosFallbackTitle: "Use passcode",
+            androidTitle: "Login",
+            androidSubtitle: "Authenticate to login",
+            androidConfirmationRequired: true,
+          });
 
-      // 2️⃣ navigator.credentials.get()
-      const credential = await navigator.credentials.get({
-        publicKey: challenge
-      });
+          // 2️⃣ Get stored credentials and login
+          const response = await axios.post(`${API_BASE}/biometric/login/`, {
+            email,
+            platform: Capacitor.getPlatform(),
+          });
 
-      // 3️⃣ Send assertion to server
-      const authRes = await axios.post(`${API_BASE}/webauthn/verify/`, {
-        user_id: email, // optionally store user id in challenge response
-        assertion: btoa(String.fromCharCode(...new Uint8Array(credential.response.authenticatorData)))
-      });
+          // 3️⃣ Store JWT tokens
+          const { access, refresh, user } = response.data;
+          localStorage.setItem("access", access);
+          localStorage.setItem("refresh", refresh);
+          localStorage.setItem("user", JSON.stringify(user));
+          localStorage.setItem("last_active", Date.now().toString());
 
-      // 4️⃣ Store JWT tokens
-      const { access, refresh, user } = authRes.data;
-      localStorage.setItem("access", access);
-      localStorage.setItem("refresh", refresh);
-      localStorage.setItem("user", JSON.stringify(user));
-      localStorage.setItem("last_active", Date.now().toString());
+          window.dispatchEvent(new Event("tokenRefreshed"));
+          setChecking(false);
+          return { success: true, user };
+        } catch (error) {
+          console.error("Native biometric login error:", error);
+          setChecking(false);
+          return { success: false, error: error.message || "Login failed" };
+        }
+      } else {
+        // Web platform: Use WebAuthn
+        // 1️⃣ Get challenge
+        const challengeRes = await axios.post(`${API_BASE}/webauthn/challenge/`, { email });
+        const challenge = challengeRes.data;
 
-      window.dispatchEvent(new Event("tokenRefreshed"));
-      setChecking(false);
-      return { success: true, user };
+        // 2️⃣ navigator.credentials.get()
+        const credential = await navigator.credentials.get({
+          publicKey: challenge
+        });
+
+        // 3️⃣ Send assertion to server
+        const authRes = await axios.post(`${API_BASE}/webauthn/verify/`, {
+          user_id: email, // optionally store user id in challenge response
+          assertion: btoa(String.fromCharCode(...new Uint8Array(credential.response.authenticatorData)))
+        });
+
+        // 4️⃣ Store JWT tokens
+        const { access, refresh, user } = authRes.data;
+        localStorage.setItem("access", access);
+        localStorage.setItem("refresh", refresh);
+        localStorage.setItem("user", JSON.stringify(user));
+        localStorage.setItem("last_active", Date.now().toString());
+
+        window.dispatchEvent(new Event("tokenRefreshed"));
+        setChecking(false);
+        return { success: true, user };
+      }
     } catch (err) {
       setChecking(false);
       return { success: false, error: err };
@@ -258,4 +382,3 @@ export default function useBiometricAuth() {
     refreshBiometricStatus: fetchBiometricStatus,
   };
 }
-

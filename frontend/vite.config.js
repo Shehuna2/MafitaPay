@@ -13,9 +13,15 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    open: true
+    open: true,
+    // Allow Capacitor to access the dev server
+    host: '0.0.0.0'
   },
   preview: {
     port: 4173
+  },
+  // Optimize dependencies for Capacitor
+  optimizeDeps: {
+    exclude: ['@capacitor/core', '@capacitor/ios', '@capacitor/android']
   }
 })
