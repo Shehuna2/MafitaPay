@@ -6,6 +6,8 @@ import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Receipt from "../../components/Receipt";
 import ShortFormLayout from "../../layouts/ShortFormLayout";
+import PINVerificationModal from "../../components/PIN/PINVerificationModal";
+import { usePIN } from "../../hooks/usePIN";
 
 // ----------------------------------------
 // NETWORK LOGOS
@@ -84,6 +86,11 @@ export default function BuyAirtime() {
   const [message, setMessage] = useState(null);
   const [receiptData, setReceiptData] = useState(null);
 
+  // PIN verification states
+  const [showPINModal, setShowPINModal] = useState(false);
+  const [pendingTransaction, setPendingTransaction] = useState(null);
+  const { pinStatus } = usePIN();
+
   // ----------------------------------------
   // Handle Phone Input with Auto-Detection
   // ----------------------------------------
@@ -129,18 +136,15 @@ export default function BuyAirtime() {
     : true;
 
   // ----------------------------------------
-  // Submit
+  // Submit - Show PIN Modal First
   // ----------------------------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setMessage(null);
-
+    
     const { valid, normalized, detected } = validateNigerianPhone(form.phone);
 
     if (!valid) {
       toast.error("Invalid Nigerian phone number");
-      setLoading(false);
       return;
     }
 
@@ -149,18 +153,49 @@ export default function BuyAirtime() {
       toast.error(
         `Number belongs to ${detected.toUpperCase()}, but you selected ${form.network.toUpperCase()}`
       );
-      setLoading(false);
       return;
     }
 
-    const payload = {
+    // Check if user has PIN set up
+    if (!pinStatus.hasPin) {
+      toast.error("Please set up your transaction PIN first in Settings");
+      return;
+    }
+
+    // Check if PIN is locked
+    if (pinStatus.isLocked) {
+      toast.error("Your PIN is locked. Please try again later or reset your PIN.");
+      return;
+    }
+
+    // Store transaction details and show PIN modal
+    const transactionDetails = {
+      type: "Airtime Purchase",
+      amount: form.amount,
+      recipient: `${form.network.toUpperCase()} - ${form.phone}`,
+      description: `${form.network.toUpperCase()} Airtime`
+    };
+
+    setPendingTransaction({
       phone: normalized,
       network: form.network,
       amount: Number(form.amount),
-    };
+    });
+    
+    setShowPINModal(true);
+  };
+
+  // ----------------------------------------
+  // Process Transaction After PIN Verified
+  // ----------------------------------------
+  const processPurchase = async () => {
+    if (!pendingTransaction) return;
+
+    setLoading(true);
+    setMessage(null);
 
     try {
-      const res = await client.post("/bills/airtime/", payload);
+      const res = await client.post("/bills/airtime/", pendingTransaction);
 
       setMessage({
         type: "success",
@@ -170,11 +205,12 @@ export default function BuyAirtime() {
       setReceiptData({
         status: "success",
         type: "airtime",
-        ...payload,
+        ...pendingTransaction,
         reference: res.data.reference || null,
       });
 
       toast.success("Airtime purchase successful!");
+      setPendingTransaction(null);
     } catch (err) {
       setMessage({
         type: "error",
@@ -184,7 +220,7 @@ export default function BuyAirtime() {
       setReceiptData({
         status: "failed",
         type: "airtime",
-        ...payload,
+        ...pendingTransaction,
         reference: err.response?.data?.reference || null,
       });
 
@@ -337,6 +373,22 @@ export default function BuyAirtime() {
           setReceiptData(null);
           resetForm();
         }}
+      />
+
+      {/* PIN Verification Modal */}
+      <PINVerificationModal
+        isOpen={showPINModal}
+        onClose={() => {
+          setShowPINModal(false);
+          setPendingTransaction(null);
+        }}
+        onVerified={processPurchase}
+        transactionDetails={pendingTransaction ? {
+          type: "Airtime Purchase",
+          amount: pendingTransaction.amount,
+          recipient: `${pendingTransaction.network.toUpperCase()} - ${form.phone}`,
+          description: `${pendingTransaction.network.toUpperCase()} Airtime`
+        } : null}
       />
     </ShortFormLayout>
   );

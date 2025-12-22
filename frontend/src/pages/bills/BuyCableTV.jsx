@@ -6,6 +6,8 @@ import client from "../../api/client";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Receipt from "../../components/Receipt";
+import PINVerificationModal from "../../components/PIN/PINVerificationModal";
+import { usePIN } from "../../hooks/usePIN";
 
 const NETWORKS = { dstv: "DSTV", gotv: "GOTV", startimes: "Startimes" };
 
@@ -22,6 +24,11 @@ export default function BuyCableTV() {
   const [fetchingPlans, setFetchingPlans] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
   const navigate = useNavigate();
+
+  // PIN verification states
+  const [showPINModal, setShowPINModal] = useState(false);
+  const [pendingTransaction, setPendingTransaction] = useState(null);
+  const { pinStatus } = usePIN();
 
   useEffect(() => {
     if (form.network) fetchPlans();
@@ -55,22 +62,53 @@ export default function BuyCableTV() {
     setForm({ ...form, variation_code: plan.variation_code, amount: plan.variation_amount });
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setLoading(true);
 
-    const payload = {
+    // Check if user has PIN set up
+    if (!pinStatus.hasPin) {
+      toast.error("Please set up your transaction PIN first in Settings");
+      return;
+    }
+
+    // Check if PIN is locked
+    if (pinStatus.isLocked) {
+      toast.error("Your PIN is locked. Please try again later or reset your PIN.");
+      return;
+    }
+
+    // Store transaction details and show PIN modal
+    const selectedPlan = plans.find(p => p.variation_code === form.variation_code);
+    setPendingTransaction({
       network: form.network,
       decoder_number: form.decoder_number,
       variation_code: form.variation_code,
       amount: Number(form.amount),
       phone: form.phone || undefined,
+      planDescription: selectedPlan?.description || "Cable TV"
+    });
+    
+    setShowPINModal(true);
+  };
+
+  const processPurchase = async () => {
+    if (!pendingTransaction) return;
+
+    setLoading(true);
+
+    const payload = {
+      network: pendingTransaction.network,
+      decoder_number: pendingTransaction.decoder_number,
+      variation_code: pendingTransaction.variation_code,
+      amount: pendingTransaction.amount,
+      phone: pendingTransaction.phone,
     };
 
     try {
       const res = await client.post("/bills/cable-tv/", payload);
       setReceiptData({ status: "success", type: "cable_tv", ...payload });
       toast.success("Subscription successful!");
+      setPendingTransaction(null);
     } catch (err) {
       setReceiptData({ status: "failed", type: "cable_tv", ...payload });
       toast.error(err.response?.data?.message || "Failed");
@@ -198,6 +236,22 @@ export default function BuyCableTV() {
             setReceiptData(null);
             navigate("/dashboard", { state: { transactionCompleted: true } });
           }}
+        />
+
+        {/* PIN Verification Modal */}
+        <PINVerificationModal
+          isOpen={showPINModal}
+          onClose={() => {
+            setShowPINModal(false);
+            setPendingTransaction(null);
+          }}
+          onVerified={processPurchase}
+          transactionDetails={pendingTransaction ? {
+            type: "Cable TV Subscription",
+            amount: pendingTransaction.amount,
+            recipient: `${NETWORKS[pendingTransaction.network]} - ${pendingTransaction.decoder_number}`,
+            description: pendingTransaction.planDescription
+          } : null}
         />
       </div>
     </div>

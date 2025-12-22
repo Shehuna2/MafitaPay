@@ -5,6 +5,8 @@ import client from "../../api/client";
 import { toast } from "react-toastify";
 import Receipt from "../../components/Receipt";
 import ShortFormLayout from "../../layouts/ShortFormLayout";
+import PINVerificationModal from "../../components/PIN/PINVerificationModal";
+import { usePIN } from "../../hooks/usePIN";
 
 /* ----------------------------------------------------
    NETWORK LOGOS + CATEGORY STYLES
@@ -93,6 +95,11 @@ export default function BuyData() {
 
   const [showConfirm, setShowConfirm] = useState(false);
   const modalRef = useRef(null);
+
+  // PIN verification states
+  const [showPINModal, setShowPINModal] = useState(false);
+  const [pendingTransaction, setPendingTransaction] = useState(null);
+  const { pinStatus } = usePIN();
 
   const [livePhoneInfo, setLivePhoneInfo] = useState({
     normalized: "",
@@ -199,13 +206,25 @@ export default function BuyData() {
 
 
   /* ----------------------------------------------------
-     PLAN CLICK
+     PLAN CLICK - Show PIN Modal First
   ---------------------------------------------------- */
   const handlePlanClick = (plan) => {
     const { valid, detected } = validateNigerianPhone(form.phone);
     if (!valid) return toast.error("Invalid phone number");
     if (detected !== form.network)
       return toast.error(`This number belongs to ${detected.toUpperCase()}`);
+
+    // Check if user has PIN set up
+    if (!pinStatus.hasPin) {
+      toast.error("Please set up your transaction PIN first in Settings");
+      return;
+    }
+
+    // Check if PIN is locked
+    if (pinStatus.isLocked) {
+      toast.error("Your PIN is locked. Please try again later or reset your PIN.");
+      return;
+    }
 
     setForm(prev => ({ ...prev, variation_id: plan.id }));
     setShowConfirm(true);
@@ -215,11 +234,10 @@ export default function BuyData() {
 
 
   /* ----------------------------------------------------
-     CONFIRM PURCHASE
+     CONFIRM PURCHASE - Trigger PIN Verification
   ---------------------------------------------------- */
-  const confirmPurchase = async () => {
+  const confirmPurchase = () => {
     setShowConfirm(false);
-    setLoading(true);
 
     const { valid, normalized, detected } = validateNigerianPhone(form.phone);
     if (!valid) return toast.error("Invalid phone number");
@@ -228,11 +246,31 @@ export default function BuyData() {
 
     if (!selectedPlan) return toast.error("Select a valid plan.");
 
-    const payload = {
+    // Store pending transaction and show PIN modal
+    setPendingTransaction({
       phone: normalized,
       network: form.network,
       variation_id: selectedPlan.id,
       amount: selectedPlan.amount,
+      plan: selectedPlan
+    });
+    
+    setShowPINModal(true);
+  };
+
+  /* ----------------------------------------------------
+     PROCESS PURCHASE - After PIN Verified
+  ---------------------------------------------------- */
+  const processPurchase = async () => {
+    if (!pendingTransaction) return;
+    
+    setLoading(true);
+
+    const payload = {
+      phone: pendingTransaction.phone,
+      network: pendingTransaction.network,
+      variation_id: pendingTransaction.variation_id,
+      amount: pendingTransaction.amount,
     };
 
     try {
@@ -244,10 +282,11 @@ export default function BuyData() {
         status: "success",
         type: "data",
         ...payload,
-        plan: selectedPlan.name,
-        provider: selectedPlan.provider
+        plan: pendingTransaction.plan.name,
+        provider: pendingTransaction.plan.provider
       });
 
+      setPendingTransaction(null);
     } catch (err) {
       const msg = err.response?.data?.message || "Purchase failed";
 
@@ -436,6 +475,22 @@ export default function BuyData() {
       )}
 
       <Receipt data={receiptData} onClose={() => { setReceiptData(null); resetForm(); }} />
+
+      {/* PIN Verification Modal */}
+      <PINVerificationModal
+        isOpen={showPINModal}
+        onClose={() => {
+          setShowPINModal(false);
+          setPendingTransaction(null);
+        }}
+        onVerified={processPurchase}
+        transactionDetails={pendingTransaction ? {
+          type: "Data Purchase",
+          amount: pendingTransaction.amount,
+          recipient: `${pendingTransaction.network.toUpperCase()} - ${pendingTransaction.phone}`,
+          description: `${pendingTransaction.plan.name || 'Data Bundle'}`
+        } : null}
+      />
 
     </ShortFormLayout>
   );
