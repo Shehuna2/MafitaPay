@@ -22,6 +22,6 @@ export default defineConfig({
   },
   // Optimize dependencies for Capacitor
   optimizeDeps: {
-    exclude: ['@capacitor/core', '@capacitor/ios', '@capacitor/android']
+    exclude: ['@capacitor/core']
   }
 })

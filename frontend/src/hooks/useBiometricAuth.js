@@ -118,8 +118,8 @@ export default function useBiometricAuth() {
           const response = await axios.post(
             `${API_BASE}/biometric/enroll/`,
             {
-              credential_id: `native_${credentialId}`,
-              public_key: `native_biometric_${Capacitor.getPlatform()}_${credentialId}`, // Unique identifier for native
+              credential_id: credentialId,
+              public_key: credentialId, // For native, this is just an identifier
               platform: Capacitor.getPlatform(),
             },
             {
@@ -191,7 +191,7 @@ export default function useBiometricAuth() {
           {
             credential_id: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
             public_key: btoa(String.fromCharCode(...new Uint8Array(credential.response.getPublicKey()))),
-            platform: "web",
+            platform: Capacitor.getPlatform(), // Returns 'web' for web browsers
           },
           {
             headers: {
