@@ -6,6 +6,8 @@ import client from "../../api/client";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Receipt from "../../components/Receipt";
+import PINVerificationModal from "../../components/PIN/PINVerificationModal";
+import { usePIN } from "../../hooks/usePIN";
 
 const DISCOS = {
   ikeja: "Ikeja Electric (IKEDC)",
@@ -29,25 +31,51 @@ export default function BuyElectricity() {
   const [receiptData, setReceiptData] = useState(null);
   const navigate = useNavigate();
 
+  // PIN verification states
+  const [showPINModal, setShowPINModal] = useState(false);
+  const [pendingTransaction, setPendingTransaction] = useState(null);
+  const { pinStatus } = usePIN();
+
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setLoading(true);
 
-    const payload = {
+    // Check if user has PIN set up
+    if (!pinStatus.hasPin) {
+      toast.error("Please set up your transaction PIN first in Settings");
+      return;
+    }
+
+    // Check if PIN is locked
+    if (pinStatus.isLocked) {
+      toast.error("Your PIN is locked. Please try again later or reset your PIN.");
+      return;
+    }
+
+    // Store transaction details and show PIN modal
+    setPendingTransaction({
       disco: form.disco,
       meter_number: form.meter_number,
       amount: Number(form.amount),
       phone: form.phone || undefined,
-    };
+    });
+    
+    setShowPINModal(true);
+  };
+
+  const processPurchase = async () => {
+    if (!pendingTransaction) return;
+
+    setLoading(true);
 
     try {
-      const res = await client.post("/bills/electricity/", payload);
-      setReceiptData({ status: "success", type: "electricity", ...payload });
+      await client.post("/bills/electricity/", pendingTransaction);
+      setReceiptData({ status: "success", type: "electricity", ...pendingTransaction });
       toast.success("Electricity paid!");
+      setPendingTransaction(null);
     } catch (err) {
-      setReceiptData({ status: "failed", type: "electricity", ...payload });
+      setReceiptData({ status: "failed", type: "electricity", ...pendingTransaction });
       toast.error(err.response?.data?.message || "Failed");
     } finally {
       setLoading(false);
@@ -149,6 +177,22 @@ export default function BuyElectricity() {
             setReceiptData(null);
             navigate("/dashboard", { state: { transactionCompleted: true } });
           }}
+        />
+
+        {/* PIN Verification Modal */}
+        <PINVerificationModal
+          isOpen={showPINModal}
+          onClose={() => {
+            setShowPINModal(false);
+            setPendingTransaction(null);
+          }}
+          onVerified={processPurchase}
+          transactionDetails={pendingTransaction ? {
+            type: "Electricity Payment",
+            amount: pendingTransaction.amount,
+            recipient: DISCOS[pendingTransaction.disco],
+            description: `Meter: ${pendingTransaction.meter_number}`
+          } : null}
         />
       </div>
     </div>

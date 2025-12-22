@@ -8,6 +8,8 @@ import { motion } from "framer-motion";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Receipt from "../../components/Receipt";
+import PINVerificationModal from "../../components/PIN/PINVerificationModal";
+import { usePIN } from "../../hooks/usePIN";
 
 const ASSET_CACHE_KEY = "asset_cache_v1";
 const RATE_CACHE_KEY = (id) => `buycrypto_cache_${id}`;
@@ -77,6 +79,11 @@ export default function BuyCrypto() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [recentWallets, setRecentWallets] = useState([]);
   const autoRefreshIntervalRef = useRef(null); // NEW: track auto-refresh timer
+
+  // PIN verification states
+  const [showPINModal, setShowPINModal] = useState(false);
+  const [pendingTransaction, setPendingTransaction] = useState(null);
+  const { pinStatus } = usePIN();
 
   // NEW: Track form activity to know if user is still on the page
   const formActivityRef = useRef(Date.now());
@@ -478,12 +485,40 @@ export default function BuyCrypto() {
   const cachedRate = JSON.parse(localStorage.getItem(RATE_CACHE_KEY(id)) || "null");
   const cacheAgeWarning = cachedRate ?  validateCacheAge(cachedRate. timestamp) : null;
 
-  // ---------------- SUBMIT ----------------
+  // ---------------- SUBMIT - Modified to Show PIN Modal ----------------
+  const handleConfirmClick = () => {
+    if (!validateForm()) return;
+    
+    // Check if user has PIN set up
+    if (!pinStatus.hasPin) {
+      setMessage({ type: "error", text: "Please set up your transaction PIN first in Settings" });
+      setShowConfirm(false);
+      return;
+    }
+
+    // Check if PIN is locked
+    if (pinStatus.isLocked) {
+      setMessage({ type: "error", text: "Your PIN is locked. Please try again later or reset your PIN." });
+      setShowConfirm(false);
+      return;
+    }
+
+    // Store pending transaction and show PIN modal
+    setPendingTransaction({
+      ...form,
+      cryptoSymbol: crypto.symbol,
+      totalNgn: totalNgn,
+      cryptoReceived: cryptoReceived
+    });
+    
+    setShowConfirm(false);
+    setShowPINModal(true);
+  };
+
   const confirmAndSubmit = async () => {
     if (!validateForm()) return;
     setSubmitting(true);
     setMessage(null);
-    setShowConfirm(false);
 
     try {
       const res = await client.post(`/buy-crypto/${id}/`, form);
@@ -512,6 +547,7 @@ export default function BuyCrypto() {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 1200);
 
+      setPendingTransaction(null);
     } catch (err) {
       const pretty = parseBackendError(err);
       setMessage({ type: "error", text: pretty });
@@ -797,7 +833,7 @@ export default function BuyCrypto() {
             cryptoReceived={cryptoReceived}
             form={form}
             onCancel={() => setShowConfirm(false)}
-            onConfirm={confirmAndSubmit}
+            onConfirm={handleConfirmClick}
           />
         )}
 
@@ -805,6 +841,22 @@ export default function BuyCrypto() {
         {showSuccess && <SuccessOverlay />}
 
         <Receipt type="crypto" data={receiptData} onClose={() => setReceiptData(null)} />
+
+        {/* PIN Verification Modal */}
+        <PINVerificationModal
+          isOpen={showPINModal}
+          onClose={() => {
+            setShowPINModal(false);
+            setPendingTransaction(null);
+          }}
+          onVerified={confirmAndSubmit}
+          transactionDetails={pendingTransaction ? {
+            type: "Crypto Purchase",
+            amount: pendingTransaction.totalNgn,
+            recipient: pendingTransaction.wallet_address,
+            description: `Buy ${pendingTransaction.cryptoReceived?.toFixed(8)} ${pendingTransaction.cryptoSymbol}`
+          } : null}
+        />
       </div>
     </>
   );
