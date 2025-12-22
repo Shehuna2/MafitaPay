@@ -74,7 +74,6 @@ export default function BuyCrypto() {
   const [rateLoading, setRateLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [recentWallets, setRecentWallets] = useState([]);
@@ -485,21 +484,21 @@ export default function BuyCrypto() {
   const cachedRate = JSON.parse(localStorage.getItem(RATE_CACHE_KEY(id)) || "null");
   const cacheAgeWarning = cachedRate ?  validateCacheAge(cachedRate. timestamp) : null;
 
-  // ---------------- SUBMIT - Modified to Show PIN Modal ----------------
-  const handleConfirmClick = () => {
+  // ---------------- SUBMIT - Show PIN Modal Directly ----------------
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
     if (!validateForm()) return;
     
     // Check if user has PIN set up
     if (!pinStatus.hasPin) {
       setMessage({ type: "error", text: "Please set up your transaction PIN first in Settings" });
-      setShowConfirm(false);
       return;
     }
 
     // Check if PIN is locked
     if (pinStatus.isLocked) {
       setMessage({ type: "error", text: "Your PIN is locked. Please try again later or reset your PIN." });
-      setShowConfirm(false);
       return;
     }
 
@@ -511,7 +510,6 @@ export default function BuyCrypto() {
       cryptoReceived: cryptoReceived
     });
     
-    setShowConfirm(false);
     setShowPINModal(true);
   };
 
@@ -665,10 +663,7 @@ export default function BuyCrypto() {
 
             {/* FORM */}
             <form
-              onSubmit={(e) => {
-                e. preventDefault();
-                if (validateForm()) setShowConfirm(true);
-              }}
+              onSubmit={handleSubmit}
               className="space-y-4"
             >
               {/* Amount & currency */}
@@ -826,17 +821,6 @@ export default function BuyCrypto() {
           </div>
         </div>
 
-        {/* Confirm Modal */}
-        {showConfirm && (
-          <ConfirmModal
-            crypto={crypto}
-            cryptoReceived={cryptoReceived}
-            form={form}
-            onCancel={() => setShowConfirm(false)}
-            onConfirm={handleConfirmClick}
-          />
-        )}
-
         {/* Success */}
         {showSuccess && <SuccessOverlay />}
 
@@ -924,23 +908,6 @@ function SuccessOverlay() {
       <motion.div className="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center text-white text-xl font-bold" initial={{ scale: 0 }} animate={{ scale: 1.2 }} transition={{ type: "spring", stiffness: 200, damping: 15 }}>
         ✓
       </motion.div>
-    </div>
-  );
-}
-
-function ConfirmModal({ crypto, cryptoReceived, form, onCancel, onConfirm }) {
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-xl p-6 w-80 text-white border border-gray-700">
-        <p className="text-sm mb-4">Confirm your purchase</p>
-        <p className="text-xs text-gray-400 mb-2">
-          You are about to buy <span className="text-indigo-400 font-bold">{cryptoReceived.toFixed(8)} {crypto.symbol}</span> using <span className="font-bold">{form.amount} {form.currency}</span>
-        </p>
-        <div className="flex gap-3 mt-4">
-          <button onClick={onCancel} className="flex-1 py-2 bg-gray-700 rounded-xl text-sm">Cancel</button>
-          <button onClick={onConfirm} className="flex-1 py-2 bg-indigo-600 rounded-xl text-sm">Confirm</button>
-        </div>
-      </div>
     </div>
   );
 }
