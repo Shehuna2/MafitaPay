@@ -213,9 +213,9 @@ const PINInput = ({
                 h-14 text-xl font-semibold rounded-lg border-2
                 bg-white text-gray-900 border-gray-300
                 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600
-                hover: bg-blue-50 hover: border-blue-500
+                hover:bg-blue-50 hover:border-blue-500
                 dark:hover:bg-gray-700 dark:hover:border-blue-400
-                active:bg-blue-100 dark:active: bg-gray-600
+                active:bg-blue-100 dark:active:bg-gray-600
                 transition-all duration-150
                 ${loading || biometricLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
               `}

@@ -50,9 +50,11 @@ const PINVerificationModal = ({
       if (result.success) {
         toast.success('Biometric verification successful!');
         
-        // Call onVerified callback without PIN (biometric verified)
+        // Call onVerified callback
+        // Note: We pass null for the PIN parameter since biometric was used
+        // Consumers should handle both PIN (string) and biometric (null) verification
         if (onVerified) {
-          onVerified(null); // null indicates biometric verification
+          onVerified(null);
         }
         
         onClose();
