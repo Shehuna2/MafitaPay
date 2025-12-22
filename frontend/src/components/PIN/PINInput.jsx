@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { LockIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
+import { LockIcon, EyeIcon, EyeOffIcon, FingerprintIcon } from 'lucide-react';
 
 /**
  * PINInput Component
@@ -11,7 +11,10 @@ const PINInput = ({
   showKeypad = true,
   autoFocus = true,
   error = null,
-  loading = false
+  loading = false,
+  showBiometric = false,
+  onBiometricClick = null,
+  biometricLoading = false
 }) => {
   const [pin, setPin] = useState(['', '', '', '']);
   const [showPin, setShowPin] = useState(false);
@@ -205,7 +208,7 @@ const PINInput = ({
             <button
               type="button"
               onClick={() => handleKeypadClick('0')}
-              disabled={loading}
+              disabled={loading || biometricLoading}
               className={`
                 h-14 text-xl font-semibold rounded-lg border-2
                 bg-white text-gray-900 border-gray-300
@@ -214,13 +217,37 @@ const PINInput = ({
                 dark:hover:bg-gray-700 dark:hover:border-blue-400
                 active:bg-blue-100 dark:active: bg-gray-600
                 transition-all duration-150
-                ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                ${loading || biometricLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
               `}
             >
               0
             </button>
 
-            <div />
+            {/* Biometric Button or Empty Space */}
+            {showBiometric && onBiometricClick ? (
+              <button
+                type="button"
+                onClick={onBiometricClick}
+                disabled={loading || biometricLoading}
+                className={`
+                  h-14 rounded-lg border-2
+                  bg-gradient-to-br from-purple-600 to-purple-700 text-white border-purple-500
+                  dark:from-purple-700 dark:to-purple-800 dark:border-purple-600
+                  hover:from-purple-500 hover:to-purple-600 hover:shadow-lg hover:shadow-purple-500/30
+                  dark:hover:from-purple-600 dark:hover:to-purple-700
+                  active:from-purple-700 active:to-purple-800
+                  transition-all duration-150 transform hover:scale-105
+                  flex items-center justify-center
+                  ${loading || biometricLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                  ${biometricLoading ? 'animate-pulse' : ''}
+                `}
+                aria-label="Use biometric authentication"
+              >
+                <FingerprintIcon className={`w-7 h-7 ${biometricLoading ? 'animate-spin' : ''}`} />
+              </button>
+            ) : (
+              <div />
+            )}
           </div>
         </div>
       )}
