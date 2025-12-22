@@ -47,7 +47,7 @@ export default function BuyCableTV() {
           amount: defaultPlan.variation_amount
         }));
       }
-    } catch (err) {
+    } catch {
       toast.error("Failed to load plans");
     } finally {
       setFetchingPlans(false);

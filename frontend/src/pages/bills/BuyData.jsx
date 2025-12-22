@@ -1,5 +1,5 @@
 // src/pages/BuyData.jsx — FULL MERGED + FULL NUMBER VALIDATION FIX (2025)
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Zap, Crown, Gift, Shield } from "lucide-react";
 import client from "../../api/client";
 import { toast } from "react-toastify";
@@ -85,16 +85,12 @@ export default function BuyData() {
   const [form, setForm] = useState({ phone: "", network: "mtn", variation_id: "" });
   const [networkLocked, setNetworkLocked] = useState(false);
 
-  const [plans, setPlans] = useState([]);
   const [groupedPlans, setGroupedPlans] = useState({});
   const [selectedCategory, setSelectedCategory] = useState("SME2");
 
   const [loading, setLoading] = useState(false);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [receiptData, setReceiptData] = useState(null);
-
-  const [showConfirm, setShowConfirm] = useState(false);
-  const modalRef = useRef(null);
 
   // PIN verification states
   const [showPINModal, setShowPINModal] = useState(false);
@@ -127,17 +123,14 @@ export default function BuyData() {
       const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
       if (cached?.grouped) {
         setGroupedPlans(cached.grouped);
-        setPlans(Object.values(cached.grouped).flat());
       }
 
       try {
         const res = await client.get(`/bills/data/plans/?network=${form.network}`);
         const grouped = res.data.plans || {};
-        const flat = Object.values(grouped).flat();
 
         if (mounted) {
           setGroupedPlans(grouped);
-          setPlans(flat);
         }
 
         localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), grouped }));
@@ -206,7 +199,7 @@ export default function BuyData() {
 
 
   /* ----------------------------------------------------
-     PLAN CLICK - Show PIN Modal First
+     PLAN CLICK - Show PIN Modal Directly
   ---------------------------------------------------- */
   const handlePlanClick = (plan) => {
     const { valid, detected } = validateNigerianPhone(form.phone);
@@ -226,33 +219,13 @@ export default function BuyData() {
       return;
     }
 
-    setForm(prev => ({ ...prev, variation_id: plan.id }));
-    setShowConfirm(true);
-  };
-
-  const selectedPlan = plans.find(p => p.id === form.variation_id);
-
-
-  /* ----------------------------------------------------
-     CONFIRM PURCHASE - Trigger PIN Verification
-  ---------------------------------------------------- */
-  const confirmPurchase = () => {
-    setShowConfirm(false);
-
-    const { valid, normalized, detected } = validateNigerianPhone(form.phone);
-    if (!valid) return toast.error("Invalid phone number");
-    if (detected !== form.network)
-      return toast.error("Wrong network selected.");
-
-    if (!selectedPlan) return toast.error("Select a valid plan.");
-
     // Store pending transaction and show PIN modal
     setPendingTransaction({
-      phone: normalized,
+      phone: validateNigerianPhone(form.phone).normalized,
       network: form.network,
-      variation_id: selectedPlan.id,
-      amount: selectedPlan.amount,
-      plan: selectedPlan
+      variation_id: plan.id,
+      amount: plan.amount,
+      plan: plan
     });
     
     setShowPINModal(true);
@@ -448,31 +421,6 @@ export default function BuyData() {
           </div>
         </div>
       </div>
-
-      {/* CONFIRM MODAL */}
-      {showConfirm && selectedPlan && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowConfirm(false)}>
-          <div ref={modalRef} className="bg-gray-900 rounded-2xl p-6 max-w-sm w-full border border-gray-700" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-bold text-white mb-4">Confirm Purchase</h3>
-
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between"><span>Phone:</span> <span>{form.phone}</span></div>
-              <div className="flex justify-between"><span>Plan:</span> <span>{selectedPlan.name}</span></div>
-              <div className="flex justify-between"><span>Price:</span> <span className="font-bold">₦{selectedPlan.amount}</span></div>
-              <div className="flex justify-between"><span>Provider:</span> <span className="text-green-400">{selectedPlan.provider}</span></div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button onClick={confirmPurchase} className="flex-1 bg-green-600 hover:bg-green-500 py-3 rounded-xl font-bold">
-                Confirm
-              </button>
-              <button onClick={() => setShowConfirm(false)} className="flex-1 bg-red-600 hover:bg-red-500 py-3 rounded-xl font-bold">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <Receipt data={receiptData} onClose={() => { setReceiptData(null); resetForm(); }} />
 
