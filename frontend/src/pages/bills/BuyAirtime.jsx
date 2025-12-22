@@ -379,7 +379,7 @@ export default function BuyAirtime() {
         transactionDetails={pendingTransaction ? {
           type: "Airtime Purchase",
           amount: pendingTransaction.amount,
-          recipient: `${pendingTransaction.network.toUpperCase()} - ${form.phone}`,
+          recipient: `${pendingTransaction.network.toUpperCase()} - ${pendingTransaction.phone}`,
           description: `${pendingTransaction.network.toUpperCase()} Airtime`
         } : null}
       />
