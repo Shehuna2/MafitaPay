@@ -8,9 +8,18 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:sync": "cap sync",
+    "cap:ios": "cap open ios",
+    "cap:android": "cap open android",
+    "build:native": "vite build && cap sync"
   },
   "dependencies": {
+    "@aparajita/capacitor-biometric-auth": "^9.1.2",
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/ios": "^8.0.0",
     "@headlessui/react": "^2.2.9",
     "@heroicons/react": "^2.2.0",
     "@phosphor-icons/react": "^2.1.10",
@@ -53,6 +62,7 @@
     "globals": "^16.4.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.15",
+    "typescript": "^5.9.3",
     "vite": "^7.1.7"
   }
 }

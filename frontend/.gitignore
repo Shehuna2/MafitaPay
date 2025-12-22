@@ -30,3 +30,15 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Capacitor
+# Keep AndroidManifest.xml and Info.plist as they contain our custom permissions
+ios/*
+!ios/App/
+!ios/App/App/
+!ios/App/App/Info.plist
+android/*
+!android/app/
+!android/app/src/
+!android/app/src/main/
+!android/app/src/main/AndroidManifest.xml
