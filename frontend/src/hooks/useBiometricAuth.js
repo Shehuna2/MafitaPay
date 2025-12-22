@@ -110,11 +110,16 @@ export default function useBiometricAuth() {
           // On successful authentication, register with backend
           // For native, we just store a flag that biometric is enabled
           // The actual biometric verification is handled by the OS
+          // Generate a cryptographically secure unique identifier
+          const credentialId = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+          
           const response = await axios.post(
             `${API_BASE}/biometric/enroll/`,
             {
-              credential_id: `native_${user.email || 'user'}_${Date.now()}`,
-              public_key: "native_biometric", // Placeholder for native
+              credential_id: `native_${credentialId}`,
+              public_key: `native_biometric_${Capacitor.getPlatform()}_${credentialId}`, // Unique identifier for native
               platform: Capacitor.getPlatform(),
             },
             {
