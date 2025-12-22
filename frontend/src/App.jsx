@@ -21,6 +21,7 @@ import Profile from "./pages/accounts/Profile";
 import VerifyEmail from "./pages/accounts/VerifyEmail";
 import ResetPassword from "./pages/accounts/ResetPassword";
 import ResetPasswordRequest from "./pages/accounts/ResetPasswordRequest";
+import SecuritySettings from "./pages/SecuritySettings";
 
 import BuyData from "./pages/bills/BuyData";
 import BuyAirtime from "./pages/bills/BuyAirtime";
@@ -98,6 +99,16 @@ function App() {
               }
             />
 
+            <Route
+              path="/security-settings"
+              element={
+                <PrivateRoute>
+                  <Layout>
+                    <SecuritySettings />
+                  </Layout>
+                </PrivateRoute>
+              }
+            />
 
             <Route
               path="/dashboard"

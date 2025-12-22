@@ -9,6 +9,7 @@ import {
   LogOut,
   MessageCircle,
   ArrowLeft,
+  Shield,
 } from "lucide-react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -185,6 +186,29 @@ export default function Profile() {
               </a>
             </div>
           )}
+
+          {/* Security & Authentication */}
+          <div className="bg-gradient-to-r from-blue-900/40 to-indigo-900/30 border border-blue-700/50 rounded-2xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-blue-400" />
+                  Security & Authentication
+                </h3>
+                <p className="text-gray-300 text-sm">
+                  Manage your PIN and biometric authentication settings
+                </p>
+              </div>
+              <Link
+                to="/security-settings"
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-5 py-3 rounded-xl font-medium transition"
+              >
+                <Shield className="w-5 h-5" />
+                <span className="hidden sm:inline">Manage Security</span>
+                <span className="sm:hidden">Security</span>
+              </Link>
+            </div>
+          </div>
 
           {/* Responsive Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">

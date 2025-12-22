@@ -47,22 +47,24 @@ const BiometricEnrollmentModal = ({ isOpen, onClose, onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-2xl max-w-lg w-full">
+      
+
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center space-x-3">
-            <div className="bg-purple-100 p-2 rounded-full">
-              <FingerprintIcon className="w-6 h-6 text-purple-600" />
+            <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-full">
+              <FingerprintIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
             </div>
-            <h2 className="text-xl font-bold text-gray-800">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">
               Biometric Authentication
             </h2>
           </div>
           {!checking && (
             <button
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               <XIcon className="w-6 h-6" />
             </button>
@@ -73,55 +75,60 @@ const BiometricEnrollmentModal = ({ isOpen, onClose, onSuccess }) => {
         <div className="p-6">
           {step === 1 && (
             <div className="space-y-6">
+
               {/* Info */}
               <div className="text-center space-y-4">
-                <div className="bg-purple-50 p-4 rounded-full w-24 h-24 mx-auto flex items-center justify-center">
-                  <FingerprintIcon className="w-12 h-12 text-purple-600" />
+                <div className="bg-purple-50 dark:bg-purple-900/30 p-4 rounded-full w-24 h-24 mx-auto flex items-center justify-center">
+                  <FingerprintIcon className="w-12 h-12 text-purple-600 dark:text-purple-400" />
                 </div>
                 
-                <h3 className="text-2xl font-bold text-gray-800">
+                <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
                   Secure Your Transactions
                 </h3>
                 
-                <p className="text-gray-600">
+                <p className="text-gray-600 dark:text-gray-300">
                   Use your fingerprint or face recognition to quickly and securely
                   authorize transactions without entering your PIN.
                 </p>
               </div>
 
               {/* Features */}
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
-                <h4 className="font-semibold text-gray-900 mb-2">Benefits:</h4>
+              <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
+                <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                  Benefits:
+                </h4>
                 
                 <div className="flex items-start space-x-3">
-                  <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-gray-700">
+                  <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
                     <strong>Fast & Convenient:</strong> No need to remember and type your PIN
                   </p>
                 </div>
                 
                 <div className="flex items-start space-x-3">
-                  <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-gray-700">
+                  <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
                     <strong>Highly Secure:</strong> Your biometric data never leaves your device
                   </p>
                 </div>
                 
                 <div className="flex items-start space-x-3">
-                  <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-gray-700">
+                  <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
                     <strong>PIN Fallback:</strong> You can always use your PIN if biometrics are unavailable
                   </p>
                 </div>
               </div>
 
               {/* Device Requirements */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <div className="flex items-start space-x-2">
-                  <SmartphoneIcon className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <SmartphoneIcon className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="font-semibold text-blue-900 mb-1">Device Requirements:</h4>
-                    <p className="text-sm text-blue-800">
+                    <h4 className="font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                      Device Requirements:
+                    </h4>
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
                       Your device must support fingerprint or face recognition.
                       Make sure you've set up biometric authentication in your device settings.
                     </p>
@@ -131,10 +138,12 @@ const BiometricEnrollmentModal = ({ isOpen, onClose, onSuccess }) => {
 
               {/* Error Message */}
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
                   <div className="flex items-start space-x-2">
-                    <AlertCircleIcon className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-red-800">{error}</p>
+                    <AlertCircleIcon className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-800 dark:text-red-300">
+                      {error}
+                    </p>
                   </div>
                 </div>
               )}
@@ -143,8 +152,8 @@ const BiometricEnrollmentModal = ({ isOpen, onClose, onSuccess }) => {
               <button
                 onClick={handleEnroll}
                 className="w-full py-3 px-4 bg-purple-600 text-white font-semibold rounded-lg
-                         hover:bg-purple-700 active:bg-purple-800 transition-colors
-                         flex items-center justify-center space-x-2"
+                           hover:bg-purple-700 active:bg-purple-800 transition-colors
+                           flex items-center justify-center space-x-2"
               >
                 <FingerprintIcon className="w-5 h-5" />
                 <span>Enroll Biometric Authentication</span>
@@ -155,17 +164,17 @@ const BiometricEnrollmentModal = ({ isOpen, onClose, onSuccess }) => {
           {step === 2 && (
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
               <div className="relative">
-                <div className="absolute inset-0 bg-purple-100 rounded-full animate-ping"></div>
-                <div className="relative bg-purple-50 p-6 rounded-full">
-                  <FingerprintIcon className="w-16 h-16 text-purple-600 animate-pulse" />
+                <div className="absolute inset-0 bg-purple-100 dark:bg-purple-900/40 rounded-full animate-ping"></div>
+                <div className="relative bg-purple-50 dark:bg-purple-900/30 p-6 rounded-full">
+                  <FingerprintIcon className="w-16 h-16 text-purple-600 dark:text-purple-400 animate-pulse" />
                 </div>
               </div>
               
-              <h3 className="text-2xl font-bold text-gray-800">
+              <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
                 Setting Up...
               </h3>
               
-              <p className="text-gray-600 text-center max-w-sm">
+              <p className="text-gray-600 dark:text-gray-300 text-center max-w-sm">
                 Please follow the prompt on your device to complete biometric enrollment.
               </p>
               
@@ -179,15 +188,15 @@ const BiometricEnrollmentModal = ({ isOpen, onClose, onSuccess }) => {
 
           {step === 3 && (
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
-              <div className="bg-green-100 p-4 rounded-full">
-                <CheckCircleIcon className="w-16 h-16 text-green-600" />
+              <div className="bg-green-100 dark:bg-green-900/30 p-4 rounded-full">
+                <CheckCircleIcon className="w-16 h-16 text-green-600 dark:text-green-400" />
               </div>
               
-              <h3 className="text-2xl font-bold text-gray-800">
+              <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
                 Enrollment Successful!
               </h3>
               
-              <p className="text-gray-600 text-center max-w-sm">
+              <p className="text-gray-600 dark:text-gray-300 text-center max-w-sm">
                 Biometric authentication is now enabled for your account.
                 You can use it to quickly authorize transactions.
               </p>
@@ -198,7 +207,7 @@ const BiometricEnrollmentModal = ({ isOpen, onClose, onSuccess }) => {
         {/* Footer */}
         {step === 1 && (
           <div className="px-6 pb-6">
-            <div className="flex items-start space-x-2 text-xs text-gray-500">
+            <div className="flex items-start space-x-2 text-xs text-gray-500 dark:text-gray-400">
               <AlertCircleIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <p>
                 Your biometric data is stored securely on your device and never sent to our servers.

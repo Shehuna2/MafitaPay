@@ -71,10 +71,11 @@ const PINSetupModal = ({ isOpen, onClose, onSuccess }) => {
         }, 2000);
       }
     } catch (err) {
-      const errorMsg = err.response?.data?.error || 
-                       err.response?.data?.pin?.[0] || 
-                       err.response?.data?.pin_confirmation?.[0] ||
-                       'Failed to set up PIN';
+      const errorMsg =
+        err.response?.data?.error ||
+        err.response?.data?.pin?.[0] ||
+        err.response?.data?.pin_confirmation?.[0] ||
+        'Failed to set up PIN';
       setError(errorMsg);
       toast.error(errorMsg);
       
@@ -113,22 +114,23 @@ const PINSetupModal = ({ isOpen, onClose, onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center space-x-3">
-            <div className="bg-blue-100 p-2 rounded-full">
-              <ShieldIcon className="w-6 h-6 text-blue-600" />
+            <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full">
+              <ShieldIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
-            <h2 className="text-xl font-bold text-gray-800">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">
               Set Up Transaction PIN
             </h2>
           </div>
           {!loading && (
             <button
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               <XIcon className="w-6 h-6" />
             </button>
@@ -139,10 +141,13 @@ const PINSetupModal = ({ isOpen, onClose, onSuccess }) => {
         <div className="p-6">
           {step === 1 && (
             <div className="space-y-6">
+
               {/* Instructions */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="font-semibold text-blue-900 mb-2">📌 PIN Guidelines:</h3>
-                <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">
+                  📌 PIN Guidelines:
+                </h3>
+                <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-disc list-inside">
                   <li>Must be exactly 4 digits</li>
                   <li>Avoid common patterns (1234, 0000, etc.)</li>
                   <li>Don't use your birthday or phone number</li>
@@ -164,9 +169,10 @@ const PINSetupModal = ({ isOpen, onClose, onSuccess }) => {
 
           {step === 2 && (
             <div className="space-y-6">
+
               {/* Info */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <p className="text-sm text-green-800 font-medium">
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <p className="text-sm text-green-800 dark:text-green-300 font-medium">
                   ✓ PIN created. Please confirm to continue.
                 </p>
               </div>
@@ -185,7 +191,7 @@ const PINSetupModal = ({ isOpen, onClose, onSuccess }) => {
               {!loading && (
                 <button
                   onClick={handleBack}
-                  className="w-full py-2 text-sm text-gray-600 hover:text-gray-800 font-medium"
+                  className="w-full py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium"
                 >
                   ← Back to enter new PIN
                 </button>
@@ -195,14 +201,16 @@ const PINSetupModal = ({ isOpen, onClose, onSuccess }) => {
 
           {step === 3 && (
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
-              <div className="bg-green-100 p-4 rounded-full">
-                <CheckCircleIcon className="w-16 h-16 text-green-600" />
+              <div className="bg-green-100 dark:bg-green-900/30 p-4 rounded-full">
+                <CheckCircleIcon className="w-16 h-16 text-green-600 dark:text-green-400" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-800">Success!</h3>
-              <p className="text-gray-600 text-center">
+              <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                Success!
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300 text-center">
                 Your transaction PIN has been set up successfully.
               </p>
-              <p className="text-sm text-gray-500 text-center">
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
                 You can now use it to secure your transactions.
               </p>
             </div>
@@ -212,7 +220,7 @@ const PINSetupModal = ({ isOpen, onClose, onSuccess }) => {
         {/* Security Notice */}
         {step !== 3 && (
           <div className="px-6 pb-6">
-            <div className="flex items-start space-x-2 text-xs text-gray-500">
+            <div className="flex items-start space-x-2 text-xs text-gray-500 dark:text-gray-400">
               <AlertCircleIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <p>
                 Your PIN is encrypted and securely stored. Never share it with anyone.
