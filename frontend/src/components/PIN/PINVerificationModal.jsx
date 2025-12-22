@@ -170,7 +170,7 @@ const PINVerificationModal = ({
               {transactionDetails.type && (
                 <div className="flex items-start gap-2 text-xs sm:text-sm">
                   <span className="text-gray-600 dark:text-gray-400 flex-shrink-0">Type:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100 capitalize text-right break-words">
+                  <span className="font-medium text-gray-900 dark:text-gray-100 capitalize break-words">
                     {transactionDetails.type}
                   </span>
                 </div>
@@ -179,7 +179,7 @@ const PINVerificationModal = ({
               {transactionDetails.amount && (
                 <div className="flex items-start gap-2 text-xs sm:text-sm">
                   <span className="text-gray-600 dark:text-gray-400 flex-shrink-0">Amount:</span>
-                  <span className="font-bold text-gray-900 dark:text-gray-100 text-sm sm:text-base md:text-lg text-right">
+                  <span className="font-bold text-gray-900 dark:text-gray-100 text-sm sm:text-base md:text-lg">
                     ₦{Number(transactionDetails.amount).toLocaleString()}
                   </span>
                 </div>
@@ -188,7 +188,7 @@ const PINVerificationModal = ({
               {transactionDetails.recipient && (
                 <div className="flex items-start gap-2 text-xs sm:text-sm">
                   <span className="text-gray-600 dark:text-gray-400 flex-shrink-0">Recipient:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100 text-right break-words truncate">
+                  <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
                     {transactionDetails.recipient}
                   </span>
                 </div>
@@ -197,7 +197,7 @@ const PINVerificationModal = ({
               {transactionDetails.description && (
                 <div className="flex items-start gap-2 text-xs sm:text-sm">
                   <span className="text-gray-600 dark:text-gray-400 flex-shrink-0">Description:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100 text-right break-words">
+                  <span className="font-medium text-gray-900 dark:text-gray-100 break-words">
                     {transactionDetails.description}
                   </span>
                 </div>
