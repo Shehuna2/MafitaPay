@@ -133,15 +133,15 @@ const PINVerificationModal = ({
       <div
         className="
           bg-white dark:bg-gray-900
-          w-full sm:max-w-md
+          w-full max-w-lg sm:max-w-xl
           rounded-t-2xl sm:rounded-2xl
           shadow-2xl
-          max-h-[85vh]
+          max-h-[90vh]
           overflow-hidden
         "
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-3 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-green-100 dark:bg-green-900/30">
               <ShieldCheckIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
@@ -161,43 +161,43 @@ const PINVerificationModal = ({
         </div>
 
         {/* Scrollable Content */}
-        <div className="overflow-y-auto px-4 py-4 space-y-5">
+        <div className="overflow-y-auto px-3 sm:px-4 py-4 space-y-4 sm:space-y-5 max-h-[60vh] sm:max-h-[65vh]">
           {/* Transaction Details */}
           {transactionDetails && (
             <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-2">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Transaction Details</h3>
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Transaction Details</h3>
               
               {transactionDetails.type && (
-                <div className="flex justify-between text-xs sm:text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Type:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100 capitalize">
+                <div className="flex items-start gap-2 text-xs sm:text-sm">
+                  <span className="text-gray-600 dark:text-gray-400 flex-shrink-0">Type:</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100 capitalize text-right break-words">
                     {transactionDetails.type}
                   </span>
                 </div>
               )}
               
               {transactionDetails.amount && (
-                <div className="flex justify-between text-xs sm:text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Amount:</span>
-                  <span className="font-bold text-gray-900 dark:text-gray-100 text-base sm:text-lg">
+                <div className="flex items-start gap-2 text-xs sm:text-sm">
+                  <span className="text-gray-600 dark:text-gray-400 flex-shrink-0">Amount:</span>
+                  <span className="font-bold text-gray-900 dark:text-gray-100 text-sm sm:text-base md:text-lg text-right">
                     ₦{Number(transactionDetails.amount).toLocaleString()}
                   </span>
                 </div>
               )}
               
               {transactionDetails.recipient && (
-                <div className="flex justify-between text-xs sm:text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Recipient:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">
+                <div className="flex items-start gap-2 text-xs sm:text-sm">
+                  <span className="text-gray-600 dark:text-gray-400 flex-shrink-0">Recipient:</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100 text-right break-words truncate">
                     {transactionDetails.recipient}
                   </span>
                 </div>
               )}
               
               {transactionDetails.description && (
-                <div className="flex justify-between text-xs sm:text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Description:</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">
+                <div className="flex items-start gap-2 text-xs sm:text-sm">
+                  <span className="text-gray-600 dark:text-gray-400 flex-shrink-0">Description:</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100 text-right break-words">
                     {transactionDetails.description}
                   </span>
                 </div>
@@ -213,17 +213,19 @@ const PINVerificationModal = ({
           </div>
 
           {/* PIN Input */}
-          <PINInput
-            title="Enter Transaction PIN"
-            onComplete={handlePinComplete}
-            error={error}
-            loading={loading}
-            showKeypad={true}
-            autoFocus={true}
-            showBiometric={isSupported && biometricStatus && biometricStatus.enabled && !biometricStatus.loading}
-            onBiometricClick={handleBiometricVerification}
-            biometricLoading={biometricLoading}
-          />
+          <div className="w-full max-w-sm mx-auto">
+            <PINInput
+              title="Enter Transaction PIN"
+              onComplete={handlePinComplete}
+              error={error}
+              loading={loading}
+              showKeypad={true}
+              autoFocus={true}
+              showBiometric={isSupported && biometricStatus && biometricStatus.enabled && !biometricStatus.loading}
+              onBiometricClick={handleBiometricVerification}
+              biometricLoading={biometricLoading}
+            />
+          </div>
 
           {/* Attempts Counter */}
           {attemptsLeft < 5 && attemptsLeft > 0 && (
@@ -236,9 +238,9 @@ const PINVerificationModal = ({
         </div>
 
         {/* Footer */}
-        <div className="px-4 pb-4">
-          <div className="flex items-start gap-2 text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
-            <AlertCircleIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />
+        <div className="px-3 sm:px-4 pb-3 sm:pb-4">
+          <div className="flex items-start gap-2 text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+            <AlertCircleIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
             <p>
               Your PIN is required to complete this transaction. After 5 failed attempts,
               your PIN will be locked for 30 minutes for security reasons.
