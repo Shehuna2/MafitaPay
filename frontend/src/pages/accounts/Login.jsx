@@ -178,7 +178,7 @@ export default function Login() {
   const displayName = reauthUser?.first_name || reauthUser?.email || formData.email.split("@")[0];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-950 to-black flex items-center justify-center px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
       {/* Loading overlay */}
       {loading && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50">
