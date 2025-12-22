@@ -105,7 +105,7 @@ export default function BuyCableTV() {
     };
 
     try {
-      const res = await client.post("/bills/cable-tv/", payload);
+      await client.post("/bills/cable-tv/", payload);
       setReceiptData({ status: "success", type: "cable_tv", ...payload });
       toast.success("Subscription successful!");
       setPendingTransaction(null);

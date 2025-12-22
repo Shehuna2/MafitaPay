@@ -61,7 +61,7 @@ export default function BuyEducation() {
     setLoading(true);
 
     try {
-      const res = await client.post("/bills/education/", pendingTransaction);
+      await client.post("/bills/education/", pendingTransaction);
       setReceiptData({ status: "success", type: "education", ...pendingTransaction });
       toast.success("Scratch card purchased!");
       setPendingTransaction(null);

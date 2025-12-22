@@ -169,13 +169,6 @@ export default function BuyAirtime() {
     }
 
     // Store transaction details and show PIN modal
-    const transactionDetails = {
-      type: "Airtime Purchase",
-      amount: form.amount,
-      recipient: `${form.network.toUpperCase()} - ${form.phone}`,
-      description: `${form.network.toUpperCase()} Airtime`
-    };
-
     setPendingTransaction({
       phone: normalized,
       network: form.network,

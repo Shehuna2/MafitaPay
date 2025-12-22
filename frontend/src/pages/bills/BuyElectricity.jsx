@@ -70,7 +70,7 @@ export default function BuyElectricity() {
     setLoading(true);
 
     try {
-      const res = await client.post("/bills/electricity/", pendingTransaction);
+      await client.post("/bills/electricity/", pendingTransaction);
       setReceiptData({ status: "success", type: "electricity", ...pendingTransaction });
       toast.success("Electricity paid!");
       setPendingTransaction(null);
