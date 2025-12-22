@@ -376,9 +376,54 @@ export default function useBiometricAuth() {
     }
   }, [isSupported]);
 
+  // Authenticate with biometric and refresh token
+  const authenticateWithRefresh = useCallback(async () => {
+    if (!isSupported) {
+      return { success: false, error: "Biometric not supported" };
+    }
+
+    try {
+      setChecking(true);
+
+      // 1️⃣ Verify biometric
+      const biometricResult = await verifyBiometric();
+      if (!biometricResult.success) {
+        setChecking(false);
+        return { success: false, error: biometricResult.error };
+      }
+
+      // 2️⃣ Use refresh token to get new access token
+      const refreshToken = localStorage.getItem("refresh");
+      if (!refreshToken) {
+        setChecking(false);
+        return { success: false, error: "No refresh token found" };
+      }
+
+      const response = await axios.post(`${API_BASE}/token/refresh/`, {
+        refresh: refreshToken,
+      });
+
+      const { access } = response.data;
+      localStorage.setItem("access", access);
+      localStorage.setItem("last_active", Date.now().toString());
+      window.dispatchEvent(new Event("tokenRefreshed"));
+
+      setChecking(false);
+      return { success: true, access };
+    } catch (error) {
+      console.error("Biometric refresh authentication error:", error);
+      setChecking(false);
+      return { 
+        success: false, 
+        error: error.response?.data?.error || error.message || "Authentication failed" 
+      };
+    }
+  }, [isSupported, verifyBiometric]);
+
   return { 
     isSupported, 
-    loginWithBiometric, 
+    loginWithBiometric,
+    authenticateWithRefresh,
     checking,
     biometricStatus,
     enrollBiometric,
