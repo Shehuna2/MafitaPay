@@ -220,7 +220,7 @@ const PINVerificationModal = ({
             loading={loading}
             showKeypad={true}
             autoFocus={true}
-            showBiometric={isSupported && biometricStatus.enabled && !biometricStatus.loading}
+            showBiometric={isSupported && biometricStatus && biometricStatus.enabled && !biometricStatus.loading}
             onBiometricClick={handleBiometricVerification}
             biometricLoading={biometricLoading}
           />
