@@ -131,6 +131,8 @@ export default function useBiometricAuth() {
           );
 
           if (response.data.success) {
+            // Store user email for future biometric login
+            localStorage.setItem("biometric_user_email", user.email);
             toast.success("Biometric authentication enrolled successfully!");
             await fetchBiometricStatus();
             setChecking(false);
@@ -202,6 +204,8 @@ export default function useBiometricAuth() {
         );
 
         if (response.data.success) {
+          // Store user email for future biometric login
+          localStorage.setItem("biometric_user_email", user.email);
           toast.success("Biometric authentication enrolled successfully!");
           await fetchBiometricStatus();
           setChecking(false);
@@ -232,6 +236,8 @@ export default function useBiometricAuth() {
       );
 
       if (response.data.success) {
+        // Clear stored biometric email
+        localStorage.removeItem("biometric_user_email");
         toast.success("Biometric authentication disabled");
         await fetchBiometricStatus();
         return { success: true };

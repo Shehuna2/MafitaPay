@@ -20,6 +20,7 @@ export default function Login() {
   const [showResend, setShowResend] = useState(false);
   const [rememberMe, setRememberMe] = useState(!!localStorage.getItem("rememberedEmail"));
   const [showPassword, setShowPassword] = useState(false);
+  const [biometricEmail, setBiometricEmail] = useState(localStorage.getItem("biometric_user_email") || "");
 
   const urlParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const shouldReauth = urlParams.get("reauth") === "true";
@@ -32,7 +33,7 @@ export default function Login() {
     }
   }, []);
 
-  const { isSupported: biometricSupported, authenticateWithRefresh, checking: biometricChecking } =
+  const { isSupported: biometricSupported, loginWithBiometric, authenticateWithRefresh, checking: biometricChecking } =
     useBiometricAuth();
 
   // Email verification feedback
@@ -147,31 +148,58 @@ export default function Login() {
     setLoading(true);
     setErrorMessage("");
 
-    const { success, access } = await authenticateWithRefresh();
-    if (success) {
-      let userData;
-      try {
-        const res = await client.get(`/profile-api/?t=${Date.now()}`);
-        userData = {
-          email: res.data.email,
-          id: res.data.id,
-          is_merchant: res.data.is_merchant,
-          is_staff: res.data.is_staff,
-          full_name: res.data.full_name || null,
-          phone_number: res.data.phone_number || null,
-        };
-      } catch {
-        userData = JSON.parse(localStorage.getItem("user") || "{}");
+    // Check if we have a refresh token (re-authentication scenario)
+    const refreshToken = localStorage.getItem("refresh");
+    
+    if (refreshToken) {
+      // Re-authentication flow: use existing refresh token
+      const { success, access } = await authenticateWithRefresh();
+      if (success) {
+        let userData;
+        try {
+          const res = await client.get(`/profile-api/?t=${Date.now()}`);
+          userData = {
+            email: res.data.email,
+            id: res.data.id,
+            is_merchant: res.data.is_merchant,
+            is_staff: res.data.is_staff,
+            full_name: res.data.full_name || null,
+            phone_number: res.data.phone_number || null,
+          };
+        } catch {
+          userData = JSON.parse(localStorage.getItem("user") || "{}");
+        }
+
+        login({ access, refresh: refreshToken }, userData);
+
+        const redirect = localStorage.getItem("post_reauth_redirect") || "/dashboard";
+        localStorage.removeItem("post_reauth_redirect");
+        navigate(redirect, { replace: true });
+      } else {
+        setErrorMessage("Biometric authentication failed. Please use your password.");
       }
-
-      login({ access, refresh: localStorage.getItem("refresh") }, userData);
-
-      const redirect = localStorage.getItem("post_reauth_redirect") || "/dashboard";
-      localStorage.removeItem("post_reauth_redirect");
-      navigate(redirect, { replace: true });
+    } else if (biometricEmail) {
+      // New login flow: use biometric authentication for returning users
+      const result = await loginWithBiometric(biometricEmail);
+      
+      if (result.success) {
+        // User data is already stored in localStorage by loginWithBiometric
+        const userData = result.user;
+        const access = localStorage.getItem("access");
+        const refresh = localStorage.getItem("refresh");
+        
+        login({ access, refresh }, userData);
+        
+        const redirect = localStorage.getItem("post_reauth_redirect") || "/dashboard";
+        localStorage.removeItem("post_reauth_redirect");
+        navigate(redirect, { replace: true });
+      } else {
+        setErrorMessage("Biometric authentication failed. Please use your password.");
+      }
     } else {
-      setErrorMessage("Biometric authentication failed. Please use your password.");
+      setErrorMessage("No biometric credentials found. Please login with your password.");
     }
+    
     setLoading(false);
   };
 
@@ -306,7 +334,7 @@ export default function Login() {
           </form>
 
           {/* Biometric option */}
-          {biometricSupported && localStorage.getItem("refresh") && (
+          {biometricSupported && (biometricEmail || localStorage.getItem("refresh")) && (
             <div className="mt-6">
               <button
                 type="button"

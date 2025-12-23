@@ -388,3 +388,13 @@ class BiometricEnrollmentSerializer(serializers.Serializer):
         if not data.get('public_key'):
             raise serializers.ValidationError({"public_key": "Public key is required."})
         return data
+
+
+class BiometricLoginSerializer(serializers.Serializer):
+    """Serializer for biometric login"""
+    email = serializers.EmailField()
+    platform = serializers.CharField(max_length=20, required=False, default='web')
+
+    def validate_email(self, value):
+        value = value.lower().strip()
+        return value
