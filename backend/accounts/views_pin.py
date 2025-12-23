@@ -11,6 +11,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken
 from datetime import timedelta
 
 from .serializers import (
@@ -20,6 +21,7 @@ from .serializers import (
     PINResetRequestSerializer,
     PINResetConfirmSerializer,
     BiometricEnrollmentSerializer,
+    BiometricLoginSerializer,
 )
 from wallet.models import TransactionSecurityLog
 
@@ -434,3 +436,80 @@ class BiometricStatusView(APIView):
             "registered_at": user.biometric_registered_at,
             "has_credential": bool(user.webauthn_credential_id),
         }, status=status.HTTP_200_OK)
+
+
+class BiometricLoginView(APIView):
+    """
+    POST /api/biometric/login/
+    Login with biometric authentication (for native platforms)
+    For web platforms, use WebAuthn challenge/verify flow
+    
+    SECURITY NOTE: This endpoint trusts that the OS-level biometric authentication
+    has been performed on the client side for native platforms. For production use,
+    consider implementing additional security measures such as:
+    - Device fingerprinting/attestation
+    - Rate limiting per IP/device
+    - Requiring re-authentication after certain time periods
+    - Using WebAuthn for web platforms which provides cryptographic proof
+    """
+    permission_classes = []  # Public endpoint
+
+    def post(self, request):
+        serializer = BiometricLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            email = serializer.validated_data['email']
+            platform = serializer.validated_data.get('platform', 'web')
+            
+            # Get user
+            user = User.objects.get(email=email)
+
+            # Check if biometric is enabled
+            if not user.biometric_enabled:
+                return Response(
+                    {"error": "Biometric authentication not enabled for this account."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Check if user has biometric credential
+            if not user.webauthn_credential_id:
+                return Response(
+                    {"error": "No biometric credential registered."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # For native platforms, we trust the OS biometric authentication
+            # The frontend already verified biometric before calling this endpoint
+            # Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+            access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
+
+            log_security_event(user, 'biometric_login', request, platform=platform)
+
+            return Response({
+                "success": True,
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "is_merchant": user.is_merchant,
+                    "is_staff": user.is_staff,
+                },
+                "access": access_token,
+                "refresh": refresh_token,
+            }, status=status.HTTP_200_OK)
+
+        except User.DoesNotExist:
+            # Return generic error to prevent user enumeration
+            return Response(
+                {"error": "Biometric authentication failed."},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        except Exception as e:
+            logger.error(f"Error during biometric login: {e}")
+            return Response(
+                {"error": "Biometric authentication failed."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

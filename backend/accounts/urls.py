@@ -6,7 +6,7 @@ from .views_webauthn import WebAuthnChallengeView, WebAuthnVerifyView
 from .views_pin import (
     PINSetupView, PINVerifyView, PINChangeView, 
     PINResetRequestView, PINResetConfirmView, PINStatusView,
-    BiometricEnrollView, BiometricDisableView, BiometricStatusView
+    BiometricEnrollView, BiometricDisableView, BiometricStatusView, BiometricLoginView
 )
 
 
@@ -39,4 +39,5 @@ urlpatterns = [
     path("biometric/enroll/", BiometricEnrollView.as_view(), name="biometric_enroll"),
     path("biometric/disable/", BiometricDisableView.as_view(), name="biometric_disable"),
     path("biometric/status/", BiometricStatusView.as_view(), name="biometric_status"),
+    path("biometric/login/", BiometricLoginView.as_view(), name="biometric_login"),
 ]
