@@ -11,6 +11,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken
 from datetime import timedelta
 
 from .serializers import (
@@ -442,6 +443,14 @@ class BiometricLoginView(APIView):
     POST /api/biometric/login/
     Login with biometric authentication (for native platforms)
     For web platforms, use WebAuthn challenge/verify flow
+    
+    SECURITY NOTE: This endpoint trusts that the OS-level biometric authentication
+    has been performed on the client side for native platforms. For production use,
+    consider implementing additional security measures such as:
+    - Device fingerprinting/attestation
+    - Rate limiting per IP/device
+    - Requiring re-authentication after certain time periods
+    - Using WebAuthn for web platforms which provides cryptographic proof
     """
     permission_classes = []  # Public endpoint
 
@@ -474,7 +483,6 @@ class BiometricLoginView(APIView):
             # For native platforms, we trust the OS biometric authentication
             # The frontend already verified biometric before calling this endpoint
             # Generate JWT tokens
-            from rest_framework_simplejwt.tokens import RefreshToken
             refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)

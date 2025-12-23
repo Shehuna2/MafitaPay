@@ -183,7 +183,8 @@ export default function Login() {
       const result = await loginWithBiometric(biometricEmail);
       
       if (result.success) {
-        // User data is already stored in localStorage by loginWithBiometric
+        // loginWithBiometric stores tokens in localStorage and returns user data
+        // Use the returned user data and tokens from localStorage
         const userData = result.user;
         const access = localStorage.getItem("access");
         const refresh = localStorage.getItem("refresh");
