@@ -20,7 +20,7 @@ export default function Login() {
   const [showResend, setShowResend] = useState(false);
   const [rememberMe, setRememberMe] = useState(!!localStorage.getItem("rememberedEmail"));
   const [showPassword, setShowPassword] = useState(false);
-  const [biometricEmail, setBiometricEmail] = useState(localStorage.getItem("biometric_user_email") || "");
+  const biometricEmail = localStorage.getItem("biometric_user_email") || "";
 
   const urlParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const shouldReauth = urlParams.get("reauth") === "true";
