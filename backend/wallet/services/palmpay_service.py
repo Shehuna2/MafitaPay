@@ -32,9 +32,9 @@ class PalmpayService:
             use_live: Whether to use live or test environment
         """
         if use_live:
-            self.merchant_id = getattr(settings, "PALMPAY_MERCHANT_ID")
-            self.public_key = getattr(settings, "PALMPAY_PUBLIC_KEY")
-            self.private_key = getattr(settings, "PALMPAY_PRIVATE_KEY")
+            self.merchant_id = getattr(settings, "PALMPAY_MERCHANT_ID", None)
+            self.public_key = getattr(settings, "PALMPAY_PUBLIC_KEY", None)
+            self.private_key = getattr(settings, "PALMPAY_PRIVATE_KEY", None)
             self.base_url = getattr(
                 settings,
                 "PALMPAY_BASE_URL",
@@ -42,17 +42,17 @@ class PalmpayService:
             )
         else:
             # Test credentials (if different from live)
-            self.merchant_id = getattr(settings, "PALMPAY_TEST_MERCHANT_ID", 
-                                      getattr(settings, "PALMPAY_MERCHANT_ID"))
-            self.public_key = getattr(settings, "PALMPAY_TEST_PUBLIC_KEY",
-                                     getattr(settings, "PALMPAY_PUBLIC_KEY"))
-            self.private_key = getattr(settings, "PALMPAY_TEST_PRIVATE_KEY",
-                                      getattr(settings, "PALMPAY_PRIVATE_KEY"))
+            self.merchant_id = getattr(settings, "PALMPAY_TEST_MERCHANT_ID", None) or \
+                              getattr(settings, "PALMPAY_MERCHANT_ID", None)
+            self.public_key = getattr(settings, "PALMPAY_TEST_PUBLIC_KEY", None) or \
+                             getattr(settings, "PALMPAY_PUBLIC_KEY", None)
+            self.private_key = getattr(settings, "PALMPAY_TEST_PRIVATE_KEY", None) or \
+                              getattr(settings, "PALMPAY_PRIVATE_KEY", None)
             self.base_url = getattr(
                 settings,
                 "PALMPAY_TEST_BASE_URL",
-                getattr(settings, "PALMPAY_BASE_URL", "https://api-sandbox.palmpay.com")
-            )
+                None
+            ) or getattr(settings, "PALMPAY_BASE_URL", "https://api-sandbox.palmpay.com")
 
         if not self.merchant_id or not self.private_key:
             missing = []
@@ -197,7 +197,11 @@ class PalmpayService:
             data = response.json()
             
             # Check response status
-            if not data.get("success", False) and data.get("code") != "0000":
+            # PalmPay API returns success=true or code='0000' for successful operations
+            # Accept response if either condition is met
+            is_success = data.get("success", False) or data.get("code") == "0000"
+            
+            if not is_success:
                 logger.error("PalmPay VA creation failed: %s", data)
                 return None
 

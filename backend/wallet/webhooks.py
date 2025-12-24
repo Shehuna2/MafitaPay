@@ -405,7 +405,12 @@ def palmpay_webhook(request):
             logger.error("Invalid PalmPay webhook signature")
             return Response({"error": "invalid signature"}, status=401)
 
-        payload = json.loads(raw.decode("utf-8") or "{}")
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.error("Failed to decode PalmPay webhook payload: %s", str(e))
+            return Response({"error": "invalid payload"}, status=400)
+            
         event = payload.get("event") or payload.get("eventType") or payload.get("type")
         data = payload.get("data", {}) or payload
 
@@ -441,16 +446,18 @@ def palmpay_webhook(request):
             )
             return Response({"status": "ignored"}, status=200)
 
-        # Get transaction reference
+        # Get transaction reference - check for None before converting to string
         provider_ref = (
-            str(data.get("transactionId"))
-            or str(data.get("transaction_id"))
-            or str(data.get("reference"))
-            or str(data.get("paymentReference"))
+            data.get("transactionId")
+            or data.get("transaction_id")
+            or data.get("reference")
+            or data.get("paymentReference")
         )
-        if not provider_ref or provider_ref == "None":
+        if not provider_ref:
             logger.error("Missing PalmPay reference in payload: %s", data)
             return Response({"status": "ignored"}, status=200)
+        
+        provider_ref = str(provider_ref)
 
         # Resolve VA account number
         account_number = (

@@ -16,8 +16,8 @@ from paystack import DedicatedVirtualAccount
 from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit
 from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer
 from .utils import extract_bank_name, extract_account_name
-from wallet.services.flutterwave_service import FlutterwaveService
-from wallet.services.palmpay_service import PalmpayService
+from .services.flutterwave_service import FlutterwaveService
+from .services.palmpay_service import PalmpayService
 
 
 
