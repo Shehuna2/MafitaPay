@@ -4,7 +4,7 @@ from .views import (
     GenerateDVAAPIView, RequeryDVAAPIView,
     SecureWithdrawalView, SecurePaymentView  # New secure transaction views
 )
-from .webhooks import paystack_webhook, psb_webhook, flutterwave_webhook
+from .webhooks import paystack_webhook, psb_webhook, flutterwave_webhook, palmpay_webhook
 
 urlpatterns = [
     path("wallet/", WalletView.as_view(), name="wallet"),
@@ -16,6 +16,7 @@ urlpatterns = [
     path("paystack/webhook/", paystack_webhook, name="paystack_webhook"),
     # path("flutterwave/webhook/", flutterwave_webhook, name="flutterwave_webhook"),
     path('api/wallet/flutterwave-webhook/', flutterwave_webhook, name='flutterwave-webhook'),
+    path('api/wallet/palmpay-webhook/', palmpay_webhook, name='palmpay-webhook'),
     
 
     path("api/wallet/transactions/", WalletTransactionListView.as_view(), name="wallet-transactions"),
