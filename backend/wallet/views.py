@@ -16,6 +16,8 @@ from paystack import DedicatedVirtualAccount
 from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit
 from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer
 from .utils import extract_bank_name, extract_account_name
+from wallet.services.flutterwave_service import FlutterwaveService
+from wallet.services.palmpay_service import PalmpayService
 
 
 
@@ -159,9 +161,6 @@ class GenerateDVAAPIView(APIView):
     # 🔥 PATCHED: FLUTTERWAVE STATIC DVA FLOW (STATIC)
     # ================================================================
     def generate_flutterwave_va(self, request, user):
-        from wallet.services.flutterwave_service import FlutterwaveService
-        from django.db import transaction
-
         logger.info("[DVA-FW] Start: Flutterwave Static VA")
 
         wallet, _ = Wallet.objects.get_or_create(user=user)
@@ -275,9 +274,6 @@ class GenerateDVAAPIView(APIView):
     # PALMPAY
     # ==========================================================================
     def generate_palmpay_va(self, request, user):
-        from wallet.services.palmpay_service import PalmpayService
-        from django.db import transaction
-
         logger.info("[DVA-PALMPAY] Start: PalmPay Virtual Account")
 
         wallet, _ = Wallet.objects.get_or_create(user=user)

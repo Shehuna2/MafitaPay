@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import hmac
+import json
 import logging
 import time
 import uuid
@@ -13,6 +14,9 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger(__name__)
+
+# Constants
+DEFAULT_PHONE_NUMBER = "+2340000000000"
 
 
 class PalmpayService:
@@ -51,7 +55,14 @@ class PalmpayService:
             )
 
         if not self.merchant_id or not self.private_key:
-            raise ImproperlyConfigured("Missing PalmPay credentials.")
+            missing = []
+            if not self.merchant_id:
+                missing.append("PALMPAY_MERCHANT_ID")
+            if not self.private_key:
+                missing.append("PALMPAY_PRIVATE_KEY")
+            raise ImproperlyConfigured(
+                f"Missing PalmPay credentials: {', '.join(missing)}"
+            )
 
         self.base_url = str(self.base_url).rstrip("/")
 
@@ -138,7 +149,7 @@ class PalmpayService:
                 if profile and getattr(profile, "last_name", None)
                 else "User"
             )[:50]
-            phone_number = getattr(profile, "phone_number", None) or "+2340000000000"
+            phone_number = getattr(profile, "phone_number", None) or DEFAULT_PHONE_NUMBER
 
             # Generate unique reference
             reference = f"palmpay_va_{uuid.uuid4().hex[:12]}"
@@ -157,7 +168,6 @@ class PalmpayService:
             if bvn:
                 payload_dict["bvn"] = bvn
 
-            import json
             payload = json.dumps(payload_dict)
             headers = self._get_headers(payload)
 

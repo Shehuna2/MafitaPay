@@ -389,13 +389,14 @@ def palmpay_webhook(request):
             logger.warning("Missing PalmPay webhook signature or timestamp")
             return Response({"error": "missing signature or timestamp"}, status=400)
 
-        palmpay_service = PalmpayService(use_live=True)
+        palmpay_service = PalmpayService(use_live=not settings.DEBUG)
 
         # SECURITY: Validate private key is configured
         if not palmpay_service.private_key:
+            env_label = "LIVE" if not settings.DEBUG else "TEST"
             logger.error(
                 "CRITICAL: PalmPay private key not configured. "
-                "Cannot verify webhook. Environment: LIVE"
+                "Cannot verify webhook. Environment: %s", env_label
             )
             return Response({"error": "configuration error"}, status=500)
 
