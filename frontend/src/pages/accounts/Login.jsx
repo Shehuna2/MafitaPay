@@ -18,7 +18,7 @@ export default function Login() {
   });
   const [errorMessage, setErrorMessage] = useState("");
   const [showResend, setShowResend] = useState(false);
-  const [rememberMe, setRememberMe] = useState(!!localStorage.getItem("rememberedEmail"));
+  const [rememberMe, setRememberMe] = useState(!! localStorage.getItem("rememberedEmail"));
   const [showPassword, setShowPassword] = useState(false);
   const biometricEmail = localStorage.getItem("biometric_user_email") || "";
 
@@ -27,24 +27,24 @@ export default function Login() {
   const reauthUser = useMemo(() => {
     const raw = localStorage.getItem("reauth_user");
     try {
-      return raw ? JSON.parse(raw) : null;
+      return raw ? JSON. parse(raw) : null;
     } catch {
       return null;
     }
   }, []);
 
-  const { isSupported: biometricSupported, loginWithBiometric, authenticateWithRefresh, checking: biometricChecking } =
+  const { isSupported:  biometricSupported, loginWithBiometric, authenticateWithRefresh, checking: biometricChecking } =
     useBiometricAuth();
 
   useEffect(() => {
     const verified = urlParams.get("verified");
-    if (verified === "true") setErrorMessage("Email verified successfully! Please sign in.");
+    if (verified === "true") setErrorMessage("Email verified successfully!  Please sign in.");
     else if (verified === "false") setErrorMessage("Email verification failed. Please try again.");
   }, [urlParams]);
 
   useEffect(() => {
     const access = localStorage.getItem("access");
-    if (!access) return;
+    if (! access) return;
 
     try {
       const [, payloadBase64] = access.split(".");
@@ -60,7 +60,7 @@ export default function Login() {
   }, [navigate]);
 
   const handleChange = (e) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setFormData((prev) => ({ ...prev, [e.target. name]: e.target.value }));
     setErrorMessage("");
   };
 
@@ -81,22 +81,22 @@ export default function Login() {
       const { access, refresh } = data;
 
       if (rememberMe) {
-        localStorage.setItem("rememberedEmail", email);
+        localStorage. setItem("rememberedEmail", email);
       } else {
         localStorage.removeItem("rememberedEmail");
       }
 
       let userData;
       try {
-        const profileRes = await client.get(`/profile-api/?t=${Date.now()}`);
+        const profileRes = await client.get(`/profile-api/? t=${Date.now()}`);
         userData = {
           email: profileRes.data.email,
           id: profileRes.data.id,
           is_merchant: profileRes.data.is_merchant,
           is_staff: profileRes.data.is_staff,
-          full_name: profileRes.data.full_name || null,
+          full_name: profileRes.data. full_name || null,
           phone_number: profileRes.data.phone_number || null,
-          date_of_birth: profileRes.data.date_of_birth || null,
+          date_of_birth: profileRes. data.date_of_birth || null,
         };
       } catch {
         userData = { email };
@@ -107,15 +107,15 @@ export default function Login() {
       localStorage.removeItem("reauth_user");
       const redirect = localStorage.getItem("post_reauth_redirect") || "/dashboard";
       localStorage.removeItem("post_reauth_redirect");
-      navigate(redirect, { replace: true });
+      navigate(redirect, { replace:  true });
     } catch (err) {
       const errors = err.response?.data || {};
-      let msg = errors.detail || "Invalid credentials. Please try again.";
+      let msg = errors.detail || "Invalid credentials.  Please try again.";
 
       if (errors.action === "resend_verification") {
         setShowResend(true);
-        msg = "Account not verified. Please check your email.";
-      } else if (errors.non_field_errors?.[0]) {
+        msg = "Account not verified. Please check your email. ";
+      } else if (errors.non_field_errors? .[0]) {
         msg = errors.non_field_errors[0];
       }
 
@@ -129,7 +129,7 @@ export default function Login() {
     setLoading(true);
     try {
       await client.post("/resend-verification/", { email: formData.email });
-      setErrorMessage("Verification email resent. Please check your inbox.");
+      setErrorMessage("Verification email resent.  Please check your inbox.");
       setShowResend(false);
     } catch (err) {
       setErrorMessage(err.response?.data?.error || "Failed to resend verification email.");
@@ -153,12 +153,12 @@ export default function Login() {
         try {
           const res = await client.get(`/profile-api/?t=${Date.now()}`);
           userData = {
-            email: res.data.email,
-            id: res.data.id,
+            email: res.data. email,
+            id: res. data.id,
             is_merchant: res.data.is_merchant,
-            is_staff: res.data.is_staff,
-            full_name: res.data.full_name || null,
-            phone_number: res.data.phone_number || null,
+            is_staff:  res.data.is_staff,
+            full_name: res. data.full_name || null,
+            phone_number: res. data.phone_number || null,
           };
         } catch {
           userData = JSON.parse(localStorage.getItem("user") || "{}");
@@ -182,11 +182,11 @@ export default function Login() {
         
         login({ access, refresh }, userData);
         
-        const redirect = localStorage.getItem("post_reauth_redirect") || "/dashboard";
+        const redirect = localStorage. getItem("post_reauth_redirect") || "/dashboard";
         localStorage.removeItem("post_reauth_redirect");
         navigate(redirect, { replace: true });
       } else {
-        setErrorMessage("Biometric authentication failed. Please use your password.");
+        setErrorMessage("Biometric authentication failed.  Please use your password.");
       }
     } else {
       setErrorMessage("No biometric credentials found. Please login with your password.");
@@ -195,7 +195,7 @@ export default function Login() {
     setLoading(false);
   };
 
-  const displayName = reauthUser?.first_name || reauthUser?.email || formData.email.split("@")[0];
+  const displayName = reauthUser?. first_name || reauthUser?.email || formData.email. split("@")[0];
 
   return (
     <>
@@ -214,10 +214,10 @@ export default function Login() {
           animation: shimmer 2s infinite;
         }
         @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(20px); }
+          from { opacity:  0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .fade-in { animation: fadeIn 0.6s ease-out forwards; }
+        .fade-in { animation:  fadeIn 0.6s ease-out forwards; }
       `}</style>
 
       <div className="min-h-screen text-white relative overflow-hidden flex items-center justify-center p-4">
@@ -287,13 +287,13 @@ export default function Login() {
                       value={formData.email}
                       onChange={handleChange}
                       placeholder="you@example.com"
-                      className="w-full bg-gray-800/70 backdrop-blur-xl border border-gray-600/80 pl-12 pr-4 py-4 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-500/60 transition-all duration-300"
+                      className="w-full bg-gray-800/70 backdrop-blur-xl border border-gray-600/80 pl-12 pr-4 py-4 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition"
                     />
                   </div>
                 </div>
               )}
 
-              {/* Password */}
+              {/* Password with Biometric Icon */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-medium text-gray-300">Password</label>
@@ -304,30 +304,47 @@ export default function Login() {
                     Forgot password?
                   </Link>
                 </div>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    name="password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="current-password"
-                    required
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="••••••••••••"
-                    className="w-full bg-gray-800/70 backdrop-blur-xl border border-gray-600/80 pl-12 pr-12 py-4 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-500/60 transition-all duration-300"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-300 transition"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+                <div className="flex gap-2 items-center">
+                  <div className="relative flex-1">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      required
+                      value={formData. password}
+                      onChange={handleChange}
+                      placeholder="••••••••••••"
+                      className="w-full bg-gray-800/70 backdrop-blur-xl border border-gray-600/80 pl-12 pr-12 py-3 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-300 transition"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> :  <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {biometricSupported && (biometricEmail || localStorage.getItem("refresh")) && (
+                    <button
+                      type="button"
+                      onClick={handleBiometric}
+                      disabled={biometricChecking || loading}
+                      className="bg-gray-800/70 hover:bg-gray-700/70 border border-gray-600/80 p-3 rounded-2xl transition-all duration-300 flex items-center justify-center h-12"
+                      title="Sign in with biometrics"
+                    >
+                      {biometricChecking ? (
+                        <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
+                      ) : (
+                        <Fingerprint className="w-5 h-5 text-indigo-400 hover:scale-110 transition" />
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Remember Me */}
-              {!shouldReauth && (
+              {! shouldReauth && (
                 <label className="flex items-center gap-3 text-sm text-gray-300 cursor-pointer">
                   <input
                     type="checkbox"
@@ -343,7 +360,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 rounded-2xl text-base transition-all duration-400 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-3 group disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 rounded-2xl text-base transition-all duration-300 group disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
@@ -359,43 +376,13 @@ export default function Login() {
               </button>
             </form>
 
-            {/* Biometric Login */}
-            {biometricSupported && (biometricEmail || localStorage.getItem("refresh")) && (
-              <div className="mt-6">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-700"></div>
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-4 bg-gray-800/60 text-gray-500">or</span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleBiometric}
-                  disabled={biometricChecking || loading}
-                  className="mt-6 w-full flex items-center justify-center gap-4 bg-gray-800/70 hover:bg-gray-700/70 border border-gray-600/80 py-4 rounded-2xl transition-all duration-300 group"
-                >
-                  {biometricChecking ? (
-                    <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
-                  ) : (
-                    <Fingerprint className="w-7 h-7 text-indigo-400 group-hover:scale-110 transition" />
-                  )}
-                  <span className="font-semibold text-gray-200">
-                    {biometricChecking ? "Authenticating..." : "Sign in with Biometrics"}
-                  </span>
-                </button>
-              </div>
-            )}
-
             {/* Resend Verification */}
             {showResend && (
               <div className="mt-6 text-center">
                 <button
                   onClick={handleResendVerification}
                   disabled={loading}
-                  className="text-indigo-400 hover:text-indigo-300 font-medium underline underline-offset-4 transition"
+                  className="text-indigo-400 hover: text-indigo-300 font-medium underline underline-offset-4 transition"
                 >
                   Resend verification email
                 </button>
