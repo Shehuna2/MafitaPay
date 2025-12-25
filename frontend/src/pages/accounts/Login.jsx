@@ -115,7 +115,7 @@ export default function Login() {
       if (errors.action === "resend_verification") {
         setShowResend(true);
         msg = "Account not verified. Please check your email. ";
-      } else if (errors.non_field_errors? .[0]) {
+      } else if (errors.non_field_errors? [0]) {
         msg = errors.non_field_errors[0];
       }
 
@@ -405,3 +405,4 @@ export default function Login() {
     </>
   );
 }
+
