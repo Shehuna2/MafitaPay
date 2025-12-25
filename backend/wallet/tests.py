@@ -391,8 +391,6 @@ class FlutterwaveVABankNameExtractionTestCase(TestCase):
 
     def test_fw_response_extraction_logic(self):
         """Test the extraction logic that should be in generate_flutterwave_va"""
-        from .utils import extract_bank_name, extract_account_name
-        
         # Simulate the fw_response structure from the issue
         fw_response = {
             "provider": "flutterwave",
