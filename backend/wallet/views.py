@@ -322,7 +322,9 @@ class GenerateDVAAPIView(APIView):
         if palmpay_response.get("error"):
             error_message = palmpay_response.get("error", "Failed to create PalmPay VA")
             # Network errors should return 500, API errors 400
-            status_code = 500 if "network" in error_message.lower() or "timeout" in error_message.lower() else 400
+            error_lower = error_message.lower()
+            is_network_error = "network" in error_lower or "timeout" in error_lower or "timed out" in error_lower
+            status_code = 500 if is_network_error else 400
             return Response({
                 "error": error_message
             }, status=status_code)
