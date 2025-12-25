@@ -297,7 +297,7 @@ export default function Register() {
           100% { background-position: 200% 0; }
         }
         .shimmer {
-          background: linear-gradient(90deg, transparent, rgba(8, 8, 8, 0.95), transparent);
+          background: linear-gradient(90deg, transparent, rgba(54, 39, 39, 0.95), transparent);
           background-size: 200% 100%;
           animation: shimmer 2s infinite;
         }
@@ -309,13 +309,6 @@ export default function Register() {
       `}</style>
 
       <div className="min-h-screen text-white relative overflow-hidden flex items-center justify-center p-4">
-        {/* Animated Background Orbs */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -left-40 w-96 h-96 bg-purple-600/30 rounded-full blur-3xl animate-float" style={{ animationDelay: '0s' }}></div>
-          <div className="absolute top-20 -right-32 w-80 h-80 bg-indigo-600/30 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }}></div>
-          <div className="absolute -bottom-40 left-1/2 w-96 h-96 bg-pink-600/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '6s' }}></div>
-        </div>
-
         {/* Premium Loading Overlay */}
         {loading && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-xl flex items-center justify-center z-50">
