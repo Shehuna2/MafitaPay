@@ -19,6 +19,7 @@ from .models import VirtualAccount, Wallet, Deposit
 from accounts.models import User
 
 from .services.flutterwave_service import FlutterwaveService
+from .services.palmpay_service import PalmpayService
 
 logger = logging.getLogger(__name__)
 
@@ -351,6 +352,195 @@ def psb_webhook(request):
     except Exception as e:
         logger.exception("9PSB webhook processing error")
         return Response({"status": "error", "message": str(e)}, status=500)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@csrf_exempt
+def palmpay_webhook(request):
+    """
+    PalmPay Webhook Handler — secure + idempotent deposit processing.
+    """
+    try:
+        # SECURITY: Limit payload size to prevent DoS attacks
+        raw = request.body or b""
+        
+        if len(raw) > MAX_WEBHOOK_SIZE:
+            logger.warning(
+                "PalmPay webhook payload too large: %d bytes (max: %d)",
+                len(raw), MAX_WEBHOOK_SIZE
+            )
+            return Response({"error": "payload too large"}, status=413)
+        
+        # Get signature and timestamp from headers
+        signature = (
+            request.headers.get("X-Signature")
+            or request.headers.get("x-signature")
+            or request.META.get("HTTP_X_SIGNATURE")
+        )
+        
+        timestamp = (
+            request.headers.get("X-Timestamp")
+            or request.headers.get("x-timestamp")
+            or request.META.get("HTTP_X_TIMESTAMP")
+        )
+
+        if not signature or not timestamp:
+            logger.warning("Missing PalmPay webhook signature or timestamp")
+            return Response({"error": "missing signature or timestamp"}, status=400)
+
+        palmpay_service = PalmpayService(use_live=not settings.DEBUG)
+
+        # SECURITY: Validate private key is configured
+        if not palmpay_service.private_key:
+            env_label = "LIVE" if not settings.DEBUG else "TEST"
+            logger.error(
+                "CRITICAL: PalmPay private key not configured. "
+                "Cannot verify webhook. Environment: %s", env_label
+            )
+            return Response({"error": "configuration error"}, status=500)
+
+        # Verify authenticity
+        if not palmpay_service.verify_webhook_signature(raw, signature, timestamp):
+            logger.error("Invalid PalmPay webhook signature")
+            return Response({"error": "invalid signature"}, status=401)
+
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.error("Failed to decode PalmPay webhook payload: %s", str(e))
+            return Response({"error": "invalid payload"}, status=400)
+            
+        event = payload.get("event") or payload.get("eventType") or payload.get("type")
+        data = payload.get("data", {}) or payload
+
+        # SECURITY: Log without exposing sensitive data
+        logger.info(
+            "PalmPay webhook received: event=%s, body_length=%d",
+            event or "unknown",
+            len(raw)
+        )
+
+        # Allowed events - adjust based on PalmPay's actual event types
+        if event not in (
+            "VIRTUAL_ACCOUNT_PAYMENT",
+            "PAYMENT_SUCCESS",
+            "payment.success",
+            "virtualaccount.payment",
+        ):
+            logger.info("PalmPay webhook event ignored: %s", event)
+            return Response({"status": "ignored"}, status=200)
+
+        # Check payment status
+        status_text = (data.get("status") or "").upper()
+        if status_text not in ("SUCCESS", "SUCCESSFUL", "COMPLETED"):
+            logger.info("PalmPay webhook status ignored: %s", status_text)
+            return Response({"status": "ignored"}, status=200)
+
+        # SECURITY: Validate amount is positive and within reasonable limits
+        amount = Decimal(str(data.get("amount", "0")))
+        if amount <= 0 or amount > MAX_AMOUNT:
+            logger.warning(
+                "Invalid or excessive amount in PalmPay webhook: %s (max: %s)",
+                amount, MAX_AMOUNT
+            )
+            return Response({"status": "ignored"}, status=200)
+
+        # Get transaction reference - check for None before converting to string
+        provider_ref = (
+            data.get("transactionId")
+            or data.get("transaction_id")
+            or data.get("reference")
+            or data.get("paymentReference")
+        )
+        if not provider_ref:
+            logger.error("Missing PalmPay reference in payload: %s", data)
+            return Response({"status": "ignored"}, status=200)
+        
+        provider_ref = str(provider_ref)
+
+        # Resolve VA account number
+        account_number = (
+            data.get("accountNumber")
+            or data.get("account_number")
+            or data.get("receiverAccount")
+            or data.get("receiver_account")
+        )
+
+        if not account_number:
+            logger.error("Missing account number in PalmPay webhook: %s", data)
+            return Response({"status": "ignored"}, status=200)
+
+        # Find virtual account
+        va = VirtualAccount.objects.filter(
+            account_number=account_number,
+            provider="palmpay",
+        ).select_related("user").first()
+
+        if not va:
+            logger.warning(
+                "PalmPay webhook: No virtual account found for account number %s",
+                account_number
+            )
+            return Response({"status": "ignored"}, status=200)
+
+        user = va.user
+        wallet, _ = Wallet.objects.get_or_create(user=user)
+
+        # IDEMPOTENT HANDLING
+        with transaction.atomic():
+            existing = Deposit.objects.select_for_update().filter(
+                provider_reference=provider_ref
+            ).first()
+
+            metadata = clean_for_json({
+                "provider": "palmpay",
+                "event": event,
+                "account_number": account_number,
+                "sender_name": data.get("senderName") or data.get("sender_name"),
+                "sender_account": data.get("senderAccount") or data.get("sender_account"),
+                "palmpay_id": provider_ref,
+            })
+
+            if existing:
+                if existing.status != "credited":
+                    if wallet.deposit(amount, f"palmpay_{provider_ref}", metadata):
+                        existing.status = "credited"
+                        existing.save(update_fields=["status"])
+                        logger.info(
+                            "PalmPay deposit recovered → ₦%s | user=%s",
+                            amount, user.email
+                        )
+                        return Response({"status": "recovered"}, status=200)
+                logger.info(
+                    "PalmPay deposit already processed: ref=%s",
+                    provider_ref
+                )
+                return Response({"status": "already_processed"}, status=200)
+
+            # New deposit
+            if not wallet.deposit(amount, f"palmpay_{provider_ref}", metadata):
+                logger.error(
+                    "PalmPay deposit failed to credit wallet: ref=%s, user=%s",
+                    provider_ref, user.email
+                )
+                return Response({"status": "deposit_failed"}, status=500)
+
+            Deposit.objects.create(
+                user=user,
+                virtual_account=va,
+                amount=amount,
+                provider_reference=provider_ref,
+                status="credited",
+                raw=payload
+            )
+
+        logger.info("PalmPay deposit success → ₦%s | user=%s", amount, user.email)
+        return Response({"status": "success"}, status=200)
+
+    except Exception:
+        logger.exception("FATAL ERROR in PalmPay webhook")
+        return Response({"error": "server error"}, status=500)
 
 
 @api_view(["GET"])

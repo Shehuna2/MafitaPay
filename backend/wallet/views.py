@@ -16,6 +16,8 @@ from paystack import DedicatedVirtualAccount
 from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit
 from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer
 from .utils import extract_bank_name, extract_account_name
+from .services.flutterwave_service import FlutterwaveService
+from .services.palmpay_service import PalmpayService
 
 
 
@@ -82,7 +84,13 @@ class GenerateDVAAPIView(APIView):
                 return self.generate_flutterwave_va(request, user)
 
             # ----------------------------------------------------------
-            # 3. PAYSTACK FLOW (unchanged)
+            # 3. PALMPAY FLOW
+            # ----------------------------------------------------------
+            elif provider == "palmpay":
+                return self.generate_palmpay_va(request, user)
+
+            # ----------------------------------------------------------
+            # 4. PAYSTACK FLOW (unchanged)
             # ----------------------------------------------------------
             return self.generate_paystack_va(request, user)
 
@@ -153,9 +161,6 @@ class GenerateDVAAPIView(APIView):
     # 🔥 PATCHED: FLUTTERWAVE STATIC DVA FLOW (STATIC)
     # ================================================================
     def generate_flutterwave_va(self, request, user):
-        from wallet.services.flutterwave_service import FlutterwaveService
-        from django.db import transaction
-
         logger.info("[DVA-FW] Start: Flutterwave Static VA")
 
         wallet, _ = Wallet.objects.get_or_create(user=user)
@@ -263,6 +268,110 @@ class GenerateDVAAPIView(APIView):
             "bank_name": bank_name,
             "account_name": account_name,
             "type": fw_response.get("type", "static")
+        }, status=201)
+
+    # ==========================================================================
+    # PALMPAY
+    # ==========================================================================
+    def generate_palmpay_va(self, request, user):
+        logger.info("[DVA-PALMPAY] Start: PalmPay Virtual Account")
+
+        wallet, _ = Wallet.objects.get_or_create(user=user)
+
+        # 1. If already exists → return
+        existing_va = VirtualAccount.objects.filter(
+            user=user, provider="palmpay", assigned=True
+        ).first()
+
+        if existing_va:
+            return Response({
+                "success": True,
+                "message": "PalmPay virtual account already exists.",
+                "account_number": existing_va.account_number,
+                "bank_name": existing_va.bank_name,
+                "account_name": existing_va.account_name,
+                "type": existing_va.metadata.get("type", "static"),
+            })
+
+        # 2. Optional: Get BVN if provided
+        bvn = request.data.get("bvn")
+
+        # SECURITY: Validate BVN format if provided (BVN=11 digits)
+        if bvn:
+            clean_bvn = re.sub(r"\D", "", str(bvn))
+            if len(clean_bvn) != 11:
+                return Response({
+                    "error": "Invalid BVN format. Must be 11 digits."
+                }, status=400)
+            bvn = clean_bvn
+
+        # 3. Call PalmPay service
+        palmpay = PalmpayService(use_live=not settings.DEBUG)
+
+        palmpay_response = palmpay.create_virtual_account(
+            user=user,
+            bvn=bvn
+        )
+
+        if not palmpay_response or palmpay_response.get("error"):
+            return Response({
+                "error": palmpay_response.get("error", "Failed to create PalmPay VA")
+            }, status=400)
+
+        account_number = palmpay_response["account_number"]
+        bank_name = palmpay_response.get("bank_name", "PalmPay")
+        account_name = palmpay_response.get("account_name", "Virtual Account")
+        provider_ref = palmpay_response.get("reference")
+
+        # 4. SECURITY CHECK - prevent duplicate accounts
+        conflict = VirtualAccount.objects.filter(
+            provider="palmpay",
+            account_number=account_number
+        ).exclude(user=user).first()
+
+        if conflict:
+            return Response({
+                "error": (
+                    "This account is already linked to another user."
+                )
+            }, status=400)
+
+        # 5. Save database records
+        try:
+            with transaction.atomic():
+                va = VirtualAccount.objects.create(
+                    user=user,
+                    provider="palmpay",
+                    provider_account_id=provider_ref,
+                    account_number=account_number,
+                    account_name=account_name,
+                    bank_name=bank_name,
+                    metadata={
+                        "raw_response": palmpay_response,
+                        "type": palmpay_response.get("type", "static"),
+                    },
+                    assigned=True
+                )
+
+                wallet.van_account_number = account_number
+                wallet.van_bank_name = bank_name
+                wallet.van_account_name = account_name
+                wallet.van_provider = "palmpay"
+                wallet.save()
+
+        except Exception as e:
+            logger.error("DB error saving PalmPay VA: %s", e, exc_info=True)
+            return Response({
+                "error": "Failed to save virtual account details."
+            }, status=500)
+
+        return Response({
+            "success": True,
+            "message": "PalmPay virtual account generated successfully.",
+            "account_number": account_number,
+            "bank_name": bank_name,
+            "account_name": account_name,
+            "type": palmpay_response.get("type", "static")
         }, status=201)
 
 
