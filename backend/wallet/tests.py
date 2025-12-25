@@ -458,8 +458,6 @@ class DepositFeeCalculationTestCase(TestCase):
 
     def test_fee_calculation_above_max(self):
         """Test fee calculation for amounts over ₦30,000 (capped at ₦300)"""
-    def test_fee_calculation_above_max(self):
-        """Test fee calculation for amounts over ₦30,000 (capped at ₦300)"""
         # ₦50,000 deposit: 1% = ₦500, but capped at ₦300
         net_amount, fee = calculate_deposit_fee(Decimal("50000"))
         self.assertEqual(fee, Decimal("300.00"))
