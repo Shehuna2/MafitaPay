@@ -7,8 +7,9 @@ import hashlib
 import base64
 from unittest.mock import patch
 
-from .models import Wallet, VirtualAccount, Deposit
+from .models import Wallet, VirtualAccount, Deposit, WalletTransaction
 from .services.flutterwave_service import FlutterwaveService
+from .utils import calculate_deposit_fee, extract_bank_name, extract_account_name
 
 User = get_user_model()
 
@@ -438,8 +439,6 @@ class DepositFeeCalculationTestCase(TestCase):
 
     def test_fee_calculation_small_amount(self):
         """Test fee calculation for amounts under ₦30,000"""
-        from .utils import calculate_deposit_fee
-        
         # ₦10,000 deposit: 1% = ₦100
         net_amount, fee = calculate_deposit_fee(Decimal("10000"))
         self.assertEqual(fee, Decimal("100.00"))
@@ -452,8 +451,6 @@ class DepositFeeCalculationTestCase(TestCase):
 
     def test_fee_calculation_at_max_threshold(self):
         """Test fee calculation at the ₦30,000 threshold (where fee = ₦300)"""
-        from .utils import calculate_deposit_fee
-        
         # ₦30,000 deposit: 1% = ₦300 (exactly at max)
         net_amount, fee = calculate_deposit_fee(Decimal("30000"))
         self.assertEqual(fee, Decimal("300.00"))
@@ -461,8 +458,8 @@ class DepositFeeCalculationTestCase(TestCase):
 
     def test_fee_calculation_above_max(self):
         """Test fee calculation for amounts over ₦30,000 (capped at ₦300)"""
-        from .utils import calculate_deposit_fee
-        
+    def test_fee_calculation_above_max(self):
+        """Test fee calculation for amounts over ₦30,000 (capped at ₦300)"""
         # ₦50,000 deposit: 1% = ₦500, but capped at ₦300
         net_amount, fee = calculate_deposit_fee(Decimal("50000"))
         self.assertEqual(fee, Decimal("300.00"))
@@ -475,8 +472,6 @@ class DepositFeeCalculationTestCase(TestCase):
 
     def test_fee_calculation_edge_cases(self):
         """Test fee calculation for edge cases"""
-        from .utils import calculate_deposit_fee
-        
         # ₦1 deposit: 1% = ₦0.01
         net_amount, fee = calculate_deposit_fee(Decimal("1"))
         self.assertEqual(fee, Decimal("0.01"))
@@ -617,7 +612,6 @@ class FlutterwaveWebhookFeeDeductionTestCase(TestCase):
         self.assertEqual(deposit.amount, Decimal("10000.00"))
         
         # Check transaction metadata has fee information
-        from .models import WalletTransaction
         txn = WalletTransaction.objects.filter(
             user=self.user,
             category="deposit",
