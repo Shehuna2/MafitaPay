@@ -1,7 +1,7 @@
 // src/pages/Login.jsx
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
-import { Loader2, Mail, Lock, Eye, EyeOff, Fingerprint } from "lucide-react";
+import { Loader2, Mail, Lock, Eye, EyeOff, Fingerprint, ChevronRight } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import useBiometricAuth from "../../hooks/useBiometricAuth";
 import client from "../../api/client";
@@ -36,14 +36,12 @@ export default function Login() {
   const { isSupported: biometricSupported, loginWithBiometric, authenticateWithRefresh, checking: biometricChecking } =
     useBiometricAuth();
 
-  // Email verification feedback
   useEffect(() => {
     const verified = urlParams.get("verified");
     if (verified === "true") setErrorMessage("Email verified successfully! Please sign in.");
     else if (verified === "false") setErrorMessage("Email verification failed. Please try again.");
   }, [urlParams]);
 
-  // Auto-redirect if already authenticated
   useEffect(() => {
     const access = localStorage.getItem("access");
     if (!access) return;
@@ -82,14 +80,12 @@ export default function Login() {
 
       const { access, refresh } = data;
 
-      // Remember email
       if (rememberMe) {
         localStorage.setItem("rememberedEmail", email);
       } else {
         localStorage.removeItem("rememberedEmail");
       }
 
-      // Fetch profile
       let userData;
       try {
         const profileRes = await client.get(`/profile-api/?t=${Date.now()}`);
@@ -148,11 +144,9 @@ export default function Login() {
     setLoading(true);
     setErrorMessage("");
 
-    // Check if we have a refresh token (re-authentication scenario)
     const refreshToken = localStorage.getItem("refresh");
     
     if (refreshToken) {
-      // Re-authentication flow: use existing refresh token
       const { success, access } = await authenticateWithRefresh();
       if (success) {
         let userData;
@@ -179,12 +173,9 @@ export default function Login() {
         setErrorMessage("Biometric authentication failed. Please use your password.");
       }
     } else if (biometricEmail) {
-      // New login flow: use biometric authentication for returning users
       const result = await loginWithBiometric(biometricEmail);
       
       if (result.success) {
-        // loginWithBiometric stores tokens in localStorage and returns user data
-        // Use the returned user data and tokens from localStorage
         const userData = result.user;
         const access = localStorage.getItem("access");
         const refresh = localStorage.getItem("refresh");
@@ -207,179 +198,230 @@ export default function Login() {
   const displayName = reauthUser?.first_name || reauthUser?.email || formData.email.split("@")[0];
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
-      {/* Loading overlay */}
-      {loading && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50">
-          <div className="bg-gray-900/80 rounded-2xl p-8 flex flex-col items-center gap-4 shadow-2xl border border-gray-800">
-            <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
-            <p className="text-indigo-300 font-medium">Signing you in...</p>
-          </div>
+    <>
+      <style>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-20px) rotate(5deg); }
+        }
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .shimmer {
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+          background-size: 200% 100%;
+          animation: shimmer 2s infinite;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeIn 0.6s ease-out forwards; }
+      `}</style>
+
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 text-white relative overflow-hidden flex items-center justify-center p-4">
+        {/* Animated Background Orbs */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -left-40 w-96 h-96 bg-purple-600/30 rounded-full blur-3xl animate-float" style={{ animationDelay: '0s' }}></div>
+          <div className="absolute top-20 -right-32 w-80 h-80 bg-indigo-600/30 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }}></div>
+          <div className="absolute -bottom-40 left-1/2 w-96 h-96 bg-pink-600/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '6s' }}></div>
         </div>
-      )}
 
-      <div className="w-full max-w-md">
-        <div className="bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-3xl p-8 shadow-2xl">
-          {/* Logo & Greeting */}
-          <div className="flex flex-col items-center mb-8">
-            <img
-              src="/mafitapay.png"
-              alt="Mafita Logo"
-              className="w-20 h-20 object-contain mb-4"
-            />
-            {shouldReauth && reauthUser ? (
-              <h1 className="text-2xl font-bold text-white">
-                Welcome back, <span className="text-indigo-400">{displayName}</span>
-              </h1>
-            ) : (
-              <h1 className="text-2xl font-bold text-white">Sign In</h1>
-            )}
-            <p className="mt-2 text-gray-400 text-sm">
-              Access your Mafita account
-            </p>
-          </div>
-
-          {/* Error message */}
-          {errorMessage && (
-            <div className="mb-6 p-4 bg-red-950/40 border border-red-800/50 rounded-2xl text-red-300 text-sm text-center">
-              {errorMessage}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
-            {!shouldReauth && (
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Email
-                </label>
+        {/* Premium Loading Overlay */}
+        {loading && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-xl flex items-center justify-center z-50">
+            <div className="bg-gray-800/80 backdrop-blur-2xl p-10 rounded-3xl shadow-2xl border border-gray-600/50 max-w-md w-full mx-4 fade-in">
+              <div className="flex flex-col items-center gap-6">
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="you@example.com"
-                    className="w-full bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 pl-11 pr-4 py-3.5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all"
-                  />
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-2xl">
+                    <Loader2 className="w-10 h-10 text-white animate-spin" />
+                  </div>
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 animate-ping opacity-40"></div>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">
+                    Signing you in...
+                  </p>
+                  <p className="text-sm text-gray-400 mt-2">Welcome back</p>
+                </div>
+                <div className="w-full h-1 bg-gray-700/60 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shimmer"></div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        <div className="max-w-lg w-full relative z-10">
+          <div className="bg-gray-800/60 backdrop-blur-2xl rounded-3xl p-8 shadow-2xl border border-gray-700/60 fade-in">
+            {/* Logo & Greeting */}
+            <div className="text-center mb-8">
+              <img
+                src="/mafitapay.png"
+                alt="Mafita Logo"
+                className="w-20 h-20 object-contain mx-auto mb-4"
+              />
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                {shouldReauth && reauthUser ? `Welcome back, ${displayName}` : "Sign In"}
+              </h1>
+              <p className="text-gray-400 mt-2">Access your Mafita account</p>
+            </div>
+
+            {/* Error / Success Message */}
+            {errorMessage && (
+              <div className={`p-4 rounded-2xl text-sm text-center shadow-lg mb-6 ${
+                errorMessage.includes("successfully")
+                  ? "bg-green-900/30 border border-green-600/40 text-green-300"
+                  : "bg-red-900/30 border border-red-600/40 text-red-300"
+              }`}>
+                {errorMessage}
+              </div>
             )}
 
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  required
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="••••••••"
-                  className="w-full bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 pl-11 pr-12 py-3.5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all"
-                />
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Email Field - Hidden during reauth */}
+              {!shouldReauth && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="you@example.com"
+                      className="w-full bg-gray-800/70 backdrop-blur-xl border border-gray-600/80 pl-12 pr-4 py-4 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-500/60 transition-all duration-300"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Password */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-300">Password</label>
+                  <Link
+                    to="/reset-password-request"
+                    className="text-sm text-indigo-400 hover:text-indigo-300 font-medium transition"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    required
+                    value={formData.password}
+                    onChange={handleChange}
+                    placeholder="••••••••••••"
+                    className="w-full bg-gray-800/70 backdrop-blur-xl border border-gray-600/80 pl-12 pr-12 py-4 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-500/60 transition-all duration-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-300 transition"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Remember Me */}
+              {!shouldReauth && (
+                <label className="flex items-center gap-3 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-600 text-indigo-500 focus:ring-indigo-500 bg-gray-800/70"
+                  />
+                  <span>Remember me</span>
+                </label>
+              )}
+
+              {/* Sign In Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 rounded-2xl text-base transition-all duration-400 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-3 group disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    Sign In
+                    <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Biometric Login */}
+            {biometricSupported && (biometricEmail || localStorage.getItem("refresh")) && (
+              <div className="mt-6">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-700"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-4 bg-gray-800/60 text-gray-500">or</span>
+                  </div>
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-indigo-400 focus:outline-none"
+                  onClick={handleBiometric}
+                  disabled={biometricChecking || loading}
+                  className="mt-6 w-full flex items-center justify-center gap-4 bg-gray-800/70 hover:bg-gray-700/70 border border-gray-600/80 py-4 rounded-2xl transition-all duration-300 group"
                 >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {biometricChecking ? (
+                    <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+                  ) : (
+                    <Fingerprint className="w-7 h-7 text-indigo-400 group-hover:scale-110 transition" />
+                  )}
+                  <span className="font-semibold text-gray-200">
+                    {biometricChecking ? "Authenticating..." : "Sign in with Biometrics"}
+                  </span>
                 </button>
               </div>
-            </div>
+            )}
 
-            {/* Remember & Forgot */}
-            <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 text-gray-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-600 text-indigo-500 focus:ring-indigo-500 bg-gray-800"
-                />
-                <span>Remember me</span>
-              </label>
+            {/* Resend Verification */}
+            {showResend && (
+              <div className="mt-6 text-center">
+                <button
+                  onClick={handleResendVerification}
+                  disabled={loading}
+                  className="text-indigo-400 hover:text-indigo-300 font-medium underline underline-offset-4 transition"
+                >
+                  Resend verification email
+                </button>
+              </div>
+            )}
+
+            {/* Register Link */}
+            <div className="mt-8 text-center text-sm text-gray-400">
+              Don't have an account?{" "}
               <Link
-                to="/reset-password-request"
-                className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
+                to="/register"
+                className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 hover:from-indigo-300 hover:to-purple-300 transition"
               >
-                Forgot password?
+                Create one here
               </Link>
             </div>
-
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-semibold py-3.5 rounded-2xl shadow-lg hover:shadow-indigo-500/30 transform hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                "Sign In"
-              )}
-            </button>
-          </form>
-
-          {/* Biometric option */}
-          {biometricSupported && (biometricEmail || localStorage.getItem("refresh")) && (
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={handleBiometric}
-                disabled={biometricChecking || loading}
-                className="w-full flex items-center justify-center gap-3 bg-gray-800/60 hover:bg-gray-700/60 border border-gray-700 text-gray-200 py-3 rounded-2xl transition-all duration-200 disabled:opacity-50"
-              >
-                {biometricChecking ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <Fingerprint className="h-6 w-6 text-indigo-400" />
-                )}
-                <span className="font-medium">
-                  {biometricChecking ? "Authenticating..." : "Sign in with Biometrics"}
-                </span>
-              </button>
-            </div>
-          )}
-
-          {/* Resend verification */}
-          {showResend && (
-            <div className="mt-5 text-center">
-              <button
-                onClick={handleResendVerification}
-                disabled={loading}
-                className="text-indigo-400 hover:text-indigo-300 text-sm font-medium underline underline-offset-4 transition"
-              >
-                Resend verification email
-              </button>
-            </div>
-          )}
-
-          {/* Register link */}
-          <div className="mt-8 text-center text-sm text-gray-400">
-            Don't have an account?{" "}
-            <Link
-              to="/register"
-              className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
-            >
-              Create account
-            </Link>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
