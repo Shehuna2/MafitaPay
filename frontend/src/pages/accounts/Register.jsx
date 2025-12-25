@@ -526,7 +526,7 @@ export default function Register() {
                       type="submit"
                       className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 rounded-2xl text-base transition-all duration-400 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-3 group"
                     >
-                      Create Account
+                      Create
                       <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition" />
                     </button>
                   </div>
@@ -546,3 +546,4 @@ export default function Register() {
     </>
   );
 }
+
