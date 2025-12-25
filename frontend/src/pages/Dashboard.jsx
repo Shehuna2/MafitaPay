@@ -371,22 +371,22 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* FUNDING NOTICE */}
+      {/* FEE INFORMATION NOTICE */}
       <div className="mx-2 mb-5">
-        <div className="flex items-start gap-3 bg-green-500/10 border border-green-500/30 backdrop-blur-md p-3 rounded-2xl animate-fade-in">
+        <div className="flex items-start gap-3 bg-indigo-500/10 border border-indigo-500/30 backdrop-blur-md p-3 rounded-2xl animate-fade-in">
           
           <div className="shrink-0 mt-0.5">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500/20 text-green-400 text-sm font-bold">
-              ✓
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-400 text-sm font-bold">
+              ℹ
             </span>
           </div>
 
           <div className="flex-1">
-            <p className="text-sm text-green-200 leading-snug">
-              <span className="font-semibold text-white">Flutterwave funding</span> is now
-              <span className="font-semibold text-green-300"> fully resolved</span>.
-              Deposits are <span className="font-semibold">crediting successfully</span> and
-              even <span className="font-semibold">faster than before</span>.
+            <p className="text-sm text-indigo-200 leading-snug">
+              <span className="font-semibold text-white">Deposit Fee Notice:</span> A
+              <span className="font-semibold text-indigo-300"> 1% fee (maximum ₦300)</span> is
+              deducted from deposits to cover Flutterwave transaction costs. This helps us keep
+              <span className="font-semibold"> MafitaPay running smoothly</span> for you.
             </p>
           </div>
         </div>
