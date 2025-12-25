@@ -209,7 +209,7 @@ export default function Login() {
           100% { background-position: 200% 0; }
         }
         .shimmer {
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+          background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.85), transparent);
           background-size: 200% 100%;
           animation: shimmer 2s infinite;
         }
@@ -220,18 +220,11 @@ export default function Login() {
         .fade-in { animation: fadeIn 0.6s ease-out forwards; }
       `}</style>
 
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 text-white relative overflow-hidden flex items-center justify-center p-4">
-        {/* Animated Background Orbs */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -left-40 w-96 h-96 bg-purple-600/30 rounded-full blur-3xl animate-float" style={{ animationDelay: '0s' }}></div>
-          <div className="absolute top-20 -right-32 w-80 h-80 bg-indigo-600/30 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }}></div>
-          <div className="absolute -bottom-40 left-1/2 w-96 h-96 bg-pink-600/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '6s' }}></div>
-        </div>
-
+      <div className="min-h-screen text-white relative overflow-hidden flex items-center justify-center p-4">
         {/* Premium Loading Overlay */}
         {loading && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-xl flex items-center justify-center z-50">
-            <div className="bg-gray-800/80 backdrop-blur-2xl p-10 rounded-3xl shadow-2xl border border-gray-600/50 max-w-md w-full mx-4 fade-in">
+            <div className="bg-gray-800/80 backdrop-blur-2xl p-6 rounded-3xl shadow-2xl border border-gray-600/50 max-w-md w-full mx-4 fade-in">
               <div className="flex flex-col items-center gap-6">
                 <div className="relative">
                   <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-2xl">
