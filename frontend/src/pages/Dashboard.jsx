@@ -358,6 +358,15 @@ export default function Dashboard() {
             ) : (
               <p className="text-xs text-gray-500">No virtual accounts assigned</p>
             )}
+
+            {/* FEE DISCLOSURE */}
+            {wallet?.virtual_accounts?.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-700/50">
+                <p className="text-xs text-gray-400">
+                  Transfers reflect instantly. <span className="text-yellow-400 ml-1">1% (max ₦300)</span> fee.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

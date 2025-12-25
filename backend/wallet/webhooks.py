@@ -20,6 +20,7 @@ from accounts.models import User
 
 from .services.flutterwave_service import FlutterwaveService
 from .services.palmpay_service import PalmpayService
+from .utils import calculate_deposit_fee
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,9 @@ def flutterwave_webhook(request):
         user = va.user
         wallet, _ = Wallet.objects.get_or_create(user=user)
 
+        # CALCULATE FEE (1% with max ₦300)
+        net_amount, fee = calculate_deposit_fee(amount)
+
         # IDEMPOTENT HANDLING
         with transaction.atomic():
             existing = Deposit.objects.select_for_update().filter(
@@ -189,18 +193,25 @@ def flutterwave_webhook(request):
                 "sender_bank": bt.get("originator_bank_name"),
                 "sender_account_number": bt.get("originator_account_number"),
                 "flutterwave_id": provider_ref,
+                "gross_amount": str(amount),
+                "fee": str(fee),
+                "net_amount": str(net_amount),
             })
 
             if existing:
                 if existing.status != "credited":
-                    if wallet.deposit(amount, f"flw_{provider_ref}", metadata):
+                    if wallet.deposit(net_amount, f"flw_{provider_ref}", metadata):
                         existing.status = "credited"
                         existing.save(update_fields=["status"])
+                        logger.info(
+                            "Flutterwave deposit recovered → ₦%s (fee: ₦%s, net: ₦%s) | user=%s",
+                            amount, fee, net_amount, user.email
+                        )
                         return Response({"status": "recovered"}, status=200)
                 return Response({"status": "already_processed"}, status=200)
 
-            # New deposit
-            if not wallet.deposit(amount, f"flw_{provider_ref}", metadata):
+            # New deposit - credit net amount after fee deduction
+            if not wallet.deposit(net_amount, f"flw_{provider_ref}", metadata):
                 return Response({"status": "deposit_failed"}, status=500)
 
             Deposit.objects.create(
@@ -212,7 +223,10 @@ def flutterwave_webhook(request):
                 raw=payload
             )
 
-        logger.info("Flutterwave deposit success → ₦%s | user=%s", amount, user.email)
+        logger.info(
+            "Flutterwave deposit success → ₦%s (fee: ₦%s, net: ₦%s) | user=%s",
+            amount, fee, net_amount, user.email
+        )
         return Response({"status": "success"}, status=200)
 
     except Exception:
@@ -487,6 +501,9 @@ def palmpay_webhook(request):
         user = va.user
         wallet, _ = Wallet.objects.get_or_create(user=user)
 
+        # CALCULATE FEE (1% with max ₦300)
+        net_amount, fee = calculate_deposit_fee(amount)
+
         # IDEMPOTENT HANDLING
         with transaction.atomic():
             existing = Deposit.objects.select_for_update().filter(
@@ -500,16 +517,19 @@ def palmpay_webhook(request):
                 "sender_name": data.get("senderName") or data.get("sender_name"),
                 "sender_account": data.get("senderAccount") or data.get("sender_account"),
                 "palmpay_id": provider_ref,
+                "gross_amount": str(amount),
+                "fee": str(fee),
+                "net_amount": str(net_amount),
             })
 
             if existing:
                 if existing.status != "credited":
-                    if wallet.deposit(amount, f"palmpay_{provider_ref}", metadata):
+                    if wallet.deposit(net_amount, f"palmpay_{provider_ref}", metadata):
                         existing.status = "credited"
                         existing.save(update_fields=["status"])
                         logger.info(
-                            "PalmPay deposit recovered → ₦%s | user=%s",
-                            amount, user.email
+                            "PalmPay deposit recovered → ₦%s (fee: ₦%s, net: ₦%s) | user=%s",
+                            amount, fee, net_amount, user.email
                         )
                         return Response({"status": "recovered"}, status=200)
                 logger.info(
@@ -518,8 +538,8 @@ def palmpay_webhook(request):
                 )
                 return Response({"status": "already_processed"}, status=200)
 
-            # New deposit
-            if not wallet.deposit(amount, f"palmpay_{provider_ref}", metadata):
+            # New deposit - credit net amount after fee deduction
+            if not wallet.deposit(net_amount, f"palmpay_{provider_ref}", metadata):
                 logger.error(
                     "PalmPay deposit failed to credit wallet: ref=%s, user=%s",
                     provider_ref, user.email
@@ -535,7 +555,10 @@ def palmpay_webhook(request):
                 raw=payload
             )
 
-        logger.info("PalmPay deposit success → ₦%s | user=%s", amount, user.email)
+        logger.info(
+            "PalmPay deposit success → ₦%s (fee: ₦%s, net: ₦%s) | user=%s",
+            amount, fee, net_amount, user.email
+        )
         return Response({"status": "success"}, status=200)
 
     except Exception:
