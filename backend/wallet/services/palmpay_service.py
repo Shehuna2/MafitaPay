@@ -126,7 +126,7 @@ class PalmpayService:
         self,
         user,
         bvn: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         """
         Create a dedicated virtual account for a user.
         
@@ -135,7 +135,7 @@ class PalmpayService:
             bvn: Bank Verification Number (optional but recommended)
             
         Returns:
-            Dictionary with virtual account details or None on failure
+            Dictionary with virtual account details on success or error key on failure
         """
         try:
             profile = getattr(user, "profile", None)
@@ -187,12 +187,15 @@ class PalmpayService:
             )
 
             if response.status_code not in (200, 201):
+                error_msg = f"PalmPay API error (status {response.status_code})"
                 logger.error(
                     "PalmPay VA creation failed: status=%d, response=%s",
                     response.status_code,
                     response.text
                 )
-                return None
+                return {
+                    "error": error_msg
+                }
 
             data = response.json()
             
@@ -202,16 +205,22 @@ class PalmpayService:
             is_success = data.get("success", False) or data.get("code") == "0000"
             
             if not is_success:
+                error_msg = data.get("message") or "PalmPay VA creation failed"
                 logger.error("PalmPay VA creation failed: %s", data)
-                return None
+                return {
+                    "error": error_msg
+                }
 
             # Extract virtual account details from response
             va_data = data.get("data", {})
             account_number = va_data.get("accountNumber") or va_data.get("account_number")
             
             if not account_number:
+                error_msg = "No account number in PalmPay response"
                 logger.error("No account number in PalmPay response: %s", data)
-                return None
+                return {
+                    "error": error_msg
+                }
 
             return {
                 "provider": "palmpay",
@@ -224,9 +233,18 @@ class PalmpayService:
                 "merchant_id": self.merchant_id,
             }
 
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Network error while creating PalmPay virtual account: {str(e)}"
+            logger.error("PalmPay VA creation failed for user %s: %s", user.email, error_msg)
+            return {
+                "error": error_msg
+            }
         except Exception as e:
+            error_msg = f"Failed to create PalmPay virtual account: {str(e)}"
             logger.exception("PalmPay VA creation failed for user %s: %s", user.email, str(e))
-            return None
+            return {
+                "error": error_msg
+            }
 
     # ---------------------------------------------------------
     # WEBHOOK VERIFICATION
