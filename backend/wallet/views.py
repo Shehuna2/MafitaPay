@@ -13,12 +13,13 @@ from rest_framework import status, generics, permissions
 from rest_framework.pagination import PageNumberPagination
 import paystack
 from paystack import DedicatedVirtualAccount
-from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit
-from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer
+from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit, CardDepositExchangeRate, CardDeposit
+from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer, CardDepositExchangeRateSerializer, CardDepositSerializer
 from .utils import extract_bank_name, extract_account_name
 from .services.flutterwave_service import FlutterwaveService
 from .services.palmpay_service import PalmpayService
-
+from .services.flutterwave_card_service import FlutterwaveCardService
+from .permissions import IsMerchantOrSuperUser
 
 
 from django.contrib.auth import get_user_model
@@ -28,12 +29,16 @@ from datetime import datetime
 import hmac
 import hashlib
 import json
+import uuid as uuid_lib
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
 # Set Paystack API key
 paystack.api_key = settings.PAYSTACK_SECRET_KEY
+
+# Constants
+SUPPORTED_CARD_CURRENCIES = ['EUR', 'USD', 'GBP']
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -1002,5 +1007,258 @@ class SecurePaymentView(APIView):
                 {"error": "Payment failed. Please contact support."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# ============================================================================
+# CARD DEPOSIT ENDPOINTS
+# ============================================================================
+
+class CardDepositExchangeRateView(APIView):
+    """Get current exchange rates and calculate fees for card deposits"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get all available exchange rates"""
+        rates = CardDepositExchangeRate.objects.all()
+        serializer = CardDepositExchangeRateSerializer(rates, many=True)
+        return Response({
+            "success": True,
+            "rates": serializer.data
+        })
+
+    def post(self, request):
+        """Calculate NGN amount for a given foreign currency amount"""
+        currency = request.data.get('currency', '').upper()
+        amount_str = request.data.get('amount')
+        
+        # Validate inputs
+        if not currency or currency not in SUPPORTED_CARD_CURRENCIES:
+            return Response(
+                {"error": f"Invalid currency. Must be one of: {', '.join(SUPPORTED_CARD_CURRENCIES)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            amount = Decimal(str(amount_str))
+            if amount <= 0:
+                raise ValueError("Amount must be positive")
+        except (InvalidOperation, ValueError, TypeError):
+            return Response(
+                {"error": "Invalid amount"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get exchange rate
+        try:
+            exchange_rate = CardDepositExchangeRate.objects.get(currency=currency)
+        except CardDepositExchangeRate.DoesNotExist:
+            return Response(
+                {"error": f"Exchange rate for {currency} not configured"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Calculate amounts
+        calculation = exchange_rate.calculate_ngn_amount(amount)
+        
+        return Response({
+            "success": True,
+            "currency": currency,
+            "amount": str(amount),
+            "exchange_rate": str(calculation['exchange_rate']),
+            "gross_ngn": str(calculation['gross_ngn']),
+            "flutterwave_fee": str(calculation['flutterwave_fee']),
+            "platform_margin": str(calculation['platform_margin']),
+            "net_amount": str(calculation['net_amount']),
+            "breakdown": {
+                "base_conversion": f"{amount} {currency} × {calculation['exchange_rate']} = ₦{calculation['gross_ngn']}",
+                "flutterwave_fee": f"₦{calculation['flutterwave_fee']} ({exchange_rate.flutterwave_fee_percent}%)",
+                "platform_margin": f"₦{calculation['platform_margin']} ({exchange_rate.platform_margin_percent}%)",
+                "you_receive": f"₦{calculation['net_amount']}"
+            }
+        })
+
+
+class CardDepositInitiateView(APIView):
+    """Initiate a card deposit transaction"""
+    permission_classes = [IsMerchantOrSuperUser]
+
+    def post(self, request):
+        """Initiate card charge"""
+        user = request.user
+        
+        # Extract and validate input
+        currency = request.data.get('currency', '').upper()
+        amount_str = request.data.get('amount')
+        card_number = request.data.get('card_number', '').replace(' ', '')
+        cvv = request.data.get('cvv')
+        expiry_month = request.data.get('expiry_month')
+        expiry_year = request.data.get('expiry_year')
+        fullname = request.data.get('fullname')
+        use_live = request.data.get('use_live', False)
+        
+        # Validate required fields
+        if not all([currency, amount_str, card_number, cvv, expiry_month, expiry_year, fullname]):
+            return Response(
+                {"error": "Missing required fields"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate currency
+        if currency not in SUPPORTED_CARD_CURRENCIES:
+            return Response(
+                {"error": f"Invalid currency. Card deposits only support: {', '.join(SUPPORTED_CARD_CURRENCIES)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate amount
+        try:
+            amount = Decimal(str(amount_str))
+            if amount <= 0:
+                raise ValueError("Amount must be positive")
+        except (InvalidOperation, ValueError, TypeError):
+            return Response(
+                {"error": "Invalid amount"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get exchange rate
+        try:
+            exchange_rate_obj = CardDepositExchangeRate.objects.get(currency=currency)
+        except CardDepositExchangeRate.DoesNotExist:
+            return Response(
+                {"error": f"Exchange rate for {currency} not configured"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Calculate NGN amounts
+        calculation = exchange_rate_obj.calculate_ngn_amount(amount)
+        
+        # Generate unique transaction reference
+        tx_ref = f"CARD_{user.id}_{uuid_lib.uuid4().hex[:12].upper()}"
+        
+        # Prepare redirect URL
+        frontend_url = settings.FRONTEND_URL
+        redirect_url = f"{frontend_url}/wallet/card-deposit/callback"
+        
+        # Initialize Flutterwave card service
+        try:
+            fw_card_service = FlutterwaveCardService(use_live=use_live)
+        except Exception as e:
+            logger.error(f"Failed to initialize Flutterwave card service: {str(e)}")
+            return Response(
+                {"error": "Service configuration error"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # Create card deposit record
+        try:
+            card_deposit = CardDeposit.objects.create(
+                user=user,
+                currency=currency,
+                amount=amount,
+                exchange_rate=calculation['exchange_rate'],
+                gross_ngn=calculation['gross_ngn'],
+                flutterwave_fee=calculation['flutterwave_fee'],
+                platform_margin=calculation['platform_margin'],
+                ngn_amount=calculation['net_amount'],
+                flutterwave_tx_ref=tx_ref,
+                status='pending',
+                use_live_mode=use_live,
+            )
+        except Exception as e:
+            logger.error(f"Failed to create card deposit record: {str(e)}", exc_info=True)
+            return Response(
+                {"error": "Failed to create transaction"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # Initiate card charge
+        try:
+            charge_result = fw_card_service.charge_card(
+                amount=amount,
+                currency=currency,
+                email=user.email,
+                tx_ref=tx_ref,
+                card_number=card_number,
+                cvv=cvv,
+                expiry_month=expiry_month,
+                expiry_year=expiry_year,
+                fullname=fullname,
+                redirect_url=redirect_url,
+            )
+            
+            if charge_result.get('status') != 'success':
+                card_deposit.status = 'failed'
+                card_deposit.raw_response = charge_result
+                card_deposit.save()
+                
+                return Response(
+                    {"error": charge_result.get('message', 'Card charge failed')},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update card deposit with response data
+            charge_data = charge_result.get('data', {})
+            card_deposit.flutterwave_tx_id = charge_data.get('id')
+            card_deposit.raw_response = charge_data
+            card_deposit.status = 'processing'
+            
+            # Extract masked card details
+            if 'card' in charge_data:
+                card_info = charge_data['card']
+                card_deposit.card_last4 = card_info.get('last4digits', card_info.get('last_4digits'))
+                card_deposit.card_brand = card_info.get('type') or card_info.get('brand')
+            
+            card_deposit.save()
+            
+            logger.info(f"Card charge initiated: user={user.email}, tx_ref={tx_ref}, amount={amount} {currency}")
+            
+            # Return response with charge details
+            response_data = {
+                "success": True,
+                "message": "Card charge initiated",
+                "tx_ref": tx_ref,
+                "charge_data": charge_data,
+            }
+            
+            # Include 3D Secure URL if present
+            if 'link' in charge_data:
+                response_data['authorization_url'] = charge_data['link']
+            elif 'auth_url' in charge_data:
+                response_data['authorization_url'] = charge_data['auth_url']
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"Card charge exception: {str(e)}", exc_info=True)
+            card_deposit.status = 'failed'
+            card_deposit.save()
+            return Response(
+                {"error": "Failed to process card charge"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class CardDepositListView(generics.ListAPIView):
+    """List user's card deposit transactions"""
+    permission_classes = [IsMerchantOrSuperUser]
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        return CardDeposit.objects.filter(user=self.request.user).order_by('-created_at')
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
+        
+        if page is not None:
+            serializer = CardDepositSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = CardDepositSerializer(queryset, many=True)
+        return Response({
+            "success": True,
+            "deposits": serializer.data
+        })
 
 
