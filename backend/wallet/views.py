@@ -1080,7 +1080,7 @@ class CardDepositExchangeRateView(APIView):
 
 class CardDepositInitiateView(APIView):
     """Initiate a card deposit transaction"""
-    permission_classes = [IsMerchantOrSuperUser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         """Initiate card charge"""
@@ -1241,7 +1241,7 @@ class CardDepositInitiateView(APIView):
 
 class CardDepositListView(generics.ListAPIView):
     """List user's card deposit transactions"""
-    permission_classes = [IsMerchantOrSuperUser]
+    permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):

@@ -13,6 +13,7 @@ import Referral from "./pages/Referral";
 import Rewards from "./pages/Rewards";
 import Dashboard from "./pages/Dashboard";
 import Deposit from "./pages/wallet/Deposit";
+import CardDeposit from "./pages/wallet/CardDeposit";
 import WalletTransactions from "./pages/WalletTransactions";
 
 import Login from "./pages/accounts/Login";
@@ -183,6 +184,17 @@ function App() {
                 <PrivateRoute>
                   <Layout>
                     <Deposit />
+                  </Layout>
+                </PrivateRoute>
+              }
+            />
+
+            <Route
+              path="/card-deposit"
+              element={
+                <PrivateRoute>
+                  <Layout>
+                    <CardDeposit />
                   </Layout>
                 </PrivateRoute>
               }
