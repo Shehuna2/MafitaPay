@@ -16,8 +16,8 @@ def calculate_deposit_fee(amount):
         tuple: (net_amount, fee) where net_amount is amount after fee deduction
     
     Example:
-        calculate_deposit_fee(Decimal("10000")) -> (Decimal("9800"), Decimal("200"))
-        calculate_deposit_fee(Decimal("50000")) -> (Decimal("49900"), Decimal("100"))
+        calculate_deposit_fee(Decimal("2000")) -> (Decimal("1960"), Decimal("40"))
+        calculate_deposit_fee(Decimal("10000")) -> (Decimal("9900"), Decimal("100"))
     """
     amount = Decimal(str(amount))
     fee_rate = Decimal("0.02")  # 2%
