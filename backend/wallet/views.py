@@ -513,7 +513,7 @@ class RequeryDVAAPIView(APIView):
                 for transfer in transfers:
                     if transfer['status'] == 'success' and not Deposit.objects.filter(provider_reference=transfer['reference']).exists():
                         amount = Decimal(str(transfer['amount'] / 100))
-                        fee = min(amount * Decimal('0.01'), Decimal('300'))
+                        fee = min(amount * Decimal('0.02'), Decimal('100'))
                         net_amount = amount - fee
                         with transaction.atomic():
                             deposit = Deposit.objects.create(

@@ -336,7 +336,7 @@ export default function Deposit() {
                 {/* FEES */}
                 <div className="pt-2 space-y-5 border-t border-gray-700/50">
                   <p className="text-xs text-gray-400">
-                    Transfers reflect instantly. <span className="text-yellow-400 ml-1">1% (max ₦300)</span> fee.
+                    Transfers reflect instantly. <span className="text-yellow-400 ml-1">2% (max ₦100)</span> fee.
                   </p>
                 </div>
 

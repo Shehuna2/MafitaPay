@@ -433,50 +433,50 @@ class FlutterwaveVABankNameExtractionTestCase(TestCase):
 
 
 class DepositFeeCalculationTestCase(TestCase):
-    """Test deposit fee calculation (1% with max ₦300)"""
+    """Test deposit fee calculation (2% with max ₦100)"""
 
     def test_fee_calculation_small_amount(self):
-        """Test fee calculation for amounts under ₦30,000"""
-        # ₦10,000 deposit: 1% = ₦100
+        """Test fee calculation for amounts under ₦5,000"""
+        # ₦10,000 deposit: 2% = ₦200
         net_amount, fee = calculate_deposit_fee(Decimal("10000"))
-        self.assertEqual(fee, Decimal("100.00"))
-        self.assertEqual(net_amount, Decimal("9900.00"))
+        self.assertEqual(fee, Decimal("200.00"))
+        self.assertEqual(net_amount, Decimal("9800.00"))
         
-        # ₦5,000 deposit: 1% = ₦50
-        net_amount, fee = calculate_deposit_fee(Decimal("5000"))
-        self.assertEqual(fee, Decimal("50.00"))
-        self.assertEqual(net_amount, Decimal("4950.00"))
+        # ₦2,000 deposit: 2% = ₦40
+        net_amount, fee = calculate_deposit_fee(Decimal("2000"))
+        self.assertEqual(fee, Decimal("40.00"))
+        self.assertEqual(net_amount, Decimal("1960.00"))
 
     def test_fee_calculation_at_max_threshold(self):
-        """Test fee calculation at the ₦30,000 threshold (where fee = ₦300)"""
-        # ₦30,000 deposit: 1% = ₦300 (exactly at max)
-        net_amount, fee = calculate_deposit_fee(Decimal("30000"))
-        self.assertEqual(fee, Decimal("300.00"))
-        self.assertEqual(net_amount, Decimal("29700.00"))
+        """Test fee calculation at the ₦5,000 threshold (where fee = ₦100)"""
+        # ₦5,000 deposit: 2% = ₦100 (exactly at max)
+        net_amount, fee = calculate_deposit_fee(Decimal("5000"))
+        self.assertEqual(fee, Decimal("100.00"))
+        self.assertEqual(net_amount, Decimal("4900.00"))
 
     def test_fee_calculation_above_max(self):
-        """Test fee calculation for amounts over ₦30,000 (capped at ₦300)"""
-        # ₦50,000 deposit: 1% = ₦500, but capped at ₦300
+        """Test fee calculation for amounts over ₦5,000 (capped at ₦100)"""
+        # ₦50,000 deposit: 2% = ₦1,000, but capped at ₦100
         net_amount, fee = calculate_deposit_fee(Decimal("50000"))
-        self.assertEqual(fee, Decimal("300.00"))
-        self.assertEqual(net_amount, Decimal("49700.00"))
+        self.assertEqual(fee, Decimal("100.00"))
+        self.assertEqual(net_amount, Decimal("49900.00"))
         
-        # ₦100,000 deposit: 1% = ₦1,000, but capped at ₦300
+        # ₦100,000 deposit: 2% = ₦2,000, but capped at ₦100
         net_amount, fee = calculate_deposit_fee(Decimal("100000"))
-        self.assertEqual(fee, Decimal("300.00"))
-        self.assertEqual(net_amount, Decimal("99700.00"))
+        self.assertEqual(fee, Decimal("100.00"))
+        self.assertEqual(net_amount, Decimal("99900.00"))
 
     def test_fee_calculation_edge_cases(self):
         """Test fee calculation for edge cases"""
-        # ₦1 deposit: 1% = ₦0.01
+        # ₦1 deposit: 2% = ₦0.02
         net_amount, fee = calculate_deposit_fee(Decimal("1"))
-        self.assertEqual(fee, Decimal("0.01"))
-        self.assertEqual(net_amount, Decimal("0.99"))
+        self.assertEqual(fee, Decimal("0.02"))
+        self.assertEqual(net_amount, Decimal("0.98"))
         
-        # ₦100 deposit: 1% = ₦1
+        # ₦100 deposit: 2% = ₦2
         net_amount, fee = calculate_deposit_fee(Decimal("100"))
-        self.assertEqual(fee, Decimal("1.00"))
-        self.assertEqual(net_amount, Decimal("99.00"))
+        self.assertEqual(fee, Decimal("2.00"))
+        self.assertEqual(net_amount, Decimal("98.00"))
 
 
 class FlutterwaveWebhookFeeDeductionTestCase(TestCase):
@@ -500,12 +500,12 @@ class FlutterwaveWebhookFeeDeductionTestCase(TestCase):
 
     @patch("wallet.webhooks.FlutterwaveService")
     def test_webhook_deducts_fee_from_deposit(self, mock_fw_service):
-        """Test that webhook deducts 1% (max ₦300) fee from deposits"""
+        """Test that webhook deducts 2% (max ₦100) fee from deposits"""
         # Setup mock
         mock_fw_service.return_value.hash_secret = "test_secret"
         mock_fw_service.return_value.verify_webhook_signature.return_value = True
 
-        # Test with ₦10,000 deposit (fee should be ₦100)
+        # Test with ₦10,000 deposit (fee should be ₦200)
         payload = {
             "event": "virtualaccount.payment.completed",
             "data": {
@@ -531,18 +531,18 @@ class FlutterwaveWebhookFeeDeductionTestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
         
-        # Verify wallet was credited with net amount (₦10,000 - ₦100 = ₦9,900)
+        # Verify wallet was credited with net amount (₦10,000 - ₦200 = ₦9,800)
         self.wallet.refresh_from_db()
-        self.assertEqual(self.wallet.balance, Decimal("9900.00"))
+        self.assertEqual(self.wallet.balance, Decimal("9800.00"))
 
     @patch("wallet.webhooks.FlutterwaveService")
     def test_webhook_deducts_max_fee_for_large_deposit(self, mock_fw_service):
-        """Test that webhook caps fee at ₦300 for large deposits"""
+        """Test that webhook caps fee at ₦100 for large deposits"""
         # Setup mock
         mock_fw_service.return_value.hash_secret = "test_secret"
         mock_fw_service.return_value.verify_webhook_signature.return_value = True
 
-        # Test with ₦100,000 deposit (fee should be capped at ₦300)
+        # Test with ₦100,000 deposit (fee should be capped at ₦100)
         payload = {
             "event": "virtualaccount.payment.completed",
             "data": {
@@ -568,9 +568,9 @@ class FlutterwaveWebhookFeeDeductionTestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
         
-        # Verify wallet was credited with net amount (₦100,000 - ₦300 = ₦99,700)
+        # Verify wallet was credited with net amount (₦100,000 - ₦100 = ₦99,900)
         self.wallet.refresh_from_db()
-        self.assertEqual(self.wallet.balance, Decimal("99700.00"))
+        self.assertEqual(self.wallet.balance, Decimal("99900.00"))
 
     @patch("wallet.webhooks.FlutterwaveService")
     def test_webhook_stores_fee_in_metadata(self, mock_fw_service):
@@ -614,8 +614,8 @@ class FlutterwaveWebhookFeeDeductionTestCase(TestCase):
             reference="flw_txn_fee_test_003"
         ).first()
         self.assertIsNotNone(txn)
-        self.assertEqual(txn.amount, Decimal("9900.00"))  # Net amount
+        self.assertEqual(txn.amount, Decimal("9800.00"))  # Net amount
         self.assertIn("fee", txn.metadata)
-        self.assertEqual(txn.metadata["fee"], "100.00")
+        self.assertEqual(txn.metadata["fee"], "200.00")
         self.assertEqual(txn.metadata["gross_amount"], "10000")
-        self.assertEqual(txn.metadata["net_amount"], "9900.00")
+        self.assertEqual(txn.metadata["net_amount"], "9800.00")
