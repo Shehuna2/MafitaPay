@@ -32,7 +32,6 @@ export default function CardDeposit() {
   const [fullname, setFullname] = useState("");
   
   // Calculation state
-  const [exchangeRate, setExchangeRate] = useState(null);
   const [calculation, setCalculation] = useState(null);
   const [calculationLoading, setCalculationLoading] = useState(false);
   
@@ -43,6 +42,26 @@ export default function CardDeposit() {
   
   // View state
   const [showHistory, setShowHistory] = useState(false);
+
+  const calculateRate = async () => {
+    setCalculationLoading(true);
+    try {
+      const response = await client.post("/wallet/card-deposit/calculate-rate/", {
+        currency,
+        amount: parseFloat(amount)
+      });
+
+      if (response.data.success) {
+        setCalculation(response.data);
+      }
+    } catch (err) {
+      console.error("Error calculating rate:", err);
+      const errorMsg = err.response?.data?.error || "Failed to calculate exchange rate";
+      toast.error(errorMsg);
+    } finally {
+      setCalculationLoading(false);
+    }
+  };
 
   // Fetch exchange rate when amount or currency changes
   useEffect(() => {
@@ -55,6 +74,7 @@ export default function CardDeposit() {
     }, 500);
 
     return () => clearTimeout(debounceTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amount, currency]);
 
   // Fetch deposit history
@@ -63,27 +83,6 @@ export default function CardDeposit() {
       fetchDeposits();
     }
   }, [showHistory]);
-
-  const calculateRate = async () => {
-    setCalculationLoading(true);
-    try {
-      const response = await client.post("/wallet/card-deposit/calculate-rate/", {
-        currency,
-        amount: parseFloat(amount)
-      });
-
-      if (response.data.success) {
-        setCalculation(response.data);
-        setExchangeRate(response.data.exchange_rate);
-      }
-    } catch (err) {
-      console.error("Error calculating rate:", err);
-      const errorMsg = err.response?.data?.error || "Failed to calculate exchange rate";
-      toast.error(errorMsg);
-    } finally {
-      setCalculationLoading(false);
-    }
-  };
 
   const fetchDeposits = async () => {
     setDepositsLoading(true);
