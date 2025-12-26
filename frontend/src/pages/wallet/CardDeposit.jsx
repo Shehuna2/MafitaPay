@@ -121,7 +121,7 @@ export default function CardDeposit() {
       return;
     }
 
-    if (!cardNumber || cardNumber.length < 15) {
+    if (!cardNumber || cardNumber.length < 13) {
       toast.error("Please enter a valid card number");
       return;
     }
@@ -152,7 +152,7 @@ export default function CardDeposit() {
         expiry_year: expiryYear,
         cvv,
         fullname,
-        use_live: false // Set to true for production
+        use_live: import.meta.env.MODE === 'production'
       });
 
       if (response.data.success) {
@@ -371,7 +371,7 @@ export default function CardDeposit() {
                         value={expiryMonth}
                         onChange={(e) => {
                           const val = e.target.value.replace(/\D/g, "").slice(0, 2);
-                          if (val === "" || (parseInt(val) >= 1 && parseInt(val) <= 12)) {
+                          if (val === "" || (val.length > 0 && parseInt(val, 10) >= 1 && parseInt(val, 10) <= 12)) {
                             setExpiryMonth(val);
                           }
                         }}

@@ -82,21 +82,21 @@ export default function CardDepositCard({ deposit }) {
         <div className="flex justify-between text-sm">
           <span className="text-gray-400">Exchange Rate:</span>
           <span className="text-gray-300">
-            ₦{parseFloat(deposit.exchange_rate).toFixed(2)}
+            ₦{parseFloat(deposit.exchange_rate || 0).toFixed(2)}
           </span>
         </div>
 
         <div className="flex justify-between text-sm">
           <span className="text-gray-400">Fees Deducted:</span>
           <span className="text-red-400">
-            -₦{(parseFloat(deposit.flutterwave_fee) + parseFloat(deposit.platform_margin)).toFixed(2)}
+            -₦{(parseFloat(deposit.flutterwave_fee || 0) + parseFloat(deposit.platform_margin || 0)).toFixed(2)}
           </span>
         </div>
 
         <div className="flex justify-between text-sm pt-2 border-t border-gray-700/50">
           <span className="text-gray-400 font-medium">You Received:</span>
           <span className="text-green-400 font-bold text-base">
-            ₦{parseFloat(deposit.ngn_amount).toFixed(2)}
+            ₦{parseFloat(deposit.ngn_amount || 0).toFixed(2)}
           </span>
         </div>
 
