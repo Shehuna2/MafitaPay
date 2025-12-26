@@ -384,9 +384,9 @@ export default function Dashboard() {
           <div className="flex-1">
             <p className="text-sm text-indigo-200 leading-snug">
               <span className="font-semibold text-white">Deposit Fee Notice:</span> A
-              <span className="font-semibold text-indigo-300"> 1% fee (maximum ₦300)</span> is
+              <span className="font-semibold text-indigo-300"> 2% fee (maximum ₦100)</span> is
               deducted from deposits to cover Flutterwave transaction costs. This helps us keep
-              <span className="font-semibold"> MafitaPay running smoothly</span> for you.
+              <span className="font-semibold "> MafitaPay running smoothly</span> for you.
             </p>
           </div>
         </div>
@@ -498,4 +498,5 @@ export default function Dashboard() {
     </div>
   );
 }
+
 
