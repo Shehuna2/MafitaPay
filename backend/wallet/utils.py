@@ -7,7 +7,7 @@ from decimal import Decimal
 
 def calculate_deposit_fee(amount):
     """
-    Calculate Flutterwave deposit fee: 1% with a maximum of ₦300.
+    Calculate deposit fee: 2% with a maximum of ₦100.
     
     Args:
         amount: The deposit amount (Decimal or numeric type)
@@ -16,12 +16,12 @@ def calculate_deposit_fee(amount):
         tuple: (net_amount, fee) where net_amount is amount after fee deduction
     
     Example:
+        calculate_deposit_fee(Decimal("2000")) -> (Decimal("1960"), Decimal("40"))
         calculate_deposit_fee(Decimal("10000")) -> (Decimal("9900"), Decimal("100"))
-        calculate_deposit_fee(Decimal("50000")) -> (Decimal("49700"), Decimal("300"))
     """
     amount = Decimal(str(amount))
-    fee_rate = Decimal("0.01")  # 1%
-    max_fee = Decimal("300")
+    fee_rate = Decimal("0.02")  # 2%
+    max_fee = Decimal("100")
     
     fee = min(amount * fee_rate, max_fee)
     net_amount = amount - fee

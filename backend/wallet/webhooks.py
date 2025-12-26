@@ -176,7 +176,7 @@ def flutterwave_webhook(request):
         user = va.user
         wallet, _ = Wallet.objects.get_or_create(user=user)
 
-        # CALCULATE FEE (1% with max ₦300)
+        # CALCULATE FEE (2% with max ₦100)
         net_amount, fee = calculate_deposit_fee(amount)
 
         # IDEMPOTENT HANDLING
@@ -501,7 +501,7 @@ def palmpay_webhook(request):
         user = va.user
         wallet, _ = Wallet.objects.get_or_create(user=user)
 
-        # CALCULATE FEE (1% with max ₦300)
+        # CALCULATE FEE (2% with max ₦100)
         net_amount, fee = calculate_deposit_fee(amount)
 
         # IDEMPOTENT HANDLING
