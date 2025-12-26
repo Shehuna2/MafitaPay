@@ -1,10 +1,12 @@
 // src/pages/Deposit.jsx
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import client from "../../api/client";
-import { Loader2, RefreshCcw, Copy, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
+import { Loader2, RefreshCcw, Copy, ChevronDown, ChevronUp, ArrowLeft, CreditCard } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 export default function Deposit() {
+  const navigate = useNavigate();
   const [dvaDetails, setDvaDetails] = useState({
     account_number: null,
     bank_name: null,
@@ -180,6 +182,27 @@ export default function Deposit() {
             <h1 className="text-xl sm:text-2xl font-bold text-indigo-400">
               Deposit via Bank Transfer
             </h1>
+          </div>
+
+          {/* Alternative Deposit Method Card */}
+          <div className="bg-gradient-to-r from-indigo-600/10 to-purple-600/10 rounded-2xl p-4 mb-5 border border-indigo-500/30 animate-fade-in-up">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-indigo-600/20 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-white font-medium text-sm">Deposit with Card</h3>
+                  <p className="text-gray-400 text-xs">Instant deposit from EUR, USD, or GBP cards</p>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate("/card-deposit")}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 transform hover:-translate-y-0.5"
+              >
+                Use Card
+              </button>
+            </div>
           </div>
 
           <div className="bg-gray-800/80 rounded-2xl p-4 sm:p-5 shadow-2xl border border-gray-700/50 animate-fade-in-up">
