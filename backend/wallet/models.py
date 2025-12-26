@@ -321,4 +321,110 @@ class TransactionSecurityLog(models.Model):
         return f"{self.user.email} - {self.get_action_display()} at {self.created_at}"
 
 
+class CardDepositExchangeRate(models.Model):
+    """Store exchange rates for card deposits (EUR/USD/GBP → NGN)"""
+    CURRENCY_CHOICES = [
+        ('EUR', 'Euro'),
+        ('USD', 'US Dollar'),
+        ('GBP', 'British Pound'),
+    ]
+    
+    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, unique=True)
+    rate = models.DecimalField(max_digits=12, decimal_places=2, help_text="Exchange rate to NGN")
+    flutterwave_fee_percent = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=Decimal("1.4"),
+        help_text="Flutterwave processing fee percentage"
+    )
+    platform_margin_percent = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=Decimal("0.5"),
+        help_text="Platform margin/profit percentage"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['currency']
+        verbose_name = 'Card Deposit Exchange Rate'
+        verbose_name_plural = 'Card Deposit Exchange Rates'
+    
+    def __str__(self):
+        return f"{self.currency} → NGN: {self.rate}"
+    
+    def calculate_ngn_amount(self, foreign_amount):
+        """Calculate NGN amount user receives after fees"""
+        foreign_amount = Decimal(str(foreign_amount))
+        # Convert to NGN
+        gross_ngn = foreign_amount * self.rate
+        # Calculate Flutterwave fee
+        flutterwave_fee = gross_ngn * (self.flutterwave_fee_percent / Decimal("100"))
+        # Calculate platform margin
+        platform_margin = gross_ngn * (self.platform_margin_percent / Decimal("100"))
+        # Net amount user receives
+        net_amount = gross_ngn - flutterwave_fee - platform_margin
+        return {
+            'gross_ngn': gross_ngn,
+            'flutterwave_fee': flutterwave_fee,
+            'platform_margin': platform_margin,
+            'net_amount': net_amount,
+            'exchange_rate': self.rate,
+        }
+
+
+CARD_DEPOSIT_STATUS = [
+    ('pending', 'Pending'),
+    ('processing', 'Processing'),
+    ('successful', 'Successful'),
+    ('failed', 'Failed'),
+]
+
+
+class CardDeposit(models.Model):
+    """Track card deposit transactions"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='card_deposits')
+    
+    # Amount details
+    currency = models.CharField(max_length=3, choices=CardDepositExchangeRate.CURRENCY_CHOICES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, help_text="Amount in foreign currency")
+    exchange_rate = models.DecimalField(max_digits=12, decimal_places=2, help_text="Exchange rate at transaction time")
+    ngn_amount = models.DecimalField(max_digits=12, decimal_places=2, help_text="Amount user receives in NGN")
+    gross_ngn = models.DecimalField(max_digits=12, decimal_places=2, help_text="Gross NGN before fees")
+    flutterwave_fee = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    platform_margin = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    
+    # Transaction details
+    flutterwave_tx_ref = models.CharField(max_length=255, unique=True, db_index=True)
+    flutterwave_tx_id = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    status = models.CharField(max_length=20, choices=CARD_DEPOSIT_STATUS, default='pending')
+    
+    # Card details (masked for PCI-DSS compliance)
+    card_last4 = models.CharField(max_length=4, blank=True, null=True)
+    card_brand = models.CharField(max_length=20, blank=True, null=True)
+    
+    # Metadata
+    raw_response = models.JSONField(default=dict, blank=True, help_text="Raw Flutterwave response")
+    use_live_mode = models.BooleanField(default=False, help_text="Whether live or test mode was used")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['flutterwave_tx_ref']),
+            models.Index(fields=['flutterwave_tx_id']),
+            models.Index(fields=['created_at']),
+        ]
+        verbose_name = 'Card Deposit'
+        verbose_name_plural = 'Card Deposits'
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.amount} {self.currency} → ₦{self.ngn_amount} ({self.status})"
+
+
 

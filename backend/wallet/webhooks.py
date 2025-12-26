@@ -570,3 +570,168 @@ def palmpay_webhook(request):
 @permission_classes([AllowAny])
 def health(request):
     return Response({"status": "ok"})
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@csrf_exempt
+def flutterwave_card_webhook(request):
+    """
+    Flutterwave Card Charge Webhook Handler
+    Handles card charge completion events with signature verification
+    """
+    try:
+        # SECURITY: Limit payload size
+        raw = request.body or b""
+        
+        if len(raw) > MAX_WEBHOOK_SIZE:
+            logger.warning(
+                "Card webhook payload too large: %d bytes (max: %d)",
+                len(raw), MAX_WEBHOOK_SIZE
+            )
+            return Response({"error": "payload too large"}, status=413)
+        
+        # Get signature from headers
+        signature = (
+            request.headers.get("verif-hash")
+            or request.headers.get("x-verif-hash")
+            or request.headers.get("Flutterwave-Signature")
+            or request.META.get("HTTP_VERIF_HASH")
+            or request.META.get("HTTP_X_VERIF_HASH")
+            or request.META.get("HTTP_FLUTTERWAVE_SIGNATURE")
+        )
+
+        if not signature:
+            logger.warning("Missing Flutterwave signature in card webhook")
+            return Response({"error": "missing signature"}, status=400)
+
+        # Parse payload
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.error(f"Invalid JSON payload: {str(e)}")
+            return Response({"error": "invalid payload"}, status=400)
+
+        logger.info(f"Card webhook received: event={payload.get('event')}")
+
+        # Determine environment from payload or default to live
+        # In production, you might want to check the event data for clues
+        use_live = True  # Default to live for webhooks
+        
+        # Initialize service for verification
+        from .services.flutterwave_card_service import FlutterwaveCardService
+        fw_card_service = FlutterwaveCardService(use_live=use_live)
+
+        # Verify signature
+        if not fw_card_service.verify_webhook_signature(raw, signature):
+            logger.error("Invalid card webhook signature")
+            return Response({"error": "invalid signature"}, status=401)
+
+        # Extract event and data
+        event = payload.get("event")
+        data = payload.get("data", {})
+
+        # We're interested in charge completion events
+        if event not in ["charge.completed", "charge.success"]:
+            logger.info(f"Ignoring card webhook event: {event}")
+            return Response({"status": "ignored"}, status=200)
+
+        # Extract transaction details
+        tx_ref = data.get("tx_ref") or data.get("txRef") or data.get("reference")
+        tx_id = data.get("id") or data.get("transaction_id")
+        charge_status = data.get("status", "").lower()
+        
+        if not tx_ref:
+            logger.error("Card webhook missing tx_ref")
+            return Response({"error": "missing tx_ref"}, status=400)
+
+        logger.info(f"Processing card charge: tx_ref={tx_ref}, status={charge_status}")
+
+        # Get card deposit record
+        from .models import CardDeposit
+        try:
+            card_deposit = CardDeposit.objects.select_for_update().get(
+                flutterwave_tx_ref=tx_ref
+            )
+        except CardDeposit.DoesNotExist:
+            logger.error(f"Card deposit not found: tx_ref={tx_ref}")
+            return Response({"error": "transaction not found"}, status=404)
+
+        # Check if already processed
+        if card_deposit.status == 'successful':
+            logger.info(f"Card deposit already processed: tx_ref={tx_ref}")
+            return Response({"status": "already processed"}, status=200)
+
+        # Process based on status
+        with transaction.atomic():
+            if charge_status == "successful" or charge_status == "success":
+                # Update card deposit record
+                card_deposit.status = 'successful'
+                card_deposit.flutterwave_tx_id = tx_id
+                card_deposit.raw_response = data
+                
+                # Extract card details if available
+                if 'card' in data:
+                    card_info = data['card']
+                    card_deposit.card_last4 = card_info.get('last4digits') or card_info.get('last_4digits')
+                    card_deposit.card_brand = card_info.get('type') or card_info.get('brand')
+                
+                card_deposit.save()
+
+                # Credit user's wallet
+                user = card_deposit.user
+                wallet = Wallet.objects.select_for_update().get(user=user)
+                
+                # Credit the net NGN amount
+                success = wallet.deposit(
+                    amount=card_deposit.ngn_amount,
+                    reference=tx_ref,
+                    metadata={
+                        'type': 'card_deposit',
+                        'currency': card_deposit.currency,
+                        'foreign_amount': str(card_deposit.amount),
+                        'exchange_rate': str(card_deposit.exchange_rate),
+                        'flutterwave_tx_id': tx_id,
+                    }
+                )
+
+                if success:
+                    logger.info(
+                        f"Card deposit successful: user={user.email}, "
+                        f"amount={card_deposit.amount} {card_deposit.currency}, "
+                        f"ngn=₦{card_deposit.ngn_amount}, tx_ref={tx_ref}"
+                    )
+                    
+                    # Create notification
+                    from .models import Notification
+                    Notification.objects.create(
+                        user=user,
+                        message=f"Card deposit of {card_deposit.amount} {card_deposit.currency} "
+                                f"(₦{card_deposit.ngn_amount}) completed successfully"
+                    )
+                else:
+                    logger.error(f"Failed to credit wallet for card deposit: tx_ref={tx_ref}")
+                    card_deposit.status = 'failed'
+                    card_deposit.save()
+                    return Response({"error": "wallet credit failed"}, status=500)
+
+            elif charge_status == "failed":
+                card_deposit.status = 'failed'
+                card_deposit.flutterwave_tx_id = tx_id
+                card_deposit.raw_response = data
+                card_deposit.save()
+                
+                logger.info(f"Card deposit failed: tx_ref={tx_ref}")
+            else:
+                # Update with latest data but keep processing status
+                card_deposit.flutterwave_tx_id = tx_id
+                card_deposit.raw_response = data
+                card_deposit.save()
+                
+                logger.info(f"Card deposit status updated: tx_ref={tx_ref}, status={charge_status}")
+
+        return Response({"status": "success"}, status=200)
+
+    except Exception as e:
+        logger.exception(f"FATAL ERROR in card webhook: {str(e)}")
+        return Response({"error": "server error"}, status=500)

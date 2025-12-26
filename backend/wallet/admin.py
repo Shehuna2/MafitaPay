@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Wallet, WalletTransaction, VirtualAccount, Deposit
+from .models import Wallet, WalletTransaction, VirtualAccount, Deposit, CardDepositExchangeRate, CardDeposit
 
 class WalletAdmin(admin.ModelAdmin):
     list_display = ("user", "balance", "locked_balance")
@@ -52,3 +52,60 @@ class DepositAdmin(admin.ModelAdmin):
     # readonly_fields = ("user", "amount", "status", "reference", "created_at")
 
 admin.site.register(Deposit, DepositAdmin)
+
+
+@admin.register(CardDepositExchangeRate)
+class CardDepositExchangeRateAdmin(admin.ModelAdmin):
+    list_display = ("currency", "rate", "flutterwave_fee_percent", "platform_margin_percent", "updated_at")
+    list_filter = ("currency",)
+    search_fields = ("currency",)
+    ordering = ("currency",)
+    readonly_fields = ("created_at", "updated_at")
+    
+    fieldsets = (
+        ("Currency Information", {
+            "fields": ("currency", "rate")
+        }),
+        ("Fee Structure", {
+            "fields": ("flutterwave_fee_percent", "platform_margin_percent")
+        }),
+        ("Timestamps", {
+            "fields": ("created_at", "updated_at"),
+            "classes": ("collapse",)
+        }),
+    )
+
+
+@admin.register(CardDeposit)
+class CardDepositAdmin(admin.ModelAdmin):
+    list_display = ("user", "amount", "currency", "ngn_amount", "status", "card_last4", "created_at")
+    list_filter = ("status", "currency", "use_live_mode", "created_at")
+    search_fields = ("user__email", "flutterwave_tx_ref", "flutterwave_tx_id", "card_last4")
+    ordering = ("-created_at",)
+    readonly_fields = (
+        "id", "flutterwave_tx_ref", "flutterwave_tx_id", "exchange_rate", 
+        "gross_ngn", "flutterwave_fee", "platform_margin", "raw_response",
+        "created_at", "updated_at"
+    )
+    
+    fieldsets = (
+        ("User Information", {
+            "fields": ("user",)
+        }),
+        ("Transaction Details", {
+            "fields": (
+                "currency", "amount", "exchange_rate", "gross_ngn", 
+                "flutterwave_fee", "platform_margin", "ngn_amount"
+            )
+        }),
+        ("Flutterwave Details", {
+            "fields": ("flutterwave_tx_ref", "flutterwave_tx_id", "status", "use_live_mode")
+        }),
+        ("Card Details (Masked)", {
+            "fields": ("card_last4", "card_brand")
+        }),
+        ("Metadata", {
+            "fields": ("raw_response", "created_at", "updated_at"),
+            "classes": ("collapse",)
+        }),
+    )

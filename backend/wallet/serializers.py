@@ -1,6 +1,6 @@
 # wallet/serializers.py
 from rest_framework import serializers
-from .models import WalletTransaction, Wallet, Notification, VirtualAccount
+from .models import WalletTransaction, Wallet, Notification, VirtualAccount, CardDepositExchangeRate, CardDeposit
 from .utils import extract_bank_name
 
 
@@ -126,3 +126,47 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = ["id", "message", "is_read", "created_at"]
+
+
+class CardDepositExchangeRateSerializer(serializers.ModelSerializer):
+    """Serializer for card deposit exchange rates"""
+    class Meta:
+        model = CardDepositExchangeRate
+        fields = [
+            'currency',
+            'rate',
+            'flutterwave_fee_percent',
+            'platform_margin_percent',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class CardDepositSerializer(serializers.ModelSerializer):
+    """Serializer for card deposit transactions"""
+    class Meta:
+        model = CardDeposit
+        fields = [
+            'id',
+            'currency',
+            'amount',
+            'exchange_rate',
+            'ngn_amount',
+            'gross_ngn',
+            'flutterwave_fee',
+            'platform_margin',
+            'flutterwave_tx_ref',
+            'flutterwave_tx_id',
+            'status',
+            'card_last4',
+            'card_brand',
+            'use_live_mode',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'exchange_rate', 'ngn_amount', 'gross_ngn',
+            'flutterwave_fee', 'platform_margin', 'flutterwave_tx_id',
+            'status', 'card_last4', 'card_brand', 'created_at', 'updated_at'
+        ]
