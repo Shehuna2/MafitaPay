@@ -356,7 +356,10 @@ class CardDepositExchangeRate(models.Model):
     
     def calculate_ngn_amount(self, foreign_amount):
         """Calculate NGN amount user receives after fees"""
-        foreign_amount = Decimal(str(foreign_amount))
+        # Optimize: only convert if not already Decimal
+        if not isinstance(foreign_amount, Decimal):
+            foreign_amount = Decimal(str(foreign_amount))
+        
         # Convert to NGN
         gross_ngn = foreign_amount * self.rate
         # Calculate Flutterwave fee

@@ -580,6 +580,10 @@ def flutterwave_card_webhook(request):
     Flutterwave Card Charge Webhook Handler
     Handles card charge completion events with signature verification
     """
+    # Status constants for cleaner comparison
+    SUCCESS_STATUSES = {'successful', 'success'}
+    COMPLETED_EVENTS = {'charge.completed', 'charge.success'}
+    
     try:
         # SECURITY: Limit payload size
         raw = request.body or b""
@@ -614,9 +618,9 @@ def flutterwave_card_webhook(request):
 
         logger.info(f"Card webhook received: event={payload.get('event')}")
 
-        # Determine environment from payload or default to live
-        # In production, you might want to check the event data for clues
-        use_live = True  # Default to live for webhooks
+        # Determine environment from settings - use same environment as main app
+        # In production, webhooks should match the environment configuration
+        use_live = not settings.DEBUG
         
         # Initialize service for verification
         from .services.flutterwave_card_service import FlutterwaveCardService
@@ -632,7 +636,7 @@ def flutterwave_card_webhook(request):
         data = payload.get("data", {})
 
         # We're interested in charge completion events
-        if event not in ["charge.completed", "charge.success"]:
+        if event not in COMPLETED_EVENTS:
             logger.info(f"Ignoring card webhook event: {event}")
             return Response({"status": "ignored"}, status=200)
 
@@ -664,7 +668,7 @@ def flutterwave_card_webhook(request):
 
         # Process based on status
         with transaction.atomic():
-            if charge_status == "successful" or charge_status == "success":
+            if charge_status in SUCCESS_STATUSES:
                 # Update card deposit record
                 card_deposit.status = 'successful'
                 card_deposit.flutterwave_tx_id = tx_id

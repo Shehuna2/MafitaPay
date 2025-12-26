@@ -13,12 +13,13 @@ from rest_framework import status, generics, permissions
 from rest_framework.pagination import PageNumberPagination
 import paystack
 from paystack import DedicatedVirtualAccount
-from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit
-from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer
+from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit, CardDepositExchangeRate, CardDeposit
+from .serializers import WalletTransactionSerializer, WalletSerializer, NotificationSerializer, CardDepositExchangeRateSerializer, CardDepositSerializer
 from .utils import extract_bank_name, extract_account_name
 from .services.flutterwave_service import FlutterwaveService
 from .services.palmpay_service import PalmpayService
-
+from .services.flutterwave_card_service import FlutterwaveCardService
+from .permissions import IsMerchantOrSuperUser
 
 
 from django.contrib.auth import get_user_model
@@ -28,12 +29,16 @@ from datetime import datetime
 import hmac
 import hashlib
 import json
+import uuid as uuid_lib
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
 # Set Paystack API key
 paystack.api_key = settings.PAYSTACK_SECRET_KEY
+
+# Constants
+SUPPORTED_CARD_CURRENCIES = ['EUR', 'USD', 'GBP']
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -1014,9 +1019,6 @@ class CardDepositExchangeRateView(APIView):
 
     def get(self, request):
         """Get all available exchange rates"""
-        from .models import CardDepositExchangeRate
-        from .serializers import CardDepositExchangeRateSerializer
-        
         rates = CardDepositExchangeRate.objects.all()
         serializer = CardDepositExchangeRateSerializer(rates, many=True)
         return Response({
@@ -1026,15 +1028,13 @@ class CardDepositExchangeRateView(APIView):
 
     def post(self, request):
         """Calculate NGN amount for a given foreign currency amount"""
-        from .models import CardDepositExchangeRate
-        
         currency = request.data.get('currency', '').upper()
         amount_str = request.data.get('amount')
         
         # Validate inputs
-        if not currency or currency not in ['EUR', 'USD', 'GBP']:
+        if not currency or currency not in SUPPORTED_CARD_CURRENCIES:
             return Response(
-                {"error": "Invalid currency. Must be EUR, USD, or GBP."},
+                {"error": f"Invalid currency. Must be one of: {', '.join(SUPPORTED_CARD_CURRENCIES)}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -1080,15 +1080,10 @@ class CardDepositExchangeRateView(APIView):
 
 class CardDepositInitiateView(APIView):
     """Initiate a card deposit transaction"""
-    from .permissions import IsMerchantOrSuperUser
     permission_classes = [IsMerchantOrSuperUser]
 
     def post(self, request):
         """Initiate card charge"""
-        from .models import CardDeposit, CardDepositExchangeRate
-        from .services.flutterwave_card_service import FlutterwaveCardService
-        import uuid as uuid_lib
-        
         user = request.user
         
         # Extract and validate input
@@ -1109,9 +1104,9 @@ class CardDepositInitiateView(APIView):
             )
         
         # Validate currency
-        if currency not in ['EUR', 'USD', 'GBP']:
+        if currency not in SUPPORTED_CARD_CURRENCIES:
             return Response(
-                {"error": "Invalid currency. Card deposits only support EUR, USD, and GBP."},
+                {"error": f"Invalid currency. Card deposits only support: {', '.join(SUPPORTED_CARD_CURRENCIES)}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -1246,16 +1241,13 @@ class CardDepositInitiateView(APIView):
 
 class CardDepositListView(generics.ListAPIView):
     """List user's card deposit transactions"""
-    from .permissions import IsMerchantOrSuperUser
     permission_classes = [IsMerchantOrSuperUser]
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
-        from .models import CardDeposit
         return CardDeposit.objects.filter(user=self.request.user).order_by('-created_at')
 
     def list(self, request, *args, **kwargs):
-        from .serializers import CardDepositSerializer
         queryset = self.get_queryset()
         page = self.paginate_queryset(queryset)
         

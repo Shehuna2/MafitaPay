@@ -117,8 +117,12 @@ class FlutterwaveCardService:
         import json
         plaintext = json.dumps(card_data)
         
-        # Get the encryption key (first 24 bytes for 3DES)
-        key = self.encryption_key[:24].encode('utf-8')
+        # Validate and get the encryption key (must be 24 bytes for 3DES)
+        key_bytes = self.encryption_key.encode('utf-8')
+        if len(key_bytes) < 24:
+            raise ImproperlyConfigured("Encryption key must be at least 24 bytes")
+        # Use first 24 bytes for 3DES
+        key = key_bytes[:24]
         
         # Pad plaintext to multiple of 8 bytes
         plaintext_bytes = plaintext.encode('utf-8')

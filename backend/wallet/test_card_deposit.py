@@ -234,7 +234,7 @@ class CardDepositInitiateTestCase(TestCase):
             rate=Decimal('1500.00')
         )
 
-    @patch('wallet.services.flutterwave_card_service.FlutterwaveCardService')
+    @patch('wallet.views.FlutterwaveCardService')
     def test_initiate_card_deposit(self, mock_fw_service):
         """Test successful card deposit initiation"""
         from rest_framework.test import APIClient
@@ -317,7 +317,7 @@ class CardDepositInitiateTestCase(TestCase):
         
         self.assertEqual(response.status_code, 400)
         data = response.json()
-        self.assertIn('Card deposits only support EUR, USD, and GBP', data['error'])
+        self.assertIn('Card deposits only support', data['error'])
 
 
 class CardDepositWebhookTestCase(TestCase):
