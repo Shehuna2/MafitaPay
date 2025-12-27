@@ -161,7 +161,7 @@ const PINVerificationModal = ({
         </div>
 
         {/* Scrollable Content */}
-        <div className="overflow-y-auto px-3 sm:px-4 py-4 space-y-4 sm:space-y-5 max-h-[60vh] sm:max-h-[65vh]">
+        <div className="overflow-y-auto items-center px-3 sm:px-4 py-4 space-y-4 sm:space-y-5 max-h-[60vh] sm:max-h-[65vh]">
           {/* Transaction Details */}
           {transactionDetails && (
             <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-2">
@@ -204,13 +204,6 @@ const PINVerificationModal = ({
               )}
             </div>
           )}
-
-          {/* Security Notice */}
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-            <p className="text-xs sm:text-sm text-yellow-800 dark:text-yellow-200">
-              <strong>⚠️ Security Check:</strong> {biometricLoading ? 'Verifying biometric...' : 'Enter your transaction PIN or use biometric authentication to authorize this transaction.'}
-            </p>
-          </div>
 
           {/* PIN Input */}
           <div className="w-full max-w-sm mx-auto">
