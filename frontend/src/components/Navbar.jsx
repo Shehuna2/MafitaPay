@@ -109,7 +109,7 @@ export default function Navbar() {
           />
 
           <span>
-            Mafita<span className="text-indigo-400">Pay</span>
+            Mafita<span className="text-green-400">Pay</span>
           </span>
         </Link>
 
@@ -176,3 +176,4 @@ export default function Navbar() {
     </nav>
   );
 }
+
