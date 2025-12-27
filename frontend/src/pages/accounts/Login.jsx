@@ -227,19 +227,19 @@ export default function Login() {
             <div className="bg-gray-800/80 backdrop-blur-2xl p-6 rounded-3xl shadow-2xl border border-gray-600/50 max-w-md w-full mx-4 fade-in">
               <div className="flex flex-col items-center gap-6">
                 <div className="relative">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-2xl">
+                  <div className="w-20 h-20 rounded-full bg-indigo-500 flex items-center justify-center shadow-2xl">
                     <Loader2 className="w-10 h-10 text-white animate-spin" />
                   </div>
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 animate-ping opacity-40"></div>
+                  <div className="absolute inset-0 rounded-full bg-indigo-500 animate-ping opacity-40"></div>
                 </div>
                 <div className="text-center">
-                  <p className="text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">
+                  <p className="text-xl font-semibold text-transparent bg-clip-text bg-indigo-300">
                     Signing you in...
                   </p>
                   <p className="text-sm text-gray-400 mt-2">Welcome back</p>
                 </div>
                 <div className="w-full h-1 bg-gray-700/60 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shimmer"></div>
+                  <div className="h-full bg-indigo-500 to-pink-500 shimmer"></div>
                 </div>
               </div>
             </div>
@@ -360,7 +360,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 rounded-2xl text-base transition-all duration-300 group disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-indigo-600 hover:from-indigo-500 hover:to-indigo-500 text-white font-bold py-4 rounded-2xl text-base transition-all duration-300 group disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
@@ -394,7 +394,7 @@ export default function Login() {
               Don't have an account?{" "}
               <Link
                 to="/register"
-                className="font-semibold text-transparent bg-clip-text bg-indigo-400 hover:from-indigo-300 hover:to-purple-300 transition"
+                className="font-semibold text-transparent bg-clip-text bg-indigo-400 hover:from-indigo-300 hover:to-indigo-300 transition"
               >
                 Create one here
               </Link>
@@ -405,5 +405,6 @@ export default function Login() {
     </>
   );
 }
+
 
 
