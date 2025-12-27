@@ -315,13 +315,13 @@ export default function Register() {
             <div className="bg-gray-800/80 backdrop-blur-2xl p-10 rounded-3xl shadow-2xl border border-gray-600/50 max-w-md w-full mx-4 fade-in">
               <div className="flex flex-col items-center gap-6">
                 <div className="relative">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-2xl">
+                  <div className="w-20 h-20 rounded-full bg-indigo-500 flex items-center justify-center shadow-2xl">
                     <Loader2 className="w-10 h-10 text-white animate-spin" />
                   </div>
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 animate-ping opacity-40"></div>
+                  <div className="absolute inset-0 rounded-full bg-indigo-500 animate-ping opacity-40"></div>
                 </div>
                 <div className="text-center">
-                  <p className="text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">
+                  <p className="text-xl font-semibold text-transparent bg-clip-text bg-indigo-300">
                     Creating your account...
                   </p>
                   <p className="text-sm text-gray-400 mt-2">This won't take long</p>
@@ -339,11 +339,11 @@ export default function Register() {
             {/* Premium Step Indicator */}
             <div className="flex justify-center mb-8">
               <div className="flex items-center gap-4 bg-gray-800/50 px-6 py-3 rounded-full border border-gray-700/50">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${step >= 1 ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg" : "bg-gray-700 text-gray-500"}`}>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${step >= 1 ? "bg-indigo-500 text-white shadow-lg" : "bg-gray-700 text-gray-500"}`}>
                   1
                 </div>
-                <div className={`w-16 h-1 rounded-full transition-all ${step >= 2 ? "bg-gradient-to-r from-indigo-500 to-purple-600" : "bg-gray-700"}`}></div>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${step >= 2 ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg" : "bg-gray-700 text-gray-500"}`}>
+                <div className={`w-16 h-1 rounded-full transition-all ${step >= 2 ? "bg-indigo-500" : "bg-gray-700"}`}></div>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${step >= 2 ? "bg-indigo-500 text-white shadow-lg" : "bg-gray-700 text-gray-500"}`}>
                   2
                 </div>
               </div>
@@ -353,7 +353,7 @@ export default function Register() {
             {step === 1 && (
               <div className="space-y-6">
                 <div className="text-center mb-4">
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                  <h1 className="text-3xl font-bold bg-indigo-400 bg-clip-text text-transparent">
                     Welcome to the Future
                   </h1>
                   <p className="text-gray-400 mt-2">Let's set up your account</p>
@@ -430,7 +430,7 @@ export default function Register() {
 
                   <button
                     onClick={nextStep}
-                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 rounded-2xl text-base transition-all duration-400 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-3 group"
+                    className="w-full bg-indigo-600 hover:from-indigo-500 hover:to-indigo-500 text-white font-bold py-4 rounded-2xl text-base transition-all duration-400 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-3 group"
                   >
                     Continue
                     <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition" />
@@ -443,7 +443,7 @@ export default function Register() {
             {step === 2 && (
               <div className="space-y-6">
                 <div className="text-center mb-4">
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                  <h1 className="text-3xl font-bold bg-indigo-400 bg-clip-text text-transparent">
                     Almost There
                   </h1>
                   <p className="text-gray-400 mt-2">Complete your profile</p>
@@ -524,7 +524,7 @@ export default function Register() {
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 rounded-2xl text-base transition-all duration-400 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-3 group"
+                      className="flex-1 bg-indigo-600 hover:from-indigo-500 hover:to-indigo-500 text-white font-bold py-4 rounded-2xl text-base transition-all duration-400 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-3 group"
                     >
                       Create
                       <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition" />
@@ -536,7 +536,7 @@ export default function Register() {
 
             <div className="mt-8 text-center text-sm text-gray-400">
               Already have an account?{" "}
-              <Link to="/login" className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 hover:from-indigo-300 hover:to-purple-300 transition">
+              <Link to="/login" className="font-semibold text-transparent bg-clip-text bg-indigo-400 hover:from-indigo-300 hover:to-indigo-300 transition">
                 Sign in here
               </Link>
             </div>
@@ -546,4 +546,5 @@ export default function Register() {
     </>
   );
 }
+
 
