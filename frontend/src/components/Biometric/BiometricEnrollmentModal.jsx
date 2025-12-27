@@ -66,7 +66,7 @@ const BiometricEnrollmentModal = ({ isOpen, onClose, onSuccess }) => {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+            <div className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
               <FingerprintIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>
             <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100">
@@ -90,8 +90,8 @@ const BiometricEnrollmentModal = ({ isOpen, onClose, onSuccess }) => {
           {step === 1 && (
             <>
               <div className="text-center space-y-3">
-                <div className="mx-auto w-16 h-16 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                  <FingerprintIcon className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+                <div className="mx-auto w-16 h-16 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                  <FingerprintIcon className="w-8 h-8 text-purple-600 dark:text-indigo-400" />
                 </div>
 
                 <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -167,9 +167,9 @@ const BiometricEnrollmentModal = ({ isOpen, onClose, onSuccess }) => {
           {step === 2 && (
             <div className="flex flex-col items-center text-center py-6 space-y-4">
               <div className="relative">
-                <div className="absolute inset-0 rounded-full bg-purple-300/30 animate-ping" />
-                <div className="relative p-4 rounded-full bg-purple-100 dark:bg-purple-900/30">
-                  <FingerprintIcon className="w-10 h-10 text-purple-600 animate-pulse" />
+                <div className="absolute inset-0 rounded-full bg-indigo-300/30 animate-ping" />
+                <div className="relative p-4 rounded-full bg-indigo-100 dark:bg-purple-900/30">
+                  <FingerprintIcon className="w-10 h-10 text-indigo-600 animate-pulse" />
                 </div>
               </div>
 
