@@ -262,7 +262,7 @@ export default function BuyAirtime() {
               </label>
               <input
                 name="phone"
-                type="text"
+                type="number"
                 placeholder="08012345678"
                 value={form.phone}
                 onChange={handlePhoneChange}
