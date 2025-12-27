@@ -255,7 +255,7 @@ export default function Login() {
                 alt="Mafita Logo"
                 className="w-20 h-20 object-contain mx-auto mb-4"
               />
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+              <h1 className="text-3xl font-bold bg-indigo-400 bg-clip-text text-transparent">
                 {shouldReauth && reauthUser ? `Welcome back, ${displayName}` : "Sign In"}
               </h1>
               <p className="text-gray-400 mt-2">Access your Mafita account</p>
@@ -360,7 +360,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 rounded-2xl text-base transition-all duration-300 group disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 rounded-2xl text-base transition-all duration-300 group disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
@@ -394,7 +394,7 @@ export default function Login() {
               Don't have an account?{" "}
               <Link
                 to="/register"
-                className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 hover:from-indigo-300 hover:to-purple-300 transition"
+                className="font-semibold text-transparent bg-clip-text bg-indigo-400 hover:from-indigo-300 hover:to-purple-300 transition"
               >
                 Create one here
               </Link>
@@ -405,4 +405,5 @@ export default function Login() {
     </>
   );
 }
+
 
