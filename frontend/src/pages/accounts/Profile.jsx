@@ -269,7 +269,7 @@ export default function Profile() {
                   <button
                     type="submit"
                     disabled={submitting || !isEdited}
-                    className="px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 rounded-xl font-medium flex items-center justify-center gap-3 transition"
+                    className="px-8 py-3.5 bg-indigo-600 hover:from-indigo-500 hover:to-indigo-500 disabled:opacity-50 rounded-xl font-medium flex items-center justify-center gap-3 transition"
                   >
                     {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
                     {submitting ? "Saving..." : "Save Changes"}
@@ -347,4 +347,5 @@ function ProfileSkeleton() {
       </div>
     </div>
   );
+
 }
