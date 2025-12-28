@@ -55,8 +55,8 @@ export default function Home() {
               <div className="flex justify-center mb-6">
                 <div className="relative">
                   <Sparkles className="w-12 h-12 text-indigo-400 absolute -top-4 -left-4 animate-pulse" />
-                  <Sparkles className="w-8 h-8 text-purple-400 absolute -top-2 -right-3 animate-pulse delay-300" />
-                  <h1 className="text-6xl md:text-8xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-300">
+                  <Sparkles className="w-8 h-8 text-indigo-400 absolute -top-2 -right-3 animate-pulse delay-300" />
+                  <h1 className="text-6xl md:text-8xl font-bold bg-clip-text text-transparent bg-indigo-400">
                     MafitaPay
                   </h1>
                 </div>
@@ -72,7 +72,7 @@ export default function Home() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up" style={{ animationDelay: "0.4s" }}>
                 <Link
                   to="/register"
-                  className="group inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-lg rounded-xl transition-all duration-300 shadow-2xl hover:shadow-3xl transform hover:-translate-y-1 pulse-glow"
+                  className="group inline-flex items-center gap-3 px-8 py-4 bg-indigo-600 hover:from-indigo-500 hover:to-indigo-500 text-white font-bold text-lg rounded-xl transition-all duration-300 shadow-2xl hover:shadow-3xl transform hover:-translate-y-1 pulse-glow"
                 >
                   Start Earning Now
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -88,7 +88,7 @@ export default function Home() {
 
             {/* Floating Feature Preview */}
             <div className="mt-20 relative max-w-5xl mx-auto">
-              <div className="absolute inset-0 bg-gradient-to-t from-indigo-600/30 to-transparent rounded-3xl blur-3xl"></div>
+              <div className="absolute inset-0 bg-indigo-600/30 to-transparent rounded-3xl blur-3xl"></div>
               <div className="relative bg-gray-800/80 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-gray-700/50 float">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
                   {[
@@ -165,7 +165,7 @@ export default function Home() {
             </p>
             <Link
               to="/register"
-              className="inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xl rounded-xl transition-all duration-300 shadow-2xl hover:shadow-3xl transform hover:-translate-y-1 pulse-glow"
+              className="inline-flex items-center gap-3 px-10 py-5 bg-indigo-600 hover:from-indigo-500 hover:to-indigo-500 text-white font-bold text-xl rounded-xl transition-all duration-300 shadow-2xl hover:shadow-3xl transform hover:-translate-y-1 pulse-glow"
             >
               Get Started Free
               <ChevronRight className="w-6 h-6" />
@@ -182,4 +182,5 @@ export default function Home() {
       </div>
     </>
   );
+
 }
