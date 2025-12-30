@@ -4,11 +4,8 @@ import client from "../../api/client";
 import { 
   Loader2, 
   ArrowLeft, 
-  CreditCard, 
   DollarSign,
-  Info,
-  AlertCircle,
-  CheckCircle
+  AlertCircle
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import CardDepositCard from "../../components/CardDepositCard";
@@ -25,11 +22,6 @@ export default function CardDeposit() {
   // Form state
   const [currency, setCurrency] = useState("USD");
   const [amount, setAmount] = useState("");
-  const [cardNumber, setCardNumber] = useState("");
-  const [expiryMonth, setExpiryMonth] = useState("");
-  const [expiryYear, setExpiryYear] = useState("");
-  const [cvv, setCvv] = useState("");
-  const [fullname, setFullname] = useState("");
   
   // Calculation state
   const [calculation, setCalculation] = useState(null);
@@ -58,12 +50,13 @@ export default function CardDeposit() {
       console.error("Error calculating rate:", err);
       const errorMsg = err.response?.data?.error || "Failed to calculate exchange rate";
       toast.error(errorMsg);
+      setCalculation(null);
     } finally {
       setCalculationLoading(false);
     }
   };
 
-  // Fetch exchange rate when amount or currency changes
+  // Debounced rate calculation
   useEffect(() => {
     const debounceTimer = setTimeout(() => {
       if (amount && parseFloat(amount) > 0) {
@@ -77,7 +70,7 @@ export default function CardDeposit() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amount, currency]);
 
-  // Fetch deposit history
+  // Fetch deposit history when opened
   useEffect(() => {
     if (showHistory) {
       fetchDeposits();
@@ -90,6 +83,8 @@ export default function CardDeposit() {
       const response = await client.get("/wallet/card-deposit/list/");
       if (response.data.results) {
         setDeposits(response.data.results);
+      } else if (response.data.deposits) {
+        setDeposits(response.data.deposits);
       }
     } catch (err) {
       console.error("Error fetching deposits:", err);
@@ -99,45 +94,16 @@ export default function CardDeposit() {
     }
   };
 
-  const formatCardNumber = (value) => {
-    const cleaned = value.replace(/\s/g, "");
-    const chunks = cleaned.match(/.{1,4}/g) || [];
-    return chunks.join(" ");
-  };
-
-  const handleCardNumberChange = (e) => {
-    const value = e.target.value.replace(/\s/g, "");
-    if (/^\d{0,16}$/.test(value)) {
-      setCardNumber(value);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validation
+
     if (!amount || parseFloat(amount) <= 0) {
       toast.error("Please enter a valid amount");
       return;
     }
 
-    if (!cardNumber || cardNumber.length < 13) {
-      toast.error("Please enter a valid card number");
-      return;
-    }
-
-    if (!expiryMonth || !expiryYear) {
-      toast.error("Please enter card expiry date");
-      return;
-    }
-
-    if (!cvv || cvv.length < 3) {
-      toast.error("Please enter a valid CVV");
-      return;
-    }
-
-    if (!fullname) {
-      toast.error("Please enter cardholder name");
+    if (!calculation) {
+      toast.error("Please wait for exchange rate calculation");
       return;
     }
 
@@ -147,38 +113,19 @@ export default function CardDeposit() {
       const response = await client.post("/wallet/card-deposit/initiate/", {
         currency,
         amount: parseFloat(amount),
-        card_number: cardNumber,
-        expiry_month: expiryMonth,
-        expiry_year: expiryYear,
-        cvv,
-        fullname,
         use_live: import.meta.env.MODE === 'production'
       });
 
-      if (response.data.success) {
-        toast.success("Card charge initiated!");
-        
-        // If there's a 3D Secure URL, redirect user
-        if (response.data.authorization_url) {
-          window.location.href = response.data.authorization_url;
-        } else {
-          // Clear form
-          setAmount("");
-          setCardNumber("");
-          setExpiryMonth("");
-          setExpiryYear("");
-          setCvv("");
-          setFullname("");
-          setCalculation(null);
-          
-          // Show history
-          setShowHistory(true);
-          fetchDeposits();
-        }
+      if (response.data.success && response.data.authorization_url) {
+        toast.success("Redirecting to secure payment page...");
+        // Redirect to Flutterwave hosted payment page
+        window.location.href = response.data.authorization_url;
+      } else {
+        throw new Error("No payment link received");
       }
     } catch (err) {
-      console.error("Error initiating card charge:", err);
-      const errorMsg = err.response?.data?.error || "Failed to process card charge";
+      console.error("Error initiating payment:", err);
+      const errorMsg = err.response?.data?.error || "Failed to initiate payment";
       toast.error(errorMsg);
     } finally {
       setLoading(false);
@@ -219,7 +166,7 @@ export default function CardDeposit() {
                   <div className="absolute inset-0 rounded-full bg-indigo-600/30 animate-ping"></div>
                 </div>
                 <p className="text-lg font-medium text-indigo-300">
-                  Processing your card payment...
+                  Redirecting to secure payment...
                 </p>
                 <div className="w-full h-2 bg-gray-700/50 rounded-full overflow-hidden mt-2">
                   <div className="h-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-600 shimmer"></div>
@@ -246,9 +193,8 @@ export default function CardDeposit() {
           {/* Main Form */}
           <div className="bg-gray-800/80 rounded-2xl p-4 sm:p-5 shadow-2xl border border-gray-700/50 animate-fade-in-up mb-5">
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Currency and Amount Section */}
+              {/* Currency and Amount */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Currency Selection */}
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1.5">
                     Currency
@@ -256,7 +202,7 @@ export default function CardDeposit() {
                   <select
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value)}
-                    className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200"
+                    className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all"
                   >
                     {SUPPORTED_CURRENCIES.map(curr => (
                       <option key={curr.code} value={curr.code}>
@@ -266,7 +212,6 @@ export default function CardDeposit() {
                   </select>
                 </div>
 
-                {/* Amount Input */}
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1.5">
                     Amount
@@ -282,13 +227,14 @@ export default function CardDeposit() {
                       placeholder="0.00"
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 pl-8 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200"
+                      required
+                      className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 pl-8 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Exchange Rate Display */}
+              {/* Exchange Rate Breakdown */}
               {calculationLoading && (
                 <div className="bg-gray-800/60 p-4 rounded-xl border border-gray-700/50 flex items-center gap-3">
                   <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
@@ -300,35 +246,23 @@ export default function CardDeposit() {
                 <div className="bg-gray-800/60 p-4 rounded-xl space-y-3 border border-gray-700/50 animate-fade-in-up">
                   <div className="flex items-center gap-2 text-indigo-400 font-medium mb-2">
                     <DollarSign className="w-4 h-4" />
-                    <span className="text-sm">Exchange Rate Breakdown</span>
+                    <span className="text-sm">You'll Receive</span>
                   </div>
 
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Exchange Rate:</span>
-                      <span className="text-white font-medium">
-                        1 {currency} = ₦{parseFloat(calculation.exchange_rate).toFixed(2)}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between">
                       <span className="text-gray-400">Gross Amount:</span>
                       <span className="text-white">₦{parseFloat(calculation.gross_ngn).toFixed(2)}</span>
                     </div>
-
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Flutterwave Fee:</span>
-                      <span className="text-red-400">-₦{parseFloat(calculation.flutterwave_fee).toFixed(2)}</span>
+                      <span className="text-gray-400">Fees (Flutterwave + Platform):</span>
+                      <span className="text-red-400">
+                        -₦{(parseFloat(calculation.flutterwave_fee) + parseFloat(calculation.platform_margin)).toFixed(2)}
+                      </span>
                     </div>
-
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Platform Fee:</span>
-                      <span className="text-red-400">-₦{parseFloat(calculation.platform_margin).toFixed(2)}</span>
-                    </div>
-
                     <div className="border-t border-gray-700/50 pt-2 flex justify-between">
-                      <span className="text-gray-400 font-medium">You'll Receive:</span>
-                      <span className="text-green-400 font-bold text-base">
+                      <span className="text-gray-400 font-medium">Final Credit:</span>
+                      <span className="text-green-400 font-bold text-lg">
                         ₦{parseFloat(calculation.net_amount).toFixed(2)}
                       </span>
                     </div>
@@ -336,139 +270,34 @@ export default function CardDeposit() {
                 </div>
               )}
 
-              {/* Card Details Section */}
-              <div className="border-t border-gray-700/50 pt-5">
-                <div className="flex items-center gap-2 text-indigo-400 font-medium mb-4">
-                  <CreditCard className="w-4 h-4" />
-                  <span className="text-sm">Card Details</span>
-                </div>
-
-                <div className="space-y-4">
-                  {/* Card Number */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                      Card Number
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="1234 5678 9012 3456"
-                      value={formatCardNumber(cardNumber)}
-                      onChange={handleCardNumberChange}
-                      maxLength="19"
-                      className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200"
-                    />
-                  </div>
-
-                  {/* Expiry and CVV */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                        Month
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="MM"
-                        value={expiryMonth}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, "").slice(0, 2);
-                          if (val === "" || (val.length > 0 && parseInt(val, 10) >= 1 && parseInt(val, 10) <= 12)) {
-                            setExpiryMonth(val);
-                          }
-                        }}
-                        maxLength="2"
-                        className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                        Year
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="YY"
-                        value={expiryYear}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, "").slice(0, 2);
-                          setExpiryYear(val);
-                        }}
-                        maxLength="2"
-                        className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                        CVV
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="123"
-                        value={cvv}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, "").slice(0, 4);
-                          setCvv(val);
-                        }}
-                        maxLength="4"
-                        className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Cardholder Name */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                      Cardholder Name
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="John Doe"
-                      value={fullname}
-                      onChange={(e) => setFullname(e.target.value)}
-                      className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all duration-200"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Security Notice */}
-              <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-700/40">
-                <div className="flex items-start gap-3">
-                  <div className="text-green-400 mt-0.5">
-                    <CheckCircle className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 text-sm text-gray-300 leading-relaxed">
-                    <p className="font-medium text-green-400 mb-1">Secure Payment</p>
-                    <p className="text-xs text-gray-400">
-                      Your card details are encrypted and processed securely via Flutterwave. 
-                      We never store your full card number.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loading || !calculation || calculationLoading}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-7 py-3 rounded-xl font-bold text-sm transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-2.5"
+                disabled={loading || calculationLoading || !calculation}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-7 py-4 rounded-xl font-bold text-base transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-3"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Processing...
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    Redirecting...
                   </>
                 ) : (
                   <>
-                    <CreditCard className="w-5 h-5" />
-                    Deposit {calculation ? `₦${parseFloat(calculation.net_amount).toFixed(2)}` : "Funds"}
+                    <span>Continue to Secure Payment</span>
+                    <span className="text-sm font-normal opacity-90">
+                      (via Flutterwave)
+                    </span>
                   </>
                 )}
               </button>
+
+              <p className="text-center text-xs text-gray-400 mt-4">
+                You'll be redirected to Flutterwave's secure page to enter your card details.
+              </p>
             </form>
           </div>
 
-          {/* History Section */}
+          {/* Transaction History */}
           <div className="bg-gray-800/80 rounded-2xl p-4 sm:p-5 shadow-2xl border border-gray-700/50">
             <button
               onClick={() => setShowHistory(!showHistory)}

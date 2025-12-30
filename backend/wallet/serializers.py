@@ -181,11 +181,6 @@ SUPPORTED_CARD_CURRENCIES = {"USD", "GBP", "EUR"}
 class CardDepositInitiateSerializer(serializers.Serializer):
     amount = serializers.DecimalField(max_digits=12, decimal_places=2)
     currency = serializers.CharField(max_length=3)
-    card_number = serializers.CharField()
-    cvv = serializers.CharField()
-    expiry_month = serializers.CharField()
-    expiry_year = serializers.CharField()
-    fullname = serializers.CharField()
     use_live = serializers.BooleanField(required=False, default=False)
 
     def validate_currency(self, value):

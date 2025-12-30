@@ -1115,7 +1115,7 @@ class CardDepositInitiateView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        redirect_url = f"{settings.FRONTEND_URL}/wallet/card-deposit/callback?tx_ref={tx_ref}"
+        redirect_url = f"{settings.FRONTEND_URL}/wallet/card-deposit/callback"
 
         # Create the deposit record early (pending)
         card_deposit = CardDeposit.objects.create(
@@ -1153,9 +1153,7 @@ class CardDepositInitiateView(APIView):
             "currency": "NGN",  # Hosted payments support charging in NGN even for foreign currency display
             "redirect_url": redirect_url,
             "customer": {
-                "email": email,
-                "name": data["fullname"],
-                # "phonenumber": "optional_phone",  # add if you have it
+                "email": email, "name": user.get_full_name() or email
             },
             "meta": {
                 "deposit_id": str(card_deposit.id),
