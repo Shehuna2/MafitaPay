@@ -170,3 +170,33 @@ class CardDepositSerializer(serializers.ModelSerializer):
             'flutterwave_fee', 'platform_margin', 'flutterwave_tx_id',
             'status', 'card_last4', 'card_brand', 'created_at', 'updated_at'
         ]
+
+
+from decimal import Decimal
+from rest_framework import serializers
+
+SUPPORTED_CARD_CURRENCIES = {"USD", "GBP", "EUR"}
+
+
+class CardDepositInitiateSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    currency = serializers.CharField(max_length=3)
+    card_number = serializers.CharField()
+    cvv = serializers.CharField()
+    expiry_month = serializers.CharField()
+    expiry_year = serializers.CharField()
+    fullname = serializers.CharField()
+    use_live = serializers.BooleanField(required=False, default=False)
+
+    def validate_currency(self, value):
+        value = value.upper()
+        if value not in SUPPORTED_CARD_CURRENCIES:
+            raise serializers.ValidationError(
+                f"Card deposits only support: {', '.join(SUPPORTED_CARD_CURRENCIES)}"
+            )
+        return value
+
+    def validate_amount(self, value: Decimal):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than zero")
+        return value

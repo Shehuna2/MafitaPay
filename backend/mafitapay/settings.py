@@ -327,6 +327,11 @@ FLW_TEST_HASH_SECRET = os.getenv("FLW_TEST_HASH_SECRET")
 FLW_TEST_BASE_URL = os.getenv("FLW_TEST_BASE_URL", "https://developersandbox-api.flutterwave.com")
 
 
+FLW_TEST_V3_BASE_URL = os.getenv("FLW_TEST_V3_BASE_URL", "https://api.flutterwave.com/v3")
+FLW_TEST_SECRET_KEY = os.getenv("FLW_TEST_V3_SECRET_KEY")
+FLW_TEST_PUBLIC_KEY = os.getenv("FLW_TEST_V3_PUBLIC_KEY")
+FLW_TEST_ENCRYPTION_KEY = os.getenv("FLW_TEST_V3_ENCRYPTION_KEY")
+
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
 PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY")
 
