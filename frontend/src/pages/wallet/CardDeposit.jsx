@@ -283,7 +283,7 @@ export default function CardDeposit() {
                   </>
                 ) : (
                   <>
-                    <span>Continue to Secure Payment</span>
+                    <span>Continue</span>
                     <span className="text-sm font-normal opacity-90">
                       (via Flutterwave)
                     </span>
