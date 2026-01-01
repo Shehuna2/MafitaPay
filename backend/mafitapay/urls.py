@@ -21,6 +21,7 @@ urlpatterns = [
     path('api/', include('p2p.urls')),
     path('api/', include('bills.urls')),
     path('api/', include('rewards.urls')),
+    path('api/', include('core.urls')),  # Maintenance mode API
     path('debug-urls/', debug_urls),  
 ]
 

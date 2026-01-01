@@ -4,6 +4,8 @@ import Layout from "./layouts/Layout";
 import Navbar from "./components/Navbar";
 import PrivateRoute from "./components/PrivateRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
+import MaintenancePage from "./components/MaintenancePage";
+import useMaintenanceCheck from "./hooks/useMaintenanceCheck";
 import { useAuth } from "./context/AuthContext";
 
 // Pages
@@ -46,8 +48,11 @@ import WithdrawOrderDetails from "./pages/p2p/WithdrawOrderDetails";
 import MerchantWithdrawOrderDetails from "./pages/p2p/MerchantWithdrawOrderDetails";
 
 function App() {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, logout, user } = useAuth();
   const location = useLocation();
+  
+  // Check for maintenance mode (poll every 30 seconds)
+  const { isMaintenanceMode, maintenanceData, isLoading } = useMaintenanceCheck(30000);
 
   useEffect(() => {
   const update = () => localStorage.setItem("last_active", Date.now().toString());
@@ -63,6 +68,13 @@ function App() {
   };
 }, []);
 
+  // Check if user is admin/staff
+  const isAdmin = user?.is_staff || user?.is_superuser;
+
+  // Show maintenance page if maintenance mode is active and user is not admin
+  if (!isLoading && isMaintenanceMode && !isAdmin) {
+    return <MaintenancePage maintenanceData={maintenanceData} />;
+  }
 
   // Hide Navbar on auth & reset pages
   const hideNavbar =
