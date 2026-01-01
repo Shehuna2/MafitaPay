@@ -153,6 +153,7 @@ INSTALLED_APPS = [
     "p2p",
     "gasfee",
     "bills",
+    "core",  # Maintenance mode app
 ]
 
 MIDDLEWARE = [
@@ -165,6 +166,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.MaintenanceModeMiddleware",  # Maintenance mode middleware (must be last)
 ]
 
 ROOT_URLCONF = "mafitapay.urls"
