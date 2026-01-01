@@ -430,4 +430,126 @@ class CardDeposit(models.Model):
         return f"{self.user.email} - {self.amount} {self.currency} → ₦{self.ngn_amount} ({self.status})"
 
 
+WEBHOOK_RETRY_STATUS = [
+    ('pending', 'Pending'),
+    ('processing', 'Processing'),
+    ('succeeded', 'Succeeded'),
+    ('failed_permanent', 'Failed - Permanent'),
+    ('failed_transient', 'Failed - Transient'),
+]
+
+
+class WebhookRetryQueue(models.Model):
+    """
+    Queue for retrying failed webhook processing
+    Handles transient failures with exponential backoff
+    """
+    WEBHOOK_TYPE_CHOICES = [
+        ('card_deposit', 'Card Deposit'),
+        ('flutterwave', 'Flutterwave'),
+        ('palmpay', 'PalmPay'),
+        ('paystack', 'Paystack'),
+        ('9psb', '9PSB'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    webhook_type = models.CharField(max_length=20, choices=WEBHOOK_TYPE_CHOICES)
+    tx_ref = models.CharField(max_length=255, db_index=True, help_text="Transaction reference")
+    payload = models.JSONField(help_text="Original webhook payload")
+    signature = models.CharField(max_length=512, blank=True, null=True, help_text="Webhook signature")
+    
+    # Retry tracking
+    status = models.CharField(max_length=20, choices=WEBHOOK_RETRY_STATUS, default='pending')
+    retry_count = models.IntegerField(default=0)
+    max_retries = models.IntegerField(default=5, help_text="Maximum number of retry attempts")
+    next_retry_at = models.DateTimeField(blank=True, null=True, help_text="Next scheduled retry time")
+    
+    # Error tracking
+    error_message = models.TextField(blank=True, null=True)
+    error_type = models.CharField(max_length=100, blank=True, null=True)
+    is_permanent_failure = models.BooleanField(default=False, help_text="True if failure is permanent and should not retry")
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_retry_at = models.DateTimeField(blank=True, null=True)
+    succeeded_at = models.DateTimeField(blank=True, null=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['webhook_type', 'status']),
+            models.Index(fields=['tx_ref']),
+            models.Index(fields=['status', 'next_retry_at']),
+            models.Index(fields=['created_at']),
+        ]
+        verbose_name = 'Webhook Retry Queue'
+        verbose_name_plural = 'Webhook Retry Queue'
+    
+    def __str__(self):
+        return f"{self.webhook_type} - {self.tx_ref} ({self.status}) - retry {self.retry_count}/{self.max_retries}"
+    
+    def calculate_next_retry(self):
+        """Calculate next retry time using exponential backoff"""
+        if self.is_permanent_failure or self.retry_count >= self.max_retries:
+            return None
+        
+        # Exponential backoff: 1min, 2min, 4min, 8min, 16min
+        delay_minutes = 2 ** self.retry_count
+        next_retry = timezone.now() + timezone.timedelta(minutes=delay_minutes)
+        return next_retry
+    
+    def mark_permanent_failure(self, error_message, error_type=None):
+        """Mark this webhook as permanently failed (no more retries)"""
+        self.is_permanent_failure = True
+        self.status = 'failed_permanent'
+        self.error_message = error_message
+        self.error_type = error_type or 'PermanentError'
+        self.save()
+        
+        logger.error(
+            "[WEBHOOK_RETRY] Permanent failure → type=%s, tx_ref=%s, error=%s",
+            self.webhook_type, self.tx_ref, error_message
+        )
+    
+    def mark_transient_failure(self, error_message, error_type=None):
+        """Mark this webhook as transiently failed (will retry)"""
+        self.retry_count += 1
+        self.last_retry_at = timezone.now()
+        self.error_message = error_message
+        self.error_type = error_type or 'TransientError'
+        
+        if self.retry_count >= self.max_retries:
+            # Exhausted retries
+            self.status = 'failed_transient'
+            self.is_permanent_failure = True
+            logger.error(
+                "[WEBHOOK_RETRY] Max retries exhausted → type=%s, tx_ref=%s, retries=%d",
+                self.webhook_type, self.tx_ref, self.retry_count
+            )
+        else:
+            # Schedule next retry
+            self.status = 'pending'
+            self.next_retry_at = self.calculate_next_retry()
+            logger.warning(
+                "[WEBHOOK_RETRY] Transient failure, will retry → type=%s, tx_ref=%s, "
+                "retry=%d/%d, next_retry_at=%s, error=%s",
+                self.webhook_type, self.tx_ref, self.retry_count, self.max_retries,
+                self.next_retry_at, error_message
+            )
+        
+        self.save()
+    
+    def mark_success(self):
+        """Mark this webhook as successfully processed"""
+        self.status = 'succeeded'
+        self.succeeded_at = timezone.now()
+        self.save()
+        
+        logger.info(
+            "[WEBHOOK_RETRY] Success after %d retries → type=%s, tx_ref=%s",
+            self.retry_count, self.webhook_type, self.tx_ref
+        )
+
+
 
