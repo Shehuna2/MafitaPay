@@ -182,10 +182,9 @@ export function useViewportConstraints() {
     height: window.innerHeight,
     visualHeight: window.visualViewport?.height || window.innerHeight,
   });
+  const resizeTimerRef = useRef(null);
 
   useEffect(() => {
-    let resizeTimer;
-
     const handleResize = () => {
       // Use visual viewport if available (better for mobile)
       const visualHeight = window.visualViewport?.height || window.innerHeight;
@@ -196,8 +195,10 @@ export function useViewportConstraints() {
 
     const handleVisualViewportResize = () => {
       // Debounce to avoid too many updates
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
+      if (resizeTimerRef.current) {
+        clearTimeout(resizeTimerRef.current);
+      }
+      resizeTimerRef.current = setTimeout(() => {
         handleResize();
       }, 100);
     };
@@ -211,7 +212,9 @@ export function useViewportConstraints() {
     }
 
     return () => {
-      clearTimeout(resizeTimer);
+      if (resizeTimerRef.current) {
+        clearTimeout(resizeTimerRef.current);
+      }
       window.removeEventListener("resize", handleResize);
       
       if (window.visualViewport) {
@@ -363,8 +366,8 @@ export function useFullscreenLayout(isOpen = false) {
     document.body.style.top = "";
     document.body.style.width = "";
     
-    // Restore scroll position
-    window.scrollTo(0, scrollPositionRef.current);
+    // Restore scroll position immediately without animation
+    window.scrollTo({ top: scrollPositionRef.current, behavior: "instant" });
   }, []);
 
   useEffect(() => {
