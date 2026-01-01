@@ -1240,3 +1240,347 @@ class CardDepositListView(generics.ListAPIView):
         })
 
 
+class CardDepositWebhookDebugView(APIView):
+    """
+    Admin-only endpoint for debugging and manually re-processing card deposit webhooks
+    GET: Show webhook processing history and status for a tx_ref
+    POST: Manually re-process a webhook by tx_ref
+    """
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request):
+        """Get webhook processing history and status"""
+        tx_ref = request.query_params.get('tx_ref')
+        
+        if not tx_ref:
+            return Response(
+                {"error": "tx_ref parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get CardDeposit record
+        try:
+            card_deposit = CardDeposit.objects.get(flutterwave_tx_ref=tx_ref)
+            deposit_data = CardDepositSerializer(card_deposit).data
+        except CardDeposit.DoesNotExist:
+            deposit_data = None
+        
+        # Get retry queue entries
+        from .models import WebhookRetryQueue
+        retry_entries = WebhookRetryQueue.objects.filter(
+            webhook_type='card_deposit',
+            tx_ref=tx_ref
+        ).order_by('-created_at')
+        
+        retry_data = []
+        for entry in retry_entries:
+            retry_data.append({
+                'id': str(entry.id),
+                'status': entry.status,
+                'retry_count': entry.retry_count,
+                'max_retries': entry.max_retries,
+                'is_permanent_failure': entry.is_permanent_failure,
+                'error_message': entry.error_message,
+                'error_type': entry.error_type,
+                'next_retry_at': entry.next_retry_at,
+                'created_at': entry.created_at,
+                'last_retry_at': entry.last_retry_at,
+                'succeeded_at': entry.succeeded_at,
+            })
+        
+        # Get wallet transaction if successful
+        wallet_transaction = None
+        if card_deposit and card_deposit.status == 'successful':
+            from .models import WalletTransaction
+            wt = WalletTransaction.objects.filter(
+                user=card_deposit.user,
+                reference=tx_ref
+            ).first()
+            if wt:
+                wallet_transaction = WalletTransactionSerializer(wt).data
+        
+        return Response({
+            "success": True,
+            "tx_ref": tx_ref,
+            "card_deposit": deposit_data,
+            "retry_history": retry_data,
+            "wallet_transaction": wallet_transaction,
+        })
+    
+    def post(self, request):
+        """Manually re-process a webhook"""
+        tx_ref = request.data.get('tx_ref')
+        
+        if not tx_ref:
+            return Response(
+                {"error": "tx_ref is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get CardDeposit record
+        try:
+            card_deposit = CardDeposit.objects.select_for_update().get(
+                flutterwave_tx_ref=tx_ref
+            )
+        except CardDeposit.DoesNotExist:
+            return Response(
+                {"error": f"CardDeposit not found for tx_ref: {tx_ref}"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if already successful
+        if card_deposit.status == 'successful':
+            # Verify wallet was actually credited
+            from .models import WalletTransaction
+            wt = WalletTransaction.objects.filter(
+                user=card_deposit.user,
+                reference=tx_ref,
+                status='success'
+            ).first()
+            
+            if wt:
+                return Response({
+                    "success": True,
+                    "message": "Transaction already processed successfully",
+                    "already_processed": True,
+                    "card_deposit": CardDepositSerializer(card_deposit).data,
+                    "wallet_transaction": WalletTransactionSerializer(wt).data,
+                })
+        
+        # Attempt to credit wallet
+        logger.info(
+            "[WEBHOOK_DEBUG] Manual re-processing → tx_ref=%s, admin=%s",
+            tx_ref, request.user.email
+        )
+        
+        user = card_deposit.user
+        try:
+            wallet = Wallet.objects.select_for_update().get(user=user)
+        except Wallet.DoesNotExist:
+            return Response(
+                {"error": f"Wallet not found for user {user.email}"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if already credited (idempotency check)
+        from .models import WalletTransaction
+        existing_txn = WalletTransaction.objects.filter(
+            user=user,
+            reference=tx_ref
+        ).first()
+        
+        if existing_txn:
+            return Response({
+                "success": True,
+                "message": "Wallet already credited for this transaction",
+                "already_processed": True,
+                "wallet_transaction": WalletTransactionSerializer(existing_txn).data,
+            })
+        
+        # Credit wallet
+        logger.info(
+            "[WEBHOOK_DEBUG] Crediting wallet → user=%s, amount=₦%s, balance=₦%s",
+            user.email, card_deposit.ngn_amount, wallet.balance
+        )
+        
+        success = wallet.deposit(
+            amount=card_deposit.ngn_amount,
+            reference=tx_ref,
+            metadata={
+                'type': 'card_deposit',
+                'currency': card_deposit.currency,
+                'foreign_amount': str(card_deposit.amount),
+                'exchange_rate': str(card_deposit.exchange_rate),
+                'flutterwave_tx_id': card_deposit.flutterwave_tx_id,
+                'manual_reprocess': True,
+                'admin_user': request.user.email,
+            }
+        )
+        
+        if success:
+            # Update card deposit status
+            card_deposit.status = 'successful'
+            card_deposit.save()
+            
+            # Mark retry queue as successful
+            from .models import WebhookRetryQueue
+            retry_entry = WebhookRetryQueue.objects.filter(
+                webhook_type='card_deposit',
+                tx_ref=tx_ref
+            ).first()
+            if retry_entry:
+                retry_entry.mark_success()
+            
+            wallet.refresh_from_db()
+            logger.info(
+                "[WEBHOOK_DEBUG] ✓ Manual re-processing successful → "
+                "tx_ref=%s, user=%s, new_balance=₦%s",
+                tx_ref, user.email, wallet.balance
+            )
+            
+            # Create notification
+            from .models import Notification
+            Notification.objects.create(
+                user=user,
+                message=f"Card deposit of {card_deposit.amount} {card_deposit.currency} "
+                        f"(₦{card_deposit.ngn_amount}) completed successfully"
+            )
+            
+            return Response({
+                "success": True,
+                "message": "Webhook re-processed successfully",
+                "card_deposit": CardDepositSerializer(card_deposit).data,
+                "new_balance": str(wallet.balance),
+            })
+        else:
+            logger.error(
+                "[WEBHOOK_DEBUG] ✗ Manual re-processing failed → "
+                "tx_ref=%s, user=%s, wallet.deposit() returned False",
+                tx_ref, user.email
+            )
+            return Response(
+                {"error": "Failed to credit wallet. Check logs for details."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class WebhookRetryProcessView(APIView):
+    """
+    Admin-only endpoint to process pending webhook retries
+    Processes webhooks that are due for retry based on next_retry_at
+    """
+    permission_classes = [permissions.IsAdminUser]
+    
+    def post(self, request):
+        """Process pending webhook retries"""
+        from .models import WebhookRetryQueue
+        
+        # Get pending retries that are due
+        now = timezone.now()
+        pending_retries = WebhookRetryQueue.objects.filter(
+            status='pending',
+            is_permanent_failure=False,
+            next_retry_at__lte=now
+        ).order_by('next_retry_at')[:10]  # Process max 10 at a time
+        
+        results = []
+        for retry_entry in pending_retries:
+            logger.info(
+                "[WEBHOOK_RETRY] Processing retry → type=%s, tx_ref=%s, attempt=%d/%d",
+                retry_entry.webhook_type, retry_entry.tx_ref,
+                retry_entry.retry_count + 1, retry_entry.max_retries
+            )
+            
+            # Mark as processing
+            retry_entry.status = 'processing'
+            retry_entry.save()
+            
+            try:
+                if retry_entry.webhook_type == 'card_deposit':
+                    # Re-process card deposit webhook
+                    result = self._retry_card_deposit_webhook(retry_entry)
+                    results.append({
+                        'tx_ref': retry_entry.tx_ref,
+                        'result': result
+                    })
+                else:
+                    logger.warning(
+                        "[WEBHOOK_RETRY] Unsupported webhook type: %s",
+                        retry_entry.webhook_type
+                    )
+                    retry_entry.mark_permanent_failure(
+                        f"Unsupported webhook type: {retry_entry.webhook_type}",
+                        'UnsupportedWebhookType'
+                    )
+                    results.append({
+                        'tx_ref': retry_entry.tx_ref,
+                        'result': 'unsupported_type'
+                    })
+            except Exception as e:
+                logger.exception(
+                    "[WEBHOOK_RETRY] Error processing retry → tx_ref=%s",
+                    retry_entry.tx_ref
+                )
+                retry_entry.mark_transient_failure(str(e), type(e).__name__)
+                results.append({
+                    'tx_ref': retry_entry.tx_ref,
+                    'result': 'error',
+                    'error': str(e)
+                })
+        
+        return Response({
+            "success": True,
+            "processed_count": len(results),
+            "results": results
+        })
+    
+    def _retry_card_deposit_webhook(self, retry_entry):
+        """Retry processing a card deposit webhook"""
+        from .models import CardDeposit, Wallet
+        
+        tx_ref = retry_entry.tx_ref
+        
+        # Get CardDeposit
+        try:
+            card_deposit = CardDeposit.objects.select_for_update().get(
+                flutterwave_tx_ref=tx_ref
+            )
+        except CardDeposit.DoesNotExist:
+            retry_entry.mark_permanent_failure(
+                'CardDeposit not found',
+                'CardDepositNotFound'
+            )
+            return 'card_deposit_not_found'
+        
+        # Check if already successful
+        if card_deposit.status == 'successful':
+            retry_entry.mark_success()
+            return 'already_successful'
+        
+        # Get wallet
+        user = card_deposit.user
+        try:
+            wallet = Wallet.objects.select_for_update().get(user=user)
+        except Wallet.DoesNotExist:
+            retry_entry.mark_transient_failure(
+                f'Wallet not found for user {user.email}',
+                'WalletNotFound'
+            )
+            return 'wallet_not_found'
+        
+        # Attempt to credit
+        success = wallet.deposit(
+            amount=card_deposit.ngn_amount,
+            reference=tx_ref,
+            metadata={
+                'type': 'card_deposit',
+                'currency': card_deposit.currency,
+                'foreign_amount': str(card_deposit.amount),
+                'exchange_rate': str(card_deposit.exchange_rate),
+                'flutterwave_tx_id': card_deposit.flutterwave_tx_id,
+                'retry_attempt': retry_entry.retry_count + 1,
+            }
+        )
+        
+        if success:
+            card_deposit.status = 'successful'
+            card_deposit.save()
+            retry_entry.mark_success()
+            
+            # Create notification
+            from .models import Notification
+            Notification.objects.create(
+                user=user,
+                message=f"Card deposit of {card_deposit.amount} {card_deposit.currency} "
+                        f"(₦{card_deposit.ngn_amount}) completed successfully"
+            )
+            
+            return 'success'
+        else:
+            retry_entry.mark_transient_failure(
+                'wallet.deposit() returned False',
+                'WalletDepositFailed'
+            )
+            return 'wallet_deposit_failed'
+
+

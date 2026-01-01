@@ -579,6 +579,7 @@ def flutterwave_card_webhook(request):
     """
     Flutterwave Card Charge Webhook Handler
     Handles card charge completion events with signature verification
+    Enhanced with detailed logging for debugging deposit issues
     """
     # Status constants for cleaner comparison
     SUCCESS_STATUSES = {'successful', 'success'}
@@ -588,9 +589,14 @@ def flutterwave_card_webhook(request):
         # SECURITY: Limit payload size
         raw = request.body or b""
         
+        logger.info(
+            "[CARD_WEBHOOK] Incoming webhook → payload_size=%d bytes",
+            len(raw)
+        )
+        
         if len(raw) > MAX_WEBHOOK_SIZE:
             logger.warning(
-                "Card webhook payload too large: %d bytes (max: %d)",
+                "[CARD_WEBHOOK] REJECTED: Payload too large: %d bytes (max: %d)",
                 len(raw), MAX_WEBHOOK_SIZE
             )
             return Response({"error": "payload too large"}, status=413)
@@ -606,17 +612,36 @@ def flutterwave_card_webhook(request):
         )
 
         if not signature:
-            logger.warning("Missing Flutterwave signature in card webhook")
+            logger.warning(
+                "[CARD_WEBHOOK] REJECTED: Missing signature header. "
+                "Available headers: %s",
+                list(request.headers.keys())
+            )
             return Response({"error": "missing signature"}, status=400)
+
+        logger.info("[CARD_WEBHOOK] Signature header found, verifying...")
 
         # Parse payload
         try:
             payload = json.loads(raw.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            logger.error(f"Invalid JSON payload: {str(e)}")
+            logger.error(
+                "[CARD_WEBHOOK] REJECTED: Invalid JSON payload → error=%s",
+                str(e),
+                exc_info=True
+            )
             return Response({"error": "invalid payload"}, status=400)
 
-        logger.info(f"Card webhook received: event={payload.get('event')}")
+        event = payload.get("event")
+        data = payload.get("data", {})
+        tx_ref = data.get("tx_ref") or data.get("txRef") or data.get("reference")
+        amount = data.get("amount")
+        status_text = data.get("status", "").lower()
+
+        logger.info(
+            "[CARD_WEBHOOK] Parsed webhook → event=%s, tx_ref=%s, amount=%s, status=%s",
+            event, tx_ref, amount, status_text
+        )
 
         # Determine environment from settings - use same environment as main app
         # In production, webhooks should match the environment configuration
@@ -626,49 +651,95 @@ def flutterwave_card_webhook(request):
         from .services.flutterwave_card_service import FlutterwaveCardService
         fw_card_service = FlutterwaveCardService(use_live=use_live)
 
+        logger.info(
+            "[CARD_WEBHOOK] Verifying signature → environment=%s",
+            "LIVE" if use_live else "TEST"
+        )
+
         # Verify signature
         if not fw_card_service.verify_webhook_signature(raw, signature):
-            logger.error("Invalid card webhook signature")
+            logger.error(
+                "[CARD_WEBHOOK] REJECTED: Invalid signature → tx_ref=%s, environment=%s",
+                tx_ref, "LIVE" if use_live else "TEST"
+            )
             return Response({"error": "invalid signature"}, status=401)
 
-        # Extract event and data
-        event = payload.get("event")
-        data = payload.get("data", {})
+        logger.info("[CARD_WEBHOOK] ✓ Signature verified successfully")
 
         # We're interested in charge completion events
         if event not in COMPLETED_EVENTS:
-            logger.info(f"Ignoring card webhook event: {event}")
+            logger.info(
+                "[CARD_WEBHOOK] IGNORED: Non-charge event → event=%s, tx_ref=%s",
+                event, tx_ref
+            )
             return Response({"status": "ignored"}, status=200)
 
         # Extract transaction details
-        tx_ref = data.get("tx_ref") or data.get("txRef") or data.get("reference")
         tx_id = data.get("id") or data.get("transaction_id")
         charge_status = data.get("status", "").lower()
         
         if not tx_ref:
-            logger.error("Card webhook missing tx_ref")
+            logger.error(
+                "[CARD_WEBHOOK] REJECTED: Missing tx_ref in payload → event=%s, data=%s",
+                event, data
+            )
             return Response({"error": "missing tx_ref"}, status=400)
 
-        logger.info(f"Processing card charge: tx_ref={tx_ref}, status={charge_status}")
+        logger.info(
+            "[CARD_WEBHOOK] Processing charge completion → tx_ref=%s, tx_id=%s, status=%s",
+            tx_ref, tx_id, charge_status
+        )
 
         # Get card deposit record
-        from .models import CardDeposit
+        from .models import CardDeposit, WebhookRetryQueue
         try:
+            logger.info(
+                "[CARD_WEBHOOK] Looking up CardDeposit → tx_ref=%s",
+                tx_ref
+            )
             card_deposit = CardDeposit.objects.select_for_update().get(
                 flutterwave_tx_ref=tx_ref
             )
+            logger.info(
+                "[CARD_WEBHOOK] ✓ CardDeposit found → id=%s, user=%s, current_status=%s, ngn_amount=₦%s",
+                card_deposit.id, card_deposit.user.email, card_deposit.status, card_deposit.ngn_amount
+            )
         except CardDeposit.DoesNotExist:
-            logger.error(f"Card deposit not found: tx_ref={tx_ref}")
+            logger.error(
+                "[CARD_WEBHOOK] REJECTED: CardDeposit not found → tx_ref=%s. "
+                "This usually means the transaction was not initiated through our system. "
+                "Marking as permanent failure (no retry).",
+                tx_ref
+            )
+            # Create retry queue entry for tracking, but mark as permanent failure
+            WebhookRetryQueue.objects.create(
+                webhook_type='card_deposit',
+                tx_ref=tx_ref or 'unknown',
+                payload=payload,
+                signature=signature,
+                status='failed_permanent',
+                is_permanent_failure=True,
+                error_message='CardDeposit record not found - transaction not initiated through system',
+                error_type='CardDepositNotFound'
+            )
             return Response({"error": "transaction not found"}, status=404)
 
         # Check if already processed
         if card_deposit.status == 'successful':
-            logger.info(f"Card deposit already processed: tx_ref={tx_ref}")
+            logger.info(
+                "[CARD_WEBHOOK] IGNORED: Already processed → tx_ref=%s, deposit_id=%s, user=%s",
+                tx_ref, card_deposit.id, card_deposit.user.email
+            )
             return Response({"status": "already processed"}, status=200)
 
         # Process based on status
         with transaction.atomic():
             if charge_status in SUCCESS_STATUSES:
+                logger.info(
+                    "[CARD_WEBHOOK] Processing SUCCESS → tx_ref=%s, updating CardDeposit and crediting wallet",
+                    tx_ref
+                )
+                
                 # Update card deposit record
                 card_deposit.status = 'successful'
                 card_deposit.flutterwave_tx_id = tx_id
@@ -679,32 +750,92 @@ def flutterwave_card_webhook(request):
                     card_info = data['card']
                     card_deposit.card_last4 = card_info.get('last4digits') or card_info.get('last_4digits')
                     card_deposit.card_brand = card_info.get('type') or card_info.get('brand')
+                    logger.info(
+                        "[CARD_WEBHOOK] Card details extracted → last4=%s, brand=%s",
+                        card_deposit.card_last4, card_deposit.card_brand
+                    )
                 
                 card_deposit.save()
+                logger.info("[CARD_WEBHOOK] ✓ CardDeposit status updated to 'successful'")
 
                 # Credit user's wallet
                 user = card_deposit.user
-                wallet = Wallet.objects.select_for_update().get(user=user)
+                try:
+                    wallet = Wallet.objects.select_for_update().get(user=user)
+                except Wallet.DoesNotExist:
+                    error_msg = f"Wallet not found for user {user.email}"
+                    logger.error(
+                        "[CARD_WEBHOOK] ✗ TRANSIENT FAILURE: %s → tx_ref=%s. "
+                        "Will retry as wallet might be created later.",
+                        error_msg, tx_ref
+                    )
+                    # Create or update retry queue entry
+                    retry_entry, created = WebhookRetryQueue.objects.get_or_create(
+                        webhook_type='card_deposit',
+                        tx_ref=tx_ref,
+                        defaults={
+                            'payload': payload,
+                            'signature': signature,
+                        }
+                    )
+                    retry_entry.mark_transient_failure(error_msg, 'WalletNotFound')
+                    return Response({"error": "wallet not found", "will_retry": True}, status=500)
+                
+                logger.info(
+                    "[CARD_WEBHOOK] Crediting wallet → user=%s, amount=₦%s, current_balance=₦%s",
+                    user.email, card_deposit.ngn_amount, wallet.balance
+                )
                 
                 # Credit the net NGN amount
-                success = wallet.deposit(
-                    amount=card_deposit.ngn_amount,
-                    reference=tx_ref,
-                    metadata={
-                        'type': 'card_deposit',
-                        'currency': card_deposit.currency,
-                        'foreign_amount': str(card_deposit.amount),
-                        'exchange_rate': str(card_deposit.exchange_rate),
-                        'flutterwave_tx_id': tx_id,
-                    }
-                )
+                try:
+                    success = wallet.deposit(
+                        amount=card_deposit.ngn_amount,
+                        reference=tx_ref,
+                        metadata={
+                            'type': 'card_deposit',
+                            'currency': card_deposit.currency,
+                            'foreign_amount': str(card_deposit.amount),
+                            'exchange_rate': str(card_deposit.exchange_rate),
+                            'flutterwave_tx_id': tx_id,
+                        }
+                    )
+                except Exception as deposit_error:
+                    error_msg = f"wallet.deposit() raised exception: {str(deposit_error)}"
+                    logger.error(
+                        "[CARD_WEBHOOK] ✗ TRANSIENT FAILURE: %s → tx_ref=%s, user=%s",
+                        error_msg, tx_ref, user.email,
+                        exc_info=True
+                    )
+                    # Create or update retry queue entry
+                    retry_entry, created = WebhookRetryQueue.objects.get_or_create(
+                        webhook_type='card_deposit',
+                        tx_ref=tx_ref,
+                        defaults={
+                            'payload': payload,
+                            'signature': signature,
+                        }
+                    )
+                    retry_entry.mark_transient_failure(error_msg, type(deposit_error).__name__)
+                    card_deposit.status = 'processing'  # Revert to processing for retry
+                    card_deposit.save()
+                    return Response({"error": "wallet credit failed", "will_retry": True}, status=500)
 
                 if success:
+                    wallet.refresh_from_db()
                     logger.info(
-                        f"Card deposit successful: user={user.email}, "
-                        f"amount={card_deposit.amount} {card_deposit.currency}, "
-                        f"ngn=₦{card_deposit.ngn_amount}, tx_ref={tx_ref}"
+                        "[CARD_WEBHOOK] ✓✓✓ SUCCESS: Card deposit completed → "
+                        "user=%s, tx_ref=%s, amount=%s %s, ngn=₦%s, new_balance=₦%s",
+                        user.email, tx_ref, card_deposit.amount, card_deposit.currency,
+                        card_deposit.ngn_amount, wallet.balance
                     )
+                    
+                    # Mark retry entry as successful if it exists
+                    retry_entry = WebhookRetryQueue.objects.filter(
+                        webhook_type='card_deposit',
+                        tx_ref=tx_ref
+                    ).first()
+                    if retry_entry:
+                        retry_entry.mark_success()
                     
                     # Create notification
                     from .models import Notification
@@ -713,29 +844,60 @@ def flutterwave_card_webhook(request):
                         message=f"Card deposit of {card_deposit.amount} {card_deposit.currency} "
                                 f"(₦{card_deposit.ngn_amount}) completed successfully"
                     )
+                    logger.info("[CARD_WEBHOOK] Notification created for user")
                 else:
-                    logger.error(f"Failed to credit wallet for card deposit: tx_ref={tx_ref}")
-                    card_deposit.status = 'failed'
+                    error_msg = "wallet.deposit() returned False - check Wallet model logs for details"
+                    logger.error(
+                        "[CARD_WEBHOOK] ✗ TRANSIENT FAILURE: %s → "
+                        "tx_ref=%s, user=%s, amount=₦%s",
+                        error_msg, tx_ref, user.email, card_deposit.ngn_amount,
+                        exc_info=True
+                    )
+                    # Create or update retry queue entry
+                    retry_entry, created = WebhookRetryQueue.objects.get_or_create(
+                        webhook_type='card_deposit',
+                        tx_ref=tx_ref,
+                        defaults={
+                            'payload': payload,
+                            'signature': signature,
+                        }
+                    )
+                    retry_entry.mark_transient_failure(error_msg, 'WalletDepositFailed')
+                    card_deposit.status = 'processing'  # Revert to processing for retry
                     card_deposit.save()
-                    return Response({"error": "wallet credit failed"}, status=500)
+                    return Response({"error": "wallet credit failed", "will_retry": True}, status=500)
 
             elif charge_status == "failed":
+                logger.info(
+                    "[CARD_WEBHOOK] Processing FAILED charge → tx_ref=%s, tx_id=%s",
+                    tx_ref, tx_id
+                )
                 card_deposit.status = 'failed'
                 card_deposit.flutterwave_tx_id = tx_id
                 card_deposit.raw_response = data
                 card_deposit.save()
                 
-                logger.info(f"Card deposit failed: tx_ref={tx_ref}")
+                logger.info(
+                    "[CARD_WEBHOOK] CardDeposit marked as failed → tx_ref=%s",
+                    tx_ref
+                )
             else:
                 # Update with latest data but keep processing status
+                logger.info(
+                    "[CARD_WEBHOOK] Non-terminal status update → tx_ref=%s, status=%s",
+                    tx_ref, charge_status
+                )
                 card_deposit.flutterwave_tx_id = tx_id
                 card_deposit.raw_response = data
                 card_deposit.save()
-                
-                logger.info(f"Card deposit status updated: tx_ref={tx_ref}, status={charge_status}")
 
+        logger.info("[CARD_WEBHOOK] Webhook processing complete → tx_ref=%s", tx_ref)
         return Response({"status": "success"}, status=200)
 
     except Exception as e:
-        logger.exception(f"FATAL ERROR in card webhook: {str(e)}")
+        logger.exception(
+            "[CARD_WEBHOOK] ✗✗✗ FATAL ERROR: Unhandled exception in webhook processing → "
+            "error=%s, error_type=%s",
+            str(e), type(e).__name__
+        )
         return Response({"error": "server error"}, status=500)

@@ -3,7 +3,8 @@ from .views import (
     WalletView, WalletTransactionListView, NotificationListView, NotificationMarkReadView,
     GenerateDVAAPIView, RequeryDVAAPIView,
     SecureWithdrawalView, SecurePaymentView,  # New secure transaction views
-    CardDepositExchangeRateView, CardDepositInitiateView, CardDepositListView  # Card deposit views
+    CardDepositExchangeRateView, CardDepositInitiateView, CardDepositListView,  # Card deposit views
+    CardDepositWebhookDebugView, WebhookRetryProcessView  # Webhook debug and retry views
 )
 from .webhooks import paystack_webhook, psb_webhook, flutterwave_webhook, palmpay_webhook, flutterwave_card_webhook
 
@@ -39,5 +40,9 @@ urlpatterns = [
     
     # Card deposit webhook
     path("api/wallet/flutterwave-card-webhook/", flutterwave_card_webhook, name="flutterwave-card-webhook"),
+    
+    # Webhook debugging and retry endpoints (admin only)
+    path("api/wallet/card-deposit/webhook-debug/", CardDepositWebhookDebugView.as_view(), name="card-deposit-webhook-debug"),
+    path("api/wallet/webhook-retry/process/", WebhookRetryProcessView.as_view(), name="webhook-retry-process"),
 
 ]
