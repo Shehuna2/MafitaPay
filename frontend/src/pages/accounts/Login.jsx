@@ -147,32 +147,52 @@ export default function Login() {
     const refreshToken = localStorage.getItem("refresh");
     
     if (refreshToken) {
-      const { success, access } = await authenticateWithRefresh();
-      if (success) {
+      // Try to authenticate with refresh token
+      console.log("Attempting biometric authentication with refresh token");
+      const result = await authenticateWithRefresh();
+      
+      if (result.success) {
         let userData;
         try {
           const res = await client.get(`/profile-api/?t=${Date.now()}`);
           userData = {
-            email: res.data. email,
-            id: res. data.id,
+            email: res.data.email,
+            id: res.data.id,
             is_merchant: res.data.is_merchant,
-            is_staff:  res.data.is_staff,
-            full_name: res. data.full_name || null,
-            phone_number: res. data.phone_number || null,
+            is_staff: res.data.is_staff,
+            full_name: res.data.full_name || null,
+            phone_number: res.data.phone_number || null,
           };
         } catch {
           userData = JSON.parse(localStorage.getItem("user") || "{}");
         }
 
-        login({ access, refresh: refreshToken }, userData);
+        login({ access: result.access, refresh: refreshToken }, userData);
 
         const redirect = localStorage.getItem("post_reauth_redirect") || "/dashboard";
         localStorage.removeItem("post_reauth_redirect");
         navigate(redirect, { replace: true });
       } else {
-        setErrorMessage("Biometric authentication failed. Please use your password.");
+        // Show specific error message based on error type
+        let errorMsg = result.error || "Biometric authentication failed. Please use your password.";
+        
+        if (result.errorType === "USER_CANCELLED") {
+          errorMsg = "Authentication cancelled. Please try again or use your password.";
+        } else if (result.errorType === "NOT_ENROLLED") {
+          errorMsg = "No biometric enrolled on this device. Please enroll your fingerprint/face in device settings, or use your password.";
+        } else if (result.errorType === "BIOMETRY_LOCKED") {
+          errorMsg = "Biometric authentication is locked due to too many failed attempts. Please use your password.";
+        } else if (result.errorType === "TOKEN_EXPIRED") {
+          errorMsg = "Your session has expired. Please login with your password.";
+        } else if (result.errorType === "NOT_SUPPORTED") {
+          errorMsg = "Biometric authentication is not supported on this device. Please use your password.";
+        }
+        
+        setErrorMessage(errorMsg);
       }
     } else if (biometricEmail) {
+      // Try to login with biometric
+      console.log("Attempting biometric login for:", biometricEmail);
       const result = await loginWithBiometric(biometricEmail);
       
       if (result.success) {
@@ -182,14 +202,33 @@ export default function Login() {
         
         login({ access, refresh }, userData);
         
-        const redirect = localStorage. getItem("post_reauth_redirect") || "/dashboard";
+        const redirect = localStorage.getItem("post_reauth_redirect") || "/dashboard";
         localStorage.removeItem("post_reauth_redirect");
         navigate(redirect, { replace: true });
       } else {
-        setErrorMessage("Biometric authentication failed.  Please use your password.");
+        // Show specific error message based on error type
+        let errorMsg = result.error || "Biometric authentication failed. Please use your password.";
+        
+        if (result.errorType === "USER_CANCELLED") {
+          errorMsg = "Authentication cancelled. Please try again or use your password.";
+        } else if (result.errorType === "NOT_ENROLLED") {
+          errorMsg = "No biometric enrolled on this device. Please enroll your fingerprint/face in device settings, or use your password.";
+        } else if (result.errorType === "BIOMETRY_LOCKED") {
+          errorMsg = "Biometric authentication is locked due to too many failed attempts. Please use your password.";
+        } else if (result.errorType === "MISSING_EMAIL") {
+          errorMsg = "No biometric credentials found. Please login with your password first, then enroll biometric in settings.";
+        } else if (result.errorType === "NOT_SUPPORTED") {
+          errorMsg = "Biometric authentication is not supported on this device. Please use your password.";
+        } else if (result.errorType === "SERVER_ERROR") {
+          errorMsg = result.error || "Server error occurred. Please use your password.";
+        } else if (result.errorType === "USER_NOT_FOUND") {
+          errorMsg = "Account not found. Please check your credentials and use your password to login.";
+        }
+        
+        setErrorMessage(errorMsg);
       }
     } else {
-      setErrorMessage("No biometric credentials found. Please login with your password.");
+      setErrorMessage("No biometric credentials found. Please login with your password first, then enroll biometric in your profile settings.");
     }
     
     setLoading(false);
