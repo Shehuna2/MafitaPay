@@ -267,7 +267,7 @@ These hooks integrate seamlessly with Capacitor:
 ## Browser Compatibility
 
 - All hooks work in modern browsers (Chrome, Safari, Firefox, Edge)
-- Haptic feedback uses the Vibration API (not supported in iOS Safari)
+- Haptic feedback uses the Vibration API (supported in most browsers, limited in iOS Safari)
 - Safe area uses CSS env() variables (iOS 11.2+, Android with notch support)
 - Visual Viewport API used for viewport constraints (modern browsers)
 

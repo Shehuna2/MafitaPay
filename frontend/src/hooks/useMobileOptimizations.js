@@ -127,34 +127,27 @@ export function useSafeArea() {
 
   useEffect(() => {
     const updateSafeArea = () => {
-      // Get CSS environment variables for safe area insets
+      // Get CSS custom properties that should be set from env() values in CSS
+      // Note: env() values must be set in CSS as custom properties first
       const computedStyle = getComputedStyle(document.documentElement);
       
       const top = parseInt(
-        computedStyle.getPropertyValue("--safe-area-inset-top") ||
-        computedStyle.getPropertyValue("env(safe-area-inset-top)") ||
-        "0",
+        computedStyle.getPropertyValue("--safe-area-inset-top") || "0",
         10
       );
       
       const right = parseInt(
-        computedStyle.getPropertyValue("--safe-area-inset-right") ||
-        computedStyle.getPropertyValue("env(safe-area-inset-right)") ||
-        "0",
+        computedStyle.getPropertyValue("--safe-area-inset-right") || "0",
         10
       );
       
       const bottom = parseInt(
-        computedStyle.getPropertyValue("--safe-area-inset-bottom") ||
-        computedStyle.getPropertyValue("env(safe-area-inset-bottom)") ||
-        "0",
+        computedStyle.getPropertyValue("--safe-area-inset-bottom") || "0",
         10
       );
       
       const left = parseInt(
-        computedStyle.getPropertyValue("--safe-area-inset-left") ||
-        computedStyle.getPropertyValue("env(safe-area-inset-left)") ||
-        "0",
+        computedStyle.getPropertyValue("--safe-area-inset-left") || "0",
         10
       );
 
@@ -258,6 +251,9 @@ export function useTouchDetection() {
  */
 export function useDisablePinchZoom(disabled = true) {
   const lastTouchRef = useRef(0);
+  const viewportMetaRef = useRef(null);
+  const originalContentRef = useRef(null);
+  const wasCreatedRef = useRef(false);
 
   useEffect(() => {
     if (!disabled) return;
@@ -283,20 +279,26 @@ export function useDisablePinchZoom(disabled = true) {
       e.preventDefault();
     };
 
-    // Add meta viewport tag if not exists
-    let viewportMeta = document.querySelector('meta[name="viewport"]');
-    const originalContent = viewportMeta?.getAttribute("content");
-    
-    if (viewportMeta) {
-      viewportMeta.setAttribute(
-        "content",
-        "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-      );
-    } else {
-      viewportMeta = document.createElement("meta");
-      viewportMeta.name = "viewport";
-      viewportMeta.content = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no";
-      document.head.appendChild(viewportMeta);
+    // Only modify viewport meta tag on first mount to avoid conflicts
+    if (!viewportMetaRef.current) {
+      let viewportMeta = document.querySelector('meta[name="viewport"]');
+      
+      if (viewportMeta) {
+        viewportMetaRef.current = viewportMeta;
+        originalContentRef.current = viewportMeta.getAttribute("content");
+        wasCreatedRef.current = false;
+        viewportMeta.setAttribute(
+          "content",
+          "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        );
+      } else {
+        viewportMeta = document.createElement("meta");
+        viewportMeta.name = "viewport";
+        viewportMeta.content = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no";
+        document.head.appendChild(viewportMeta);
+        viewportMetaRef.current = viewportMeta;
+        wasCreatedRef.current = true;
+      }
     }
 
     // Prevent pinch zoom via touch events
@@ -313,9 +315,19 @@ export function useDisablePinchZoom(disabled = true) {
       document.removeEventListener("touchend", preventDoubleTapZoom);
       document.removeEventListener("gesturestart", preventGestureZoom);
       
-      // Restore original viewport settings
-      if (originalContent && viewportMeta) {
-        viewportMeta.setAttribute("content", originalContent);
+      // Restore or remove viewport meta tag on cleanup
+      const viewportMeta = viewportMetaRef.current;
+      if (viewportMeta) {
+        if (wasCreatedRef.current) {
+          // Remove the tag we created
+          viewportMeta.remove();
+        } else if (originalContentRef.current) {
+          // Restore the original content
+          viewportMeta.setAttribute("content", originalContentRef.current);
+        }
+        viewportMetaRef.current = null;
+        originalContentRef.current = null;
+        wasCreatedRef.current = false;
       }
     };
   }, [disabled]);
