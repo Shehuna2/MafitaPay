@@ -1,0 +1,659 @@
+/* ==========================================================================
+   Mobile Optimization Styles
+   Comprehensive mobile-first CSS for responsive design with safe areas,
+   touch-friendly targets, and performance enhancements
+   ========================================================================== */
+
+/* ==========================================================================
+   Safe Area Support for Notch Devices
+   ========================================================================== */
+
+:root {
+  /* CSS environment variables for safe areas */
+  --safe-area-inset-top: max(1rem, env(safe-area-inset-top));
+  --safe-area-inset-bottom: max(1rem, env(safe-area-inset-bottom));
+  --safe-area-inset-left: max(1rem, env(safe-area-inset-left));
+  --safe-area-inset-right: max(1rem, env(safe-area-inset-right));
+  
+  /* Touch target sizing */
+  --touch-target-min: 44px;
+  --touch-target-comfortable: 48px;
+  
+  /* Mobile-specific spacing */
+  --mobile-spacing-xs: 0.5rem;
+  --mobile-spacing-sm: 1rem;
+  --mobile-spacing-md: 1.5rem;
+  --mobile-spacing-lg: 2rem;
+  
+  /* Font sizing for mobile */
+  --mobile-font-size-xs: 12px;
+  --mobile-font-size-sm: 14px;
+  --mobile-font-size-base: 16px;
+  --mobile-font-size-lg: 18px;
+  --mobile-font-size-xl: 20px;
+  
+  /* Line heights for readability */
+  --mobile-line-height-tight: 1.4;
+  --mobile-line-height-normal: 1.6;
+  --mobile-line-height-relaxed: 1.8;
+}
+
+/* ==========================================================================
+   Viewport and Body Configuration
+   ========================================================================== */
+
+body {
+  /* Prevent layout shift and optimize rendering */
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+  
+  /* Font optimization for mobile */
+  font-size: var(--mobile-font-size-base);
+  line-height: var(--mobile-line-height-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  /* Touch optimization */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+html {
+  /* Prevent zooming on input focus */
+  scroll-behavior: smooth;
+  overscroll-behavior: none;
+}
+
+/* ==========================================================================
+   Safe Area Implementation for Full-Screen Content
+   ========================================================================== */
+
+body {
+  padding-top: var(--safe-area-inset-top);
+  padding-bottom: var(--safe-area-inset-bottom);
+  padding-left: var(--safe-area-inset-left);
+  padding-right: var(--safe-area-inset-right);
+}
+
+/* Safe area for headers and footers */
+.header,
+.navbar,
+[role="banner"] {
+  padding-top: calc(var(--safe-area-inset-top) + var(--mobile-spacing-sm));
+  padding-left: var(--safe-area-inset-left);
+  padding-right: var(--safe-area-inset-right);
+}
+
+.footer,
+[role="contentinfo"] {
+  padding-bottom: calc(var(--safe-area-inset-bottom) + var(--mobile-spacing-sm));
+  padding-left: var(--safe-area-inset-left);
+  padding-right: var(--safe-area-inset-right);
+}
+
+/* ==========================================================================
+   Touch-Friendly Interactive Elements
+   ========================================================================== */
+
+/* Touch target minimum size */
+button,
+a,
+[role="button"],
+[role="link"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+input[type="checkbox"],
+input[type="radio"] {
+  /* Ensure minimum touch target size */
+  min-height: var(--touch-target-min);
+  min-width: var(--touch-target-min);
+  
+  /* Comfortable spacing around touch targets */
+  padding: calc(var(--touch-target-min) / 2 - 0.5em) 1em;
+  
+  /* Disable double-tap delay on click */
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+/* Form inputs touch optimization */
+input,
+textarea,
+select {
+  min-height: var(--touch-target-comfortable);
+  min-width: var(--touch-target-comfortable);
+  font-size: var(--mobile-font-size-base);
+  padding: var(--mobile-spacing-sm);
+  border-radius: 8px;
+  
+  /* Prevent zooming on focus */
+  font-size: 16px; /* Critical for iOS to prevent zoom */
+}
+
+/* Checkbox and radio improvements */
+input[type="checkbox"],
+input[type="radio"] {
+  width: var(--touch-target-comfortable);
+  height: var(--touch-target-comfortable);
+  cursor: pointer;
+}
+
+/* Select improvements */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 12px;
+  padding-right: 2.5rem;
+}
+
+/* ==========================================================================
+   Typography for Mobile Readability
+   ========================================================================== */
+
+/* Headings */
+h1 {
+  font-size: var(--mobile-font-size-xl);
+  line-height: var(--mobile-line-height-tight);
+  margin: var(--mobile-spacing-md) 0 var(--mobile-spacing-sm) 0;
+  word-break: break-word;
+}
+
+h2 {
+  font-size: var(--mobile-font-size-lg);
+  line-height: var(--mobile-line-height-tight);
+  margin: var(--mobile-spacing-md) 0 var(--mobile-spacing-sm) 0;
+  word-break: break-word;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--mobile-font-size-base);
+  line-height: var(--mobile-line-height-normal);
+  margin: var(--mobile-spacing-sm) 0 var(--mobile-spacing-xs) 0;
+  word-break: break-word;
+}
+
+/* Paragraph readability */
+p {
+  line-height: var(--mobile-line-height-normal);
+  margin: 0 0 var(--mobile-spacing-sm) 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Small text */
+small,
+.text-small {
+  font-size: var(--mobile-font-size-sm);
+  line-height: var(--mobile-line-height-normal);
+}
+
+/* Links */
+a {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  
+  /* Ensure clickable area */
+  display: inline-block;
+  padding: 0.25em 0.5em;
+  margin: -0.25em -0.5em;
+}
+
+/* ==========================================================================
+   Mobile Container and Layout
+   ========================================================================== */
+
+.container,
+[role="main"] {
+  width: 100%;
+  padding: var(--mobile-spacing-md);
+  box-sizing: border-box;
+  max-width: 100%;
+  
+  /* Performance optimization */
+  contain: layout style paint;
+}
+
+/* Content padding with safe areas */
+.content,
+main {
+  padding: var(--mobile-spacing-md) var(--mobile-spacing-sm);
+  box-sizing: border-box;
+  width: 100%;
+}
+
+/* ==========================================================================
+   Image and Media Optimization
+   ========================================================================== */
+
+img,
+picture,
+video {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  
+  /* Prevent layout shift */
+  background-color: #f0f0f0;
+  
+  /* Performance optimization */
+  contain: size;
+}
+
+/* Responsive images */
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+  
+  /* Prevent long press context menu */
+  -webkit-touch-callout: none;
+}
+
+/* Figure elements */
+figure {
+  margin: var(--mobile-spacing-md) 0;
+  padding: 0;
+}
+
+/* ==========================================================================
+   Forms and Input Optimization
+   ========================================================================== */
+
+form {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.form-group {
+  margin-bottom: var(--mobile-spacing-md);
+}
+
+label {
+  display: block;
+  margin-bottom: var(--mobile-spacing-xs);
+  font-size: var(--mobile-font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Input styling */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
+input[type="number"],
+input[type="search"],
+input[type="url"],
+textarea,
+select {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  border: 1px solid #ccc;
+  background-color: white;
+  
+  /* Improve focus visibility */
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #007AFF;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+/* Placeholder text */
+::placeholder {
+  color: #999;
+  opacity: 1;
+}
+
+/* Textarea specific */
+textarea {
+  resize: vertical;
+  min-height: 120px;
+  font-family: inherit;
+}
+
+/* ==========================================================================
+   Navigation and Menu Optimization
+   ========================================================================== */
+
+nav {
+  width: 100%;
+}
+
+/* Mobile menu styling */
+.nav-menu,
+[role="navigation"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mobile-spacing-sm);
+  padding: var(--mobile-spacing-sm);
+}
+
+.nav-item,
+.menu-item {
+  padding: var(--mobile-spacing-sm);
+  min-height: var(--touch-target-min);
+  display: flex;
+  align-items: center;
+  
+  /* Touch target enhancement */
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.nav-item:active,
+.nav-item:focus-within {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* ==========================================================================
+   List Optimization
+   ========================================================================== */
+
+ul,
+ol {
+  padding-left: var(--mobile-spacing-md);
+  margin: var(--mobile-spacing-sm) 0;
+}
+
+li {
+  margin-bottom: var(--mobile-spacing-xs);
+  line-height: var(--mobile-line-height-normal);
+}
+
+/* ==========================================================================
+   Spacing and Margin Utilities
+   ========================================================================== */
+
+.mb-xs { margin-bottom: var(--mobile-spacing-xs); }
+.mb-sm { margin-bottom: var(--mobile-spacing-sm); }
+.mb-md { margin-bottom: var(--mobile-spacing-md); }
+.mb-lg { margin-bottom: var(--mobile-spacing-lg); }
+
+.mt-xs { margin-top: var(--mobile-spacing-xs); }
+.mt-sm { margin-top: var(--mobile-spacing-sm); }
+.mt-md { margin-top: var(--mobile-spacing-md); }
+.mt-lg { margin-top: var(--mobile-spacing-lg); }
+
+.px-sm { padding: 0 var(--mobile-spacing-sm); }
+.px-md { padding: 0 var(--mobile-spacing-md); }
+
+.py-sm { padding: var(--mobile-spacing-sm) 0; }
+.py-md { padding: var(--mobile-spacing-md) 0; }
+
+/* ==========================================================================
+   Mobile Performance Enhancements
+   ========================================================================== */
+
+/* Hardware acceleration */
+.animated,
+[class*="transition"],
+[class*="animation"] {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Optimize scrolling performance */
+.scrollable,
+[class*="scroll"],
+[role="region"][aria-label*="scroll"] {
+  -webkit-overflow-scrolling: touch;
+  will-change: scroll-position;
+}
+
+/* Reduce paint areas */
+.fixed-header,
+.sticky-nav {
+  contain: layout style paint;
+  z-index: 100;
+}
+
+/* ==========================================================================
+   Accessibility Enhancements
+   ========================================================================== */
+
+/* Focus visible for keyboard navigation */
+:focus-visible {
+  outline: 2px solid #007AFF;
+  outline-offset: 2px;
+}
+
+/* Skip to main content link */
+.skip-to-main {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background-color: #007AFF;
+  color: white;
+  padding: 8px;
+  z-index: 100;
+  text-decoration: none;
+  border-radius: 0 0 4px 0;
+}
+
+.skip-to-main:focus {
+  top: 0;
+}
+
+/* Visible focus indicators */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #007AFF;
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Mobile Gestures and Interactions
+   ========================================================================== */
+
+/* Prevent unwanted text selection on long press */
+button,
+[role="button"],
+.clickable {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Active state feedback */
+button:active,
+a:active,
+[role="button"]:active {
+  opacity: 0.7;
+  transform: scale(0.98);
+}
+
+/* Remove default iOS button styling */
+button {
+  border: none;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+  appearance: none;
+}
+
+/* ==========================================================================
+   Utility Classes for Mobile Layout
+   ========================================================================== */
+
+/* Text utilities */
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* Flex utilities */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Grid utilities */
+.grid {
+  display: grid;
+  gap: var(--mobile-spacing-sm);
+}
+
+.grid-cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* ==========================================================================
+   Reduced Motion Support
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   Dark Mode Support
+   ========================================================================== */
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #121212;
+    color: #ffffff;
+  }
+  
+  input,
+  textarea,
+  select {
+    background-color: #1e1e1e;
+    color: #ffffff;
+    border-color: #333;
+  }
+  
+  a {
+    color: #4da6ff;
+  }
+}
+
+/* ==========================================================================
+   High Contrast Mode Support
+   ========================================================================== */
+
+@media (prefers-contrast: more) {
+  button,
+  a,
+  [role="button"] {
+    border: 2px solid currentColor;
+  }
+  
+  input:focus,
+  textarea:focus,
+  select:focus {
+    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.3);
+  }
+}
+
+/* ==========================================================================
+   Landscape Mode Adjustments
+   ========================================================================== */
+
+@media (orientation: landscape) and (max-height: 500px) {
+  body {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+  
+  h1 {
+    font-size: var(--mobile-font-size-lg);
+    margin: var(--mobile-spacing-xs) 0;
+  }
+  
+  h2 {
+    font-size: var(--mobile-font-size-base);
+    margin: var(--mobile-spacing-xs) 0;
+  }
+  
+  button,
+  input,
+  select,
+  textarea {
+    min-height: 40px;
+    padding: 0.5rem;
+    font-size: 14px;
+  }
+}
+
+/* ==========================================================================
+   Print Optimization
+   ========================================================================== */
+
+@media print {
+  body {
+    padding: 0;
+  }
+  
+  button,
+  [role="button"],
+  .no-print {
+    display: none;
+  }
+  
+  a {
+    text-decoration: underline;
+  }
+}
