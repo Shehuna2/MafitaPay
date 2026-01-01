@@ -418,7 +418,7 @@ export default function useBiometricAuth() {
           }
 
           // 1️⃣ Authenticate with biometric
-          console.log("Attempting native biometric authentication for:", email);
+          console.log("Attempting native biometric authentication");
           await BiometricAuth.authenticate({
             reason: "Login to MafitaPay",
             cancelTitle: "Cancel",
@@ -479,7 +479,7 @@ export default function useBiometricAuth() {
       } else {
         // Web platform: Use WebAuthn
         try {
-          console.log("Attempting WebAuthn authentication for:", email);
+          console.log("Attempting WebAuthn authentication");
           
           // 1️⃣ Get challenge from server
           const challengeRes = await axios.post(`${API_BASE}/webauthn/challenge/`, { email });
