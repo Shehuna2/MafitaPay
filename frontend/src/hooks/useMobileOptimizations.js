@@ -257,6 +257,8 @@ export function useTouchDetection() {
  * @param {boolean} disabled - Whether to disable pinch zoom (default: true)
  */
 export function useDisablePinchZoom(disabled = true) {
+  const lastTouchRef = useRef(0);
+
   useEffect(() => {
     if (!disabled) return;
 
@@ -268,13 +270,17 @@ export function useDisablePinchZoom(disabled = true) {
 
     const preventDoubleTapZoom = (e) => {
       const now = Date.now();
-      const timeSinceLastTouch = now - (preventDoubleTapZoom.lastTouch || 0);
+      const timeSinceLastTouch = now - lastTouchRef.current;
       
       if (timeSinceLastTouch < 300 && timeSinceLastTouch > 0) {
         e.preventDefault();
       }
       
-      preventDoubleTapZoom.lastTouch = now;
+      lastTouchRef.current = now;
+    };
+
+    const preventGestureZoom = (e) => {
+      e.preventDefault();
     };
 
     // Add meta viewport tag if not exists
@@ -299,13 +305,13 @@ export function useDisablePinchZoom(disabled = true) {
     document.addEventListener("touchend", preventDoubleTapZoom, { passive: false });
 
     // Prevent zoom via gesture events (Safari)
-    document.addEventListener("gesturestart", (e) => e.preventDefault());
+    document.addEventListener("gesturestart", preventGestureZoom);
 
     return () => {
       document.removeEventListener("touchstart", preventZoom);
       document.removeEventListener("touchmove", preventZoom);
       document.removeEventListener("touchend", preventDoubleTapZoom);
-      document.removeEventListener("gesturestart", (e) => e.preventDefault());
+      document.removeEventListener("gesturestart", preventGestureZoom);
       
       // Restore original viewport settings
       if (originalContent && viewportMeta) {
