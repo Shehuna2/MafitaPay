@@ -3,8 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/jpg+xml" href="/mafitapay.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Viewport Configuration with Notch Support -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- App Meta Information -->
+    <meta name="description" content="MafitaPay - Your trusted mobile payment solution for fast, secure, and convenient transactions" />
     <title>MafitaPay</title>
+    
+    <!-- Apple iOS Configuration -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MafitaPay" />
+    
+    <!-- Android Chrome Configuration -->
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="format-detection" content="telephone=no" />
+    
+    <!-- Color Scheme Support -->
+    <meta name="color-scheme" content="dark light" />
+    <meta name="supported-color-schemes" content="dark light" />
 
     <!-- 2. Disable text selection on forms -->
     <style>
@@ -18,11 +37,22 @@
       input, textarea { -webkit-user-select: text !important; user-select: text !important; }
     </style>
 
-    <!-- 3. Dark mode (optional but pro) -->
+    <!-- 3. Dark mode and contrast support -->
     <style>
       @media (prefers-color-scheme: dark) {
         body { background: #121212; color: #fff; }
         .card { background: #1e1e1e; }
+      }
+      
+      /* High contrast support */
+      @media (prefers-contrast: high) {
+        body { border: 2px solid currentColor; }
+        button, input { border: 2px solid currentColor; }
+      }
+      
+      /* Low contrast support */
+      @media (prefers-contrast: low) {
+        body { opacity: 0.95; }
       }
     </style>
   </head>
