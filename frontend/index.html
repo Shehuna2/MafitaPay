@@ -45,8 +45,10 @@
       
       /* High contrast support */
       @media (prefers-contrast: high) {
-        body { border: 2px solid currentColor; }
-        button, input { border: 2px solid currentColor; }
+        * { border-color: currentColor !important; }
+        button, a, input, select, textarea { 
+          border: 1px solid currentColor !important;
+        }
       }
       
       /* Low contrast support */
