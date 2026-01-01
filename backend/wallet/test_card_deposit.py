@@ -518,3 +518,473 @@ class CardDepositWebhookTestCase(TestCase):
         # Wallet should still be at 0 (not double-credited)
         self.wallet.refresh_from_db()
         self.assertEqual(self.wallet.balance, Decimal('0.00'))
+
+
+class WebhookLoggingTestCase(TestCase):
+    """Test enhanced webhook logging functionality"""
+    
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="test@example.com",
+            password="testpass123"
+        )
+        self.wallet = Wallet.objects.get(user=self.user)
+        self.wallet.balance = Decimal("0.00")
+        self.wallet.save()
+        
+        self.card_deposit = CardDeposit.objects.create(
+            user=self.user,
+            currency='USD',
+            amount=Decimal('100.00'),
+            exchange_rate=Decimal('1500.00'),
+            gross_ngn=Decimal('150000.00'),
+            flutterwave_fee=Decimal('2100.00'),
+            platform_margin=Decimal('750.00'),
+            ngn_amount=Decimal('147150.00'),
+            flutterwave_tx_ref='CARD_LOG_TEST',
+            status='processing'
+        )
+    
+    @patch('wallet.services.flutterwave_card_service.FlutterwaveCardService')
+    def test_webhook_missing_card_deposit_creates_retry_entry(self, mock_fw_service):
+        """Test that missing CardDeposit creates a permanent failure retry entry"""
+        from rest_framework.test import APIClient
+        from .models import WebhookRetryQueue
+        
+        # Mock webhook signature verification
+        mock_instance = MagicMock()
+        mock_instance.verify_webhook_signature.return_value = True
+        mock_fw_service.return_value = mock_instance
+        
+        payload = {
+            'event': 'charge.completed',
+            'data': {
+                'tx_ref': 'NONEXISTENT_TX_REF',
+                'id': 'flw_999',
+                'status': 'successful',
+                'amount': 100
+            }
+        }
+        
+        client = APIClient()
+        response = client.post(
+            '/api/wallet/flutterwave-card-webhook/',
+            data=payload,
+            format='json',
+            HTTP_VERIF_HASH='test_signature'
+        )
+        
+        self.assertEqual(response.status_code, 404)
+        
+        # Check that retry queue entry was created
+        retry_entry = WebhookRetryQueue.objects.filter(
+            webhook_type='card_deposit',
+            tx_ref='NONEXISTENT_TX_REF'
+        ).first()
+        
+        self.assertIsNotNone(retry_entry)
+        self.assertEqual(retry_entry.status, 'failed_permanent')
+        self.assertTrue(retry_entry.is_permanent_failure)
+        self.assertIn('CardDeposit record not found', retry_entry.error_message)
+    
+    @patch('wallet.webhooks.Wallet.objects.select_for_update')
+    @patch('wallet.services.flutterwave_card_service.FlutterwaveCardService')
+    def test_webhook_wallet_not_found_creates_transient_retry(self, mock_fw_service, mock_wallet_qs):
+        """Test that missing Wallet creates a transient failure retry entry"""
+        from rest_framework.test import APIClient
+        from .models import WebhookRetryQueue
+        
+        # Mock webhook signature verification
+        mock_instance = MagicMock()
+        mock_instance.verify_webhook_signature.return_value = True
+        mock_fw_service.return_value = mock_instance
+        
+        # Mock wallet not found
+        mock_wallet_qs.return_value.get.side_effect = Wallet.DoesNotExist
+        
+        payload = {
+            'event': 'charge.completed',
+            'data': {
+                'tx_ref': 'CARD_LOG_TEST',
+                'id': 'flw_123456',
+                'status': 'successful',
+                'amount': 100
+            }
+        }
+        
+        client = APIClient()
+        response = client.post(
+            '/api/wallet/flutterwave-card-webhook/',
+            data=payload,
+            format='json',
+            HTTP_VERIF_HASH='test_signature'
+        )
+        
+        self.assertEqual(response.status_code, 500)
+        self.assertTrue(response.json().get('will_retry'))
+        
+        # Check that retry queue entry was created
+        retry_entry = WebhookRetryQueue.objects.filter(
+            webhook_type='card_deposit',
+            tx_ref='CARD_LOG_TEST'
+        ).first()
+        
+        self.assertIsNotNone(retry_entry)
+        self.assertEqual(retry_entry.status, 'pending')
+        self.assertFalse(retry_entry.is_permanent_failure)
+        self.assertEqual(retry_entry.retry_count, 1)
+        self.assertIsNotNone(retry_entry.next_retry_at)
+    
+    @patch('wallet.models.Wallet.deposit')
+    @patch('wallet.services.flutterwave_card_service.FlutterwaveCardService')
+    def test_webhook_wallet_deposit_failure_creates_retry(self, mock_fw_service, mock_deposit):
+        """Test that wallet.deposit() failure creates a retry entry"""
+        from rest_framework.test import APIClient
+        from .models import WebhookRetryQueue
+        
+        # Mock webhook signature verification
+        mock_instance = MagicMock()
+        mock_instance.verify_webhook_signature.return_value = True
+        mock_fw_service.return_value = mock_instance
+        
+        # Mock deposit failure
+        mock_deposit.return_value = False
+        
+        payload = {
+            'event': 'charge.completed',
+            'data': {
+                'tx_ref': 'CARD_LOG_TEST',
+                'id': 'flw_123456',
+                'status': 'successful',
+                'amount': 100,
+                'card': {
+                    'last4digits': '1234',
+                    'type': 'visa'
+                }
+            }
+        }
+        
+        client = APIClient()
+        response = client.post(
+            '/api/wallet/flutterwave-card-webhook/',
+            data=payload,
+            format='json',
+            HTTP_VERIF_HASH='test_signature'
+        )
+        
+        self.assertEqual(response.status_code, 500)
+        self.assertTrue(response.json().get('will_retry'))
+        
+        # Check that retry queue entry was created
+        retry_entry = WebhookRetryQueue.objects.filter(
+            webhook_type='card_deposit',
+            tx_ref='CARD_LOG_TEST'
+        ).first()
+        
+        self.assertIsNotNone(retry_entry)
+        self.assertEqual(retry_entry.status, 'pending')
+        self.assertEqual(retry_entry.error_type, 'WalletDepositFailed')
+
+
+class WebhookRetryQueueTestCase(TestCase):
+    """Test WebhookRetryQueue model functionality"""
+    
+    def setUp(self):
+        from .models import WebhookRetryQueue
+        self.retry_entry = WebhookRetryQueue.objects.create(
+            webhook_type='card_deposit',
+            tx_ref='TEST_RETRY_123',
+            payload={'test': 'data'},
+            signature='test_sig'
+        )
+    
+    def test_calculate_next_retry_exponential_backoff(self):
+        """Test exponential backoff calculation"""
+        # First retry: 2^0 = 1 minute
+        next_retry = self.retry_entry.calculate_next_retry()
+        self.assertIsNotNone(next_retry)
+        
+        # Second retry: 2^1 = 2 minutes
+        self.retry_entry.retry_count = 1
+        next_retry = self.retry_entry.calculate_next_retry()
+        self.assertIsNotNone(next_retry)
+        
+        # Third retry: 2^2 = 4 minutes
+        self.retry_entry.retry_count = 2
+        next_retry = self.retry_entry.calculate_next_retry()
+        self.assertIsNotNone(next_retry)
+        
+        # Max retries reached
+        self.retry_entry.retry_count = 5
+        next_retry = self.retry_entry.calculate_next_retry()
+        self.assertIsNone(next_retry)
+    
+    def test_mark_permanent_failure(self):
+        """Test marking as permanent failure"""
+        self.retry_entry.mark_permanent_failure(
+            'Invalid transaction',
+            'InvalidTransaction'
+        )
+        
+        self.assertTrue(self.retry_entry.is_permanent_failure)
+        self.assertEqual(self.retry_entry.status, 'failed_permanent')
+        self.assertEqual(self.retry_entry.error_message, 'Invalid transaction')
+        self.assertEqual(self.retry_entry.error_type, 'InvalidTransaction')
+    
+    def test_mark_transient_failure(self):
+        """Test marking as transient failure with retry scheduling"""
+        self.retry_entry.mark_transient_failure(
+            'Database lock timeout',
+            'DatabaseError'
+        )
+        
+        self.assertFalse(self.retry_entry.is_permanent_failure)
+        self.assertEqual(self.retry_entry.status, 'pending')
+        self.assertEqual(self.retry_entry.retry_count, 1)
+        self.assertIsNotNone(self.retry_entry.next_retry_at)
+        self.assertIsNotNone(self.retry_entry.last_retry_at)
+    
+    def test_mark_transient_failure_max_retries(self):
+        """Test that max retries marks as failed"""
+        self.retry_entry.retry_count = 4  # One before max
+        self.retry_entry.mark_transient_failure('Still failing', 'Error')
+        
+        # Should now be at max retries (5)
+        self.assertEqual(self.retry_entry.retry_count, 5)
+        self.assertEqual(self.retry_entry.status, 'failed_transient')
+        self.assertTrue(self.retry_entry.is_permanent_failure)
+    
+    def test_mark_success(self):
+        """Test marking as successful"""
+        self.retry_entry.retry_count = 2
+        self.retry_entry.mark_success()
+        
+        self.assertEqual(self.retry_entry.status, 'succeeded')
+        self.assertIsNotNone(self.retry_entry.succeeded_at)
+
+
+class WebhookDebugEndpointTestCase(TestCase):
+    """Test webhook debug endpoint"""
+    
+    def setUp(self):
+        self.admin_user = User.objects.create_superuser(
+            email="admin@example.com",
+            password="testpass123"
+        )
+        self.regular_user = User.objects.create_user(
+            email="user@example.com",
+            password="testpass123"
+        )
+        self.wallet = Wallet.objects.get(user=self.regular_user)
+        
+        self.card_deposit = CardDeposit.objects.create(
+            user=self.regular_user,
+            currency='USD',
+            amount=Decimal('100.00'),
+            exchange_rate=Decimal('1500.00'),
+            gross_ngn=Decimal('150000.00'),
+            flutterwave_fee=Decimal('2100.00'),
+            platform_margin=Decimal('750.00'),
+            ngn_amount=Decimal('147150.00'),
+            flutterwave_tx_ref='DEBUG_TEST_123',
+            status='processing'
+        )
+    
+    def test_debug_endpoint_requires_admin(self):
+        """Test that debug endpoint requires admin permissions"""
+        from rest_framework.test import APIClient
+        
+        client = APIClient()
+        client.force_authenticate(user=self.regular_user)
+        
+        response = client.get('/api/wallet/card-deposit/webhook-debug/?tx_ref=DEBUG_TEST_123')
+        self.assertEqual(response.status_code, 403)
+    
+    def test_debug_endpoint_get_history(self):
+        """Test getting webhook processing history"""
+        from rest_framework.test import APIClient
+        from .models import WebhookRetryQueue
+        
+        # Create some retry history
+        retry1 = WebhookRetryQueue.objects.create(
+            webhook_type='card_deposit',
+            tx_ref='DEBUG_TEST_123',
+            payload={'test': 'data'},
+            status='failed_transient',
+            retry_count=2
+        )
+        
+        client = APIClient()
+        client.force_authenticate(user=self.admin_user)
+        
+        response = client.get('/api/wallet/card-deposit/webhook-debug/?tx_ref=DEBUG_TEST_123')
+        self.assertEqual(response.status_code, 200)
+        
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['tx_ref'], 'DEBUG_TEST_123')
+        self.assertIsNotNone(data['card_deposit'])
+        self.assertEqual(len(data['retry_history']), 1)
+        self.assertEqual(data['retry_history'][0]['retry_count'], 2)
+    
+    def test_debug_endpoint_manual_reprocess(self):
+        """Test manual webhook re-processing"""
+        from rest_framework.test import APIClient
+        
+        client = APIClient()
+        client.force_authenticate(user=self.admin_user)
+        
+        # Initial balance
+        self.assertEqual(self.wallet.balance, Decimal('0.00'))
+        
+        response = client.post(
+            '/api/wallet/card-deposit/webhook-debug/',
+            {'tx_ref': 'DEBUG_TEST_123'},
+            format='json'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        
+        # Verify wallet was credited
+        self.wallet.refresh_from_db()
+        self.assertEqual(self.wallet.balance, Decimal('147150.00'))
+        
+        # Verify card deposit status updated
+        self.card_deposit.refresh_from_db()
+        self.assertEqual(self.card_deposit.status, 'successful')
+    
+    def test_debug_endpoint_prevents_double_credit(self):
+        """Test that manual reprocessing doesn't double-credit"""
+        from rest_framework.test import APIClient
+        
+        # Mark as already successful and create wallet transaction
+        self.card_deposit.status = 'successful'
+        self.card_deposit.save()
+        
+        self.wallet.deposit(
+            amount=self.card_deposit.ngn_amount,
+            reference='DEBUG_TEST_123',
+            metadata={'type': 'card_deposit'}
+        )
+        
+        self.wallet.refresh_from_db()
+        initial_balance = self.wallet.balance
+        
+        client = APIClient()
+        client.force_authenticate(user=self.admin_user)
+        
+        response = client.post(
+            '/api/wallet/card-deposit/webhook-debug/',
+            {'tx_ref': 'DEBUG_TEST_123'},
+            format='json'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['already_processed'])
+        
+        # Balance should not change
+        self.wallet.refresh_from_db()
+        self.assertEqual(self.wallet.balance, initial_balance)
+
+
+class WebhookRetryProcessTestCase(TestCase):
+    """Test webhook retry processing endpoint"""
+    
+    def setUp(self):
+        self.admin_user = User.objects.create_superuser(
+            email="admin@example.com",
+            password="testpass123"
+        )
+        self.user = User.objects.create_user(
+            email="user@example.com",
+            password="testpass123"
+        )
+        self.wallet = Wallet.objects.get(user=self.user)
+        
+        self.card_deposit = CardDeposit.objects.create(
+            user=self.user,
+            currency='USD',
+            amount=Decimal('100.00'),
+            exchange_rate=Decimal('1500.00'),
+            gross_ngn=Decimal('150000.00'),
+            flutterwave_fee=Decimal('2100.00'),
+            platform_margin=Decimal('750.00'),
+            ngn_amount=Decimal('147150.00'),
+            flutterwave_tx_ref='RETRY_PROC_123',
+            flutterwave_tx_id='flw_999',
+            status='processing'
+        )
+    
+    def test_retry_process_requires_admin(self):
+        """Test that retry process endpoint requires admin"""
+        from rest_framework.test import APIClient
+        
+        client = APIClient()
+        response = client.post('/api/wallet/webhook-retry/process/')
+        self.assertEqual(response.status_code, 401)
+    
+    def test_retry_process_successful_retry(self):
+        """Test successful retry processing"""
+        from rest_framework.test import APIClient
+        from .models import WebhookRetryQueue
+        from django.utils import timezone
+        
+        # Create a pending retry that's due
+        retry_entry = WebhookRetryQueue.objects.create(
+            webhook_type='card_deposit',
+            tx_ref='RETRY_PROC_123',
+            payload={'event': 'charge.completed'},
+            status='pending',
+            retry_count=1,
+            next_retry_at=timezone.now() - timezone.timedelta(minutes=5)
+        )
+        
+        client = APIClient()
+        client.force_authenticate(user=self.admin_user)
+        
+        response = client.post('/api/wallet/webhook-retry/process/')
+        self.assertEqual(response.status_code, 200)
+        
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['processed_count'], 1)
+        
+        # Check retry entry was marked as successful
+        retry_entry.refresh_from_db()
+        self.assertEqual(retry_entry.status, 'succeeded')
+        
+        # Check wallet was credited
+        self.wallet.refresh_from_db()
+        self.assertEqual(self.wallet.balance, Decimal('147150.00'))
+    
+    def test_retry_process_only_processes_due_retries(self):
+        """Test that only due retries are processed"""
+        from rest_framework.test import APIClient
+        from .models import WebhookRetryQueue
+        from django.utils import timezone
+        
+        # Create a pending retry that's NOT due yet
+        retry_entry = WebhookRetryQueue.objects.create(
+            webhook_type='card_deposit',
+            tx_ref='RETRY_PROC_123',
+            payload={'event': 'charge.completed'},
+            status='pending',
+            retry_count=1,
+            next_retry_at=timezone.now() + timezone.timedelta(hours=1)
+        )
+        
+        client = APIClient()
+        client.force_authenticate(user=self.admin_user)
+        
+        response = client.post('/api/wallet/webhook-retry/process/')
+        self.assertEqual(response.status_code, 200)
+        
+        data = response.json()
+        self.assertEqual(data['processed_count'], 0)
+        
+        # Retry entry should still be pending
+        retry_entry.refresh_from_db()
+        self.assertEqual(retry_entry.status, 'pending')
