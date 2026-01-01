@@ -425,16 +425,20 @@ class BiometricDisableView(APIView):
 class BiometricStatusView(APIView):
     """
     GET /api/biometric/status/
-    Check if user has biometric enabled
+    Check if user has biometric enabled and provides detailed enrollment info
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
+        has_credential = bool(user.webauthn_credential_id)
+        
         return Response({
             "enabled": user.biometric_enabled,
             "registered_at": user.biometric_registered_at,
-            "has_credential": bool(user.webauthn_credential_id),
+            "has_credential": has_credential,
+            "is_enrolled": user.biometric_enabled and has_credential,
+            "platform": getattr(user, 'biometric_platform', None),
         }, status=status.HTTP_200_OK)
 
 
@@ -457,26 +461,39 @@ class BiometricLoginView(APIView):
     def post(self, request):
         serializer = BiometricLoginSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Invalid request data."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             email = serializer.validated_data['email']
             platform = serializer.validated_data.get('platform', 'web')
             
             # Get user
-            user = User.objects.get(email=email)
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                # Return generic error to prevent user enumeration
+                logger.warning(f"Biometric login attempt for non-existent user: {email}")
+                return Response(
+                    {"error": "Biometric authentication failed. Please use your password to login."},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
 
             # Check if biometric is enabled
             if not user.biometric_enabled:
+                logger.info(f"Biometric login attempt for user without biometric enabled: {email}")
                 return Response(
-                    {"error": "Biometric authentication not enabled for this account."},
+                    {"error": "Biometric authentication is not enabled for this account. Please login with your password and enroll biometric in settings."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
             # Check if user has biometric credential
             if not user.webauthn_credential_id:
+                logger.info(f"Biometric login attempt for user without credential: {email}")
                 return Response(
-                    {"error": "No biometric credential registered."},
+                    {"error": "No biometric credential registered. Please login with your password and enroll biometric in settings."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -501,15 +518,9 @@ class BiometricLoginView(APIView):
                 "refresh": refresh_token,
             }, status=status.HTTP_200_OK)
 
-        except User.DoesNotExist:
-            # Return generic error to prevent user enumeration
-            return Response(
-                {"error": "Biometric authentication failed."},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
         except Exception as e:
             logger.error(f"Error during biometric login: {e}")
             return Response(
-                {"error": "Biometric authentication failed."},
+                {"error": "An unexpected error occurred. Please use your password to login."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
