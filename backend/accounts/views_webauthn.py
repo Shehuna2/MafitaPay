@@ -35,6 +35,12 @@ class WebAuthnChallengeView(views.APIView):
             display_name=user.email,
         )
 
+        # Check if user has registered a credential
+        if not user.webauthn_credential_id:
+            return Response({
+                "detail": "Biometric credential not registered. Please register your biometric authentication first."
+            }, status=400)
+
         # create authentication options
         auth_data, state = server.authenticate_begin([{
             "id": base64.urlsafe_b64decode(user.webauthn_credential_id),
@@ -65,6 +71,12 @@ class WebAuthnVerifyView(views.APIView):
         state = CHALLENGES.get(user.id)
         if not state:
             return Response({"detail": "No challenge found"}, status=400)
+
+        # Check if user has registered a credential
+        if not user.webauthn_credential_id:
+            return Response({
+                "detail": "Biometric credential not registered. Please register your biometric authentication first."
+            }, status=400)
 
         # Decode the response from client
         assertion = cbor.decode(base64.urlsafe_b64decode(assertion_response))
