@@ -48,14 +48,7 @@ class AppSettings(models.Model):
         Also clear cache when settings are updated.
         """
         self.pk = 1
-        # Check if instance exists
-        if not AppSettings.objects.filter(pk=1).exists():
-            # First time saving, use default behavior
-            super().save(*args, **kwargs)
-        else:
-            # Update existing instance
-            kwargs['force_update'] = True
-            super().save(*args, **kwargs)
+        super().save(*args, **kwargs)
         # Clear cache when settings are updated
         cache.delete('maintenance_settings')
 

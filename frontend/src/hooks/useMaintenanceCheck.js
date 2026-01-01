@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const BASE_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000/api").replace(/\/$/, "");
@@ -15,7 +15,7 @@ const useMaintenanceCheck = (pollInterval = 30000) => {
     error: null,
   });
 
-  const checkMaintenanceStatus = async () => {
+  const checkMaintenanceStatus = useCallback(async () => {
     try {
       const response = await axios.get(`${BASE_URL}/maintenance-status/`);
       
@@ -43,7 +43,7 @@ const useMaintenanceCheck = (pollInterval = 30000) => {
         }));
       }
     }
-  };
+  }, []);
 
   useEffect(() => {
     // Check immediately on mount
@@ -54,7 +54,7 @@ const useMaintenanceCheck = (pollInterval = 30000) => {
       const interval = setInterval(checkMaintenanceStatus, pollInterval);
       return () => clearInterval(interval);
     }
-  }, [pollInterval]);
+  }, [pollInterval, checkMaintenanceStatus]);
 
   return {
     ...maintenanceStatus,

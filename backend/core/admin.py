@@ -53,8 +53,5 @@ class AppSettingsAdmin(admin.ModelAdmin):
         """Set start_time when enabling maintenance mode"""
         if obj.maintenance_enabled and not obj.maintenance_start_time:
             obj.maintenance_start_time = timezone.now()
-        elif not obj.maintenance_enabled:
-            # Reset times when disabling maintenance
-            obj.maintenance_start_time = None
-            obj.maintenance_end_time = None
+        # Note: We don't clear times when disabling to preserve history
         super().save_model(request, obj, form, change)
