@@ -557,7 +557,7 @@ export default function useBiometricAuth() {
       setChecking(false);
       return { 
         success: false, 
-        error: err.message || "An unexpected error occurred. Please use your password.",
+        error: err instanceof Error ? err.message : String(err) || "An unexpected error occurred. Please use your password.",
         errorType: "UNEXPECTED_ERROR"
       };
     }
