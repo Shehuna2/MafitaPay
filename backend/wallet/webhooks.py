@@ -578,8 +578,13 @@ def health(request):
 def flutterwave_card_webhook(request):
     """
     Flutterwave Card Charge Webhook Handler
-    Handles card charge completion events with signature verification
-    Enhanced with detailed logging for debugging deposit issues
+    
+    Handles card charge completion events with:
+    - Signature verification for security
+    - Comprehensive logging at each processing step
+    - Automatic retry queuing for transient failures
+    - Idempotency checks to prevent double-crediting
+    - Detailed error tracking and diagnostics
     """
     # Status constants for cleaner comparison
     SUCCESS_STATUSES = {'successful', 'success'}
