@@ -581,7 +581,7 @@ export default function useBiometricAuth() {
       console.log("Verifying biometric for token refresh");
       const biometricResult = await verifyBiometric();
       if (!biometricResult.success) {
-        console.error("Biometric verification failed:", biometricResult.error);
+        console.error("Biometric verification failed:", biometricResult.errorType || "VERIFICATION_FAILED");
         setChecking(false);
         return { 
           success: false, 
