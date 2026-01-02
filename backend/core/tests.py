@@ -55,6 +55,36 @@ class AnalyticsCacheTableTestCase(TestCase):
         value = cache.get('expiring_key')
         self.assertIsNone(value, "Cache entry should be cleared")
 
+    def test_cache_timezone_aware_datetime(self):
+        """
+        Test that cache operations work with timezone-aware datetimes.
+        This validates the fix for: TypeError: can't compare offset-naive 
+        and offset-aware datetimes
+        """
+        cache.clear()
+        
+        # Store a model instance with timezone-aware datetime fields
+        settings = AppSettings.objects.create(
+            maintenance_enabled=True,
+            maintenance_start_time=timezone.now(),
+            maintenance_end_time=timezone.now() + timedelta(hours=2)
+        )
+        
+        # Cache the settings object
+        cache.set('test_settings', settings, timeout=60)
+        
+        # Retrieve from cache - this should not raise TypeError
+        cached_settings = cache.get('test_settings')
+        
+        # Verify the object was cached and retrieved successfully
+        self.assertIsNotNone(cached_settings)
+        self.assertEqual(cached_settings.pk, settings.pk)
+        self.assertEqual(cached_settings.maintenance_enabled, True)
+        
+        # Verify datetime fields are timezone-aware
+        self.assertIsNotNone(cached_settings.maintenance_start_time.tzinfo)
+        self.assertIsNotNone(cached_settings.maintenance_end_time.tzinfo)
+
 
 class AppSettingsModelTestCase(TestCase):
     """Test the AppSettings model"""
