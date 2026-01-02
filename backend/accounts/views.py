@@ -55,8 +55,12 @@ class RegisterView(generics.GenericAPIView):
             first_name = getattr(profile, "first_name", "")
             last_name = getattr(profile, "last_name", "")
 
-            # Send verification email synchronously
-            send_verification_email_sync(user.email, verification_url, first_name, last_name)
+            # Send verification email synchronously - but don't fail registration if it fails
+            try:
+                send_verification_email_sync(user.email, verification_url, first_name, last_name)
+                logger.info(f"Verification email sent to {user.email}")
+            except Exception as e:
+                logger.error(f"Failed to send verification email to {user.email}, user can resend later: {e}")
 
             logger.info(f"Registration complete for {user.email}, verification sent to {verification_url}")
             return Response(
