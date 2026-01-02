@@ -154,6 +154,7 @@ INSTALLED_APPS = [
     "gasfee",
     "bills",
     "core",  # Maintenance mode app
+    "analytics",  # CEO Analytics Dashboard
 ]
 
 MIDDLEWARE = [
@@ -217,10 +218,22 @@ SIMPLE_JWT = {
 }
 
 # --------------------------------------------------
-# 13. CHANNELS & CACHE (in-memory = zero config)
+# 13. CHANNELS & CACHE
 # --------------------------------------------------
-CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+# Use database cache for analytics (built-in, no extra dependencies)
+# For production scaling, can easily switch to Redis without breaking existing code
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "analytics_cache_table",
+        "OPTIONS": {
+            "MAX_ENTRIES": 1000,  # Limit cache size
+            "CULL_FREQUENCY": 3,  # Remove 1/3 of entries when max is reached
+        }
+    }
+}
 CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
+
 
 
 # --------------------------------------------------

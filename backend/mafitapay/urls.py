@@ -22,6 +22,7 @@ urlpatterns = [
     path('api/', include('bills.urls')),
     path('api/', include('rewards.urls')),
     path('api/', include('core.urls')),  # Maintenance mode API
+    path('api/analytics/', include('analytics.urls')),  # CEO Analytics Dashboard
     path('debug-urls/', debug_urls),  
 ]
 
