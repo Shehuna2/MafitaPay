@@ -158,3 +158,36 @@ class PaymentProof(models.Model):
 
     def __str__(self):
         return f"Proof for Order #{self.order.id}"
+
+
+class TransactionMonitoring(models.Model):
+    """
+    Model for tracking suspicious transaction patterns and fraud detection.
+    """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    event_type = models.CharField(max_length=50)  # e.g., 'rapid_purchase', 'unusual_amount'
+    severity = models.CharField(max_length=20, default='low')  # low, medium, high
+    description = models.TextField()
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed = models.BooleanField(default=False)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='reviewed_transactions'
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['event_type', 'severity']),
+            models.Index(fields=['reviewed']),
+        ]
+
+    def __str__(self):
+        return f"{self.event_type} - {self.user.username} - {self.created_at}"
