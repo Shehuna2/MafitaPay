@@ -23,9 +23,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Analytics Configuration Constants
-PROFIT_MARGIN = 0.80  # 80% profit margin for revenue calculations
-EXPENSE_RATIO = 0.20  # 20% expense ratio for revenue calculations
-CAC_EXPENSE_RATIO = 0.20  # Customer acquisition cost as 20% of revenue
+PROFIT_MARGIN = 0.80  # Assumed profit margin (80%) for simplified profit calculations
+EXPENSE_RATIO = 0.20  # Assumed expense ratio (20% of revenue) for simplified expense calculations
+CAC_EXPENSE_RATIO = 0.20  # Assumed customer acquisition cost as 20% of revenue (simplified)
 DAU_TARGET_PERCENTAGE = 0.30  # Target 30% of total users as daily active users
 MAU_TARGET_PERCENTAGE = 0.70  # Target 70% of total users as monthly active users
 BILL_PAYMENT_CATEGORIES = ['airtime', 'data', 'cable', 'electricity', 'education']
@@ -711,7 +711,7 @@ class UserAnalyticsView(APIView):
                         'username': item['referred_by__email'] or 'Unknown',
                         'referral_count': item['referral_count'],
                         'active_referrals': item['active_referrals'],
-                        'total_revenue': 0.0  # Can be calculated from referee transactions
+                        'total_revenue': 0.0  # TODO: Calculate from referee transactions
                     }
                     for item in referrer_stats
                 ]
@@ -1146,16 +1146,20 @@ class KPIAnalyticsView(APIView):
             transaction_success_rate = round(safe_divide(successful_tx, total_tx, 0) * 100, 2)
             prev_success_rate = round(safe_divide(prev_successful_tx, prev_total_tx, 0) * 100, 2)
             
-            # CAC - Customer Acquisition Cost (simplified - marketing spend / new users)
-            # Using a simplified calculation: total expenses / new users in period
+            # CAC - Customer Acquisition Cost (simplified)
+            # Note: Using total expenses as proxy for acquisition costs
+            # In production, this should use actual marketing/acquisition spend
             new_users_period = User.objects.filter(date_joined__gte=start_date).count()
-            cac = safe_divide(float(total_revenue) * CAC_EXPENSE_RATIO, new_users_period, 0)
+            acquisition_expenses = float(total_revenue) * CAC_EXPENSE_RATIO
+            cac = safe_divide(acquisition_expenses, new_users_period, 0)
             
-            # ARPU - Average Revenue Per User
+            # ARPU - Average Revenue Per User (current period)
+            # Note: Using current period revenue divided by active users in period
             arpu = safe_divide(float(total_revenue), active_users, 0)
             prev_arpu = safe_divide(float(prev_revenue), prev_active_users, 0)
             
-            # Churn rate (simplified - users who became inactive)
+            # Churn rate (simplified estimation)
+            # Note: This is a simplified calculation. In production, implement cohort-based churn
             total_users_prev_period = User.objects.filter(date_joined__lt=start_date).count()
             churn_rate = round(safe_divide(total_users_prev_period - active_users, total_users_prev_period, 0) * 100, 2)
             
