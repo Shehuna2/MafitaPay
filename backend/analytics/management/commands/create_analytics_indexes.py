@@ -59,16 +59,28 @@ class Command(BaseCommand):
                     "CREATE INDEX idx_bonus_created_status ON rewards_bonus(created_at, status)",
                 ]
             
-            for index_sql in indexes:
+            # Define table names for clearer output messages
+            table_names = [
+                'wallet_wallettransaction',
+                'wallet_wallettransaction',
+                'wallet_wallettransaction',
+                'accounts_user',
+                'accounts_user',
+                'p2p_depositorder',
+                'gasfee_cryptopurchase',
+                'rewards_bonus',
+            ]
+            
+            for index_sql, table_name in zip(indexes, table_names):
                 try:
                     cursor.execute(index_sql)
-                    self.stdout.write(self.style.SUCCESS(f'✓ Created: {index_sql.split("ON")[1].split("(")[0].strip()}'))
+                    self.stdout.write(self.style.SUCCESS(f'✓ Created index on: {table_name}'))
                 except Exception as e:
                     # Index might already exist
                     if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
-                        self.stdout.write(self.style.WARNING(f'○ Already exists: {index_sql.split("ON")[1].split("(")[0].strip()}'))
+                        self.stdout.write(self.style.WARNING(f'○ Index already exists on: {table_name}'))
                     else:
-                        self.stdout.write(self.style.ERROR(f'✗ Error creating index: {str(e)}'))
+                        self.stdout.write(self.style.ERROR(f'✗ Error creating index on {table_name}: {str(e)}'))
         
         self.stdout.write(self.style.SUCCESS('\nAnalytics indexes created successfully!'))
         self.stdout.write('These indexes will improve query performance for the CEO dashboard.')

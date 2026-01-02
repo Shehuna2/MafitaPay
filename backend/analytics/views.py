@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework import status
 
 from accounts.models import User
-from wallet.models import Wallet, WalletTransaction, Deposit
+from wallet.models import Wallet, WalletTransaction
 from p2p.models import DepositOrder, WithdrawOrder, Deposit_P2P_Offer, Withdraw_P2P_Offer
 from gasfee.models import CryptoPurchase
 from rewards.models import Bonus
@@ -21,6 +21,17 @@ from rewards.models import Bonus
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def safe_divide(numerator, denominator, default=0):
+    """Safely divide two numbers, returning default if denominator is zero"""
+    try:
+        denom = float(denominator) if denominator else 0
+        if denom == 0:
+            return default
+        return float(numerator) / denom
+    except (TypeError, ValueError, ZeroDivisionError):
+        return default
 
 
 class DashboardOverviewView(APIView):
@@ -92,7 +103,8 @@ class DashboardOverviewView(APIView):
                 'users': {
                     'total': total_users,
                     'new': new_users,
-                    'growth_rate': round((new_users / max(total_users - new_users, 1)) * 100, 2)
+                    # Growth rate: (new users / previous total) * 100
+                    'growth_rate': round(safe_divide(new_users, total_users - new_users, 0) * 100, 2)
                 },
                 'wallet': {
                     'total_balance': float(total_balance),
@@ -102,11 +114,11 @@ class DashboardOverviewView(APIView):
                 'transactions': {
                     'total_volume': float(tx_stats['total_volume'] or 0),
                     'total_count': tx_stats['total_count'] or 0,
-                    'average_transaction': float((tx_stats['total_volume'] or 0) / max(tx_stats['total_count'] or 1, 1))
+                    'average_transaction': round(safe_divide(tx_stats['total_volume'] or 0, tx_stats['total_count'] or 0, 0), 2)
                 },
                 'revenue': {
                     'total': float(total_revenue),
-                    'daily_average': float(total_revenue / max(days, 1))
+                    'daily_average': round(safe_divide(total_revenue, days, 0), 2)
                 },
                 'p2p': {
                     'orders': p2p_orders['count'] or 0,
@@ -197,7 +209,7 @@ class TransactionAnalyticsView(APIView):
                     'total_transactions': total_tx,
                     'successful': successful_tx,
                     'failed': failed_tx,
-                    'success_rate': round((successful_tx / max(total_tx, 1)) * 100, 2)
+                    'success_rate': round(safe_divide(successful_tx, total_tx, 0) * 100, 2)
                 },
                 'by_category': [
                     {
@@ -304,17 +316,17 @@ class RevenueAnalyticsView(APIView):
                     'deposits': {
                         'revenue': float(deposit_revenue['total'] or 0),
                         'count': deposit_revenue['count'] or 0,
-                        'percentage': round((float(deposit_revenue['total'] or 0) / max(float(total_revenue), 1)) * 100, 2)
+                        'percentage': round(safe_divide(deposit_revenue['total'] or 0, total_revenue, 0) * 100, 2)
                     },
                     'p2p': {
                         'revenue': float(p2p_revenue['total'] or 0),
                         'count': p2p_revenue['count'] or 0,
-                        'percentage': round((float(p2p_revenue['total'] or 0) / max(float(total_revenue), 1)) * 100, 2)
+                        'percentage': round(safe_divide(p2p_revenue['total'] or 0, total_revenue, 0) * 100, 2)
                     },
                     'crypto': {
                         'revenue': float(crypto_revenue['total'] or 0),
                         'count': crypto_revenue['count'] or 0,
-                        'percentage': round((float(crypto_revenue['total'] or 0) / max(float(total_revenue), 1)) * 100, 2)
+                        'percentage': round(safe_divide(crypto_revenue['total'] or 0, total_revenue, 0) * 100, 2)
                     }
                 },
                 'monthly_trend': [
@@ -394,8 +406,8 @@ class UserAnalyticsView(APIView):
                     'merchants': merchants,
                     'active_users': active_users,
                     'users_with_wallets': users_with_wallets,
-                    'verification_rate': round((verified_users / max(total_users, 1)) * 100, 2),
-                    'activation_rate': round((active_users / max(total_users, 1)) * 100, 2)
+                    'verification_rate': round(safe_divide(verified_users, total_users, 0) * 100, 2),
+                    'activation_rate': round(safe_divide(active_users, total_users, 0) * 100, 2)
                 },
                 'engagement': {
                     'avg_transactions_per_user': round(tx_per_user['avg_tx'] or 0, 2)
@@ -502,7 +514,7 @@ class ServiceAnalyticsView(APIView):
                     'cancelled': p2p_deposit_orders['cancelled'] or 0,
                     'total_volume': float(p2p_deposit_orders['total_volume'] or 0),
                     'active_offers': active_p2p_offers,
-                    'completion_rate': round((p2p_deposit_orders['completed'] or 0) / max(p2p_deposit_orders['total_count'] or 1, 1) * 100, 2)
+                    'completion_rate': round(safe_divide(p2p_deposit_orders['completed'] or 0, p2p_deposit_orders['total_count'] or 0, 0) * 100, 2)
                 },
                 'crypto': {
                     'total_purchases': crypto_purchases['total_count'] or 0,
@@ -510,7 +522,7 @@ class ServiceAnalyticsView(APIView):
                     'pending': crypto_purchases['pending'] or 0,
                     'failed': crypto_purchases['failed'] or 0,
                     'total_volume': float(crypto_purchases['total_volume'] or 0),
-                    'success_rate': round((crypto_purchases['completed'] or 0) / max(crypto_purchases['total_count'] or 1, 1) * 100, 2),
+                    'success_rate': round(safe_divide(crypto_purchases['completed'] or 0, crypto_purchases['total_count'] or 0, 0) * 100, 2),
                     'by_network': [
                         {
                             'network': item['crypto__network'],
@@ -583,14 +595,14 @@ class KPIAnalyticsView(APIView):
             ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
             
             total_users = User.objects.count()
-            clv = total_revenue / max(total_users, 1)
+            clv = safe_divide(total_revenue, total_users, 0)
             
             # User retention (active users ratio)
             active_users = WalletTransaction.objects.filter(
                 created_at__gte=start_date
             ).values('user').distinct().count()
             
-            retention_rate = (active_users / max(total_users, 1)) * 100
+            retention_rate = safe_divide(active_users, total_users, 0) * 100
             
             # Bonus distribution
             bonus_stats = Bonus.objects.filter(
@@ -606,7 +618,7 @@ class KPIAnalyticsView(APIView):
                 'period_days': days,
                 'kpis': {
                     'total_platform_value': float(total_wallet_balance),
-                    'transaction_success_rate': round((successful_tx / max(total_tx, 1)) * 100, 2),
+                    'transaction_success_rate': round(safe_divide(successful_tx, total_tx, 0) * 100, 2),
                     'average_transaction_value': float(avg_tx_value),
                     'customer_lifetime_value': float(clv),
                     'user_retention_rate': round(retention_rate, 2),
@@ -618,7 +630,7 @@ class KPIAnalyticsView(APIView):
                     'total_count': bonus_stats['total_count'] or 0,
                     'unlocked': bonus_stats['unlocked'] or 0,
                     'used': bonus_stats['used'] or 0,
-                    'utilization_rate': round((bonus_stats['used'] or 0) / max(bonus_stats['total_count'] or 1, 1) * 100, 2)
+                    'utilization_rate': round(safe_divide(bonus_stats['used'] or 0, bonus_stats['total_count'] or 0, 0) * 100, 2)
                 },
                 'generated_at': timezone.now().isoformat()
             }
