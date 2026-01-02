@@ -183,10 +183,17 @@ class ResendVerificationEmailView(APIView):
             first_name = getattr(profile, "first_name", "")
             last_name = getattr(profile, "last_name", "")
 
-            send_verification_email_sync(user.email, verification_url, first_name, last_name)
-
-            logger.info(f"Verification email resent to {email} with link {verification_url}")
-            return Response({"message": "Verification email resent successfully."}, status=status.HTTP_200_OK)
+            # Send verification email - but don't fail if email service is down
+            try:
+                send_verification_email_sync(user.email, verification_url, first_name, last_name)
+                logger.info(f"Verification email resent to {email} with link {verification_url}")
+                return Response({"message": "Verification email resent successfully."}, status=status.HTTP_200_OK)
+            except Exception as e:
+                logger.error(f"Failed to resend verification email to {email}: {e}")
+                return Response(
+                    {"error": "Failed to send verification email. Please try again later."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
         except User.DoesNotExist:
             return Response({"error": "No account found with this email."}, status=status.HTTP_404_NOT_FOUND)

@@ -144,3 +144,26 @@ class EmailFailureHandlingTestCase(TestCase):
         
         # User should exist
         self.assertTrue(User.objects.filter(email='viewtest@example.com').exists())
+
+    @patch('accounts.views.send_verification_email_sync')
+    def test_resend_verification_handles_email_failure(self, mock_send_email):
+        """Test that ResendVerificationEmailView handles email failures gracefully"""
+        # Create an unverified user
+        user = User.objects.create_user(
+            email='resendtest@example.com',
+            password='TestPass123!'
+        )
+        user.is_email_verified = False
+        user.save()
+        
+        # Simulate email sending failure
+        mock_send_email.side_effect = Exception("Email service down")
+        
+        response = self.client.post('/api/resend-verification/', {
+            'email': 'resendtest@example.com'
+        })
+        
+        # Should return 500 with error message
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertIn('error', response.data)
+        self.assertIn('Failed to send verification email', response.data['error'])
