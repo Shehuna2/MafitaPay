@@ -43,7 +43,7 @@ const MetricCard = ({
             <p className="text-gray-500 text-xs">{subtitle}</p>
           )}
           
-          {trend !== undefined && (
+          {trend !== undefined && trend !== null && (
             <div className="flex items-center mt-2">
               {trend > 0 ? (
                 <FiTrendingUp className="text-green-500 mr-1" />
@@ -51,7 +51,7 @@ const MetricCard = ({
                 <FiTrendingDown className="text-red-500 mr-1" />
               )}
               <span className={`text-sm ${trend > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {trendValue || `${Math.abs(trend)}%`}
+                {trendValue || `${Math.abs(Number(trend) || 0)}%`}
               </span>
               <span className="text-gray-500 text-xs ml-2">vs last period</span>
             </div>

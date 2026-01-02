@@ -51,6 +51,8 @@ import MerchantWithdrawOrderDetails from "./pages/p2p/MerchantWithdrawOrderDetai
 // Analytics Pages
 import AnalyticsLayout from "./layouts/AnalyticsLayout";
 import AnalyticsOverview from "./pages/analytics/AnalyticsOverview";
+import AnalyticsDemoOverview from "./pages/analytics/AnalyticsDemoOverview";
+import TransactionsDemoAnalytics from "./pages/analytics/TransactionsDemoAnalytics";
 import TransactionsAnalytics from "./pages/analytics/TransactionsAnalytics";
 import RevenueAnalytics from "./pages/analytics/RevenueAnalytics";
 import UsersAnalytics from "./pages/analytics/UsersAnalytics";
@@ -343,6 +345,12 @@ function App() {
               <Route path="services" element={<ServicesAnalytics />} />
               <Route path="kpis" element={<KPIsAnalytics />} />
               <Route path="reports" element={<ReportsAnalytics />} />
+            </Route>
+
+            {/* Analytics Demo Route - No auth required for showcase */}
+            <Route path="/analytics-demo" element={<AnalyticsLayout />}>
+              <Route path="overview" element={<AnalyticsDemoOverview />} />
+              <Route path="transactions" element={<TransactionsDemoAnalytics />} />
             </Route>
           </Routes>
         </ErrorBoundary>

@@ -107,7 +107,9 @@ const RevenueAnalytics = () => {
         <div className="bg-gray-800 rounded-lg p-6">
           <h4 className="text-gray-400 text-sm mb-2">Profit Margin</h4>
           <p className="text-2xl font-bold text-white">
-            {((analytics.net_profit / analytics.total_revenue) * 100 || 0).toFixed(2)}%
+            {analytics.total_revenue > 0 
+              ? ((analytics.net_profit / analytics.total_revenue) * 100).toFixed(2)
+              : 0}%
           </p>
         </div>
       </div>

@@ -12,8 +12,7 @@ const ExportButton = ({
 }) => {
   const handleExport = () => {
     if (!data || data.length === 0) {
-      alert('No data to export');
-      return;
+      return; // Silently return if no data
     }
     exportToCSV(data, filename);
   };

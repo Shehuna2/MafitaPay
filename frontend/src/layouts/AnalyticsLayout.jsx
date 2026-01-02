@@ -8,13 +8,6 @@ import AnalyticsHeader from '../components/analytics/AnalyticsHeader';
  */
 const AnalyticsLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    // Trigger a refresh of the current page data
-    window.location.reload();
-  };
 
   return (
     <div className="flex h-screen bg-gray-900">
@@ -26,8 +19,6 @@ const AnalyticsLayout = ({ children }) => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <AnalyticsHeader
           onMenuClick={() => setSidebarOpen(true)}
-          onRefresh={handleRefresh}
-          refreshing={refreshing}
         />
 
         <main className="flex-1 overflow-y-auto p-6">

@@ -114,7 +114,7 @@ export const exportToCSV = (data, filename = 'export.csv') => {
         if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
           return `"${value.replace(/"/g, '""')}"`;
         }
-        return value;
+        return value ?? '';
       }).join(',')
     )
   ].join('\n');

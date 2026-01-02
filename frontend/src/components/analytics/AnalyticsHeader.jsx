@@ -1,11 +1,11 @@
-import { FiMenu, FiRefreshCw, FiSettings, FiLogOut } from 'react-icons/fi';
+import { FiMenu, FiSettings, FiLogOut } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { useState } from 'react';
 
 /**
  * AnalyticsHeader - Top header for analytics dashboard
  */
-const AnalyticsHeader = ({ onMenuClick, onRefresh, refreshing = false }) => {
+const AnalyticsHeader = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -32,22 +32,6 @@ const AnalyticsHeader = ({ onMenuClick, onRefresh, refreshing = false }) => {
 
         {/* Right side */}
         <div className="flex items-center gap-4">
-          {/* Refresh button */}
-          {onRefresh && (
-            <button
-              onClick={onRefresh}
-              disabled={refreshing}
-              className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 
-                text-white transition-colors disabled:opacity-50"
-              title="Refresh data"
-            >
-              <FiRefreshCw 
-                size={20} 
-                className={refreshing ? 'animate-spin' : ''} 
-              />
-            </button>
-          )}
-
           {/* User menu */}
           <div className="relative">
             <button

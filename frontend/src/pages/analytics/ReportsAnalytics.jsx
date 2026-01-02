@@ -4,7 +4,6 @@ import DateRangePicker from '../../components/analytics/DateRangePicker';
 import { useFilters } from '../../hooks/useFilters';
 import { exportReport } from '../../services/analyticsService';
 import { formatDate } from '../../services/formatters';
-import toast from 'react-hot-toast';
 
 /**
  * ReportsAnalytics - Report generation and export
@@ -15,6 +14,7 @@ const ReportsAnalytics = () => {
   const [format, setFormat] = useState('csv');
   const [generating, setGenerating] = useState(false);
   const [reportHistory, setReportHistory] = useState([]);
+  const [message, setMessage] = useState({ type: '', text: '' });
   
   const [selectedMetrics, setSelectedMetrics] = useState({
     transactions: true,
@@ -33,6 +33,7 @@ const ReportsAnalytics = () => {
 
   const handleGenerateReport = async () => {
     setGenerating(true);
+    setMessage({ type: '', text: '' });
 
     try {
       const params = {
@@ -67,10 +68,10 @@ const ReportsAnalytics = () => {
       };
       setReportHistory(prev => [newReport, ...prev]);
 
-      toast.success('Report generated successfully!');
+      setMessage({ type: 'success', text: 'Report generated successfully!' });
     } catch (error) {
       console.error('Failed to generate report:', error);
-      toast.error('Failed to generate report. Please try again.');
+      setMessage({ type: 'error', text: 'Failed to generate report. Please try again.' });
     } finally {
       setGenerating(false);
     }
@@ -83,6 +84,16 @@ const ReportsAnalytics = () => {
         <h2 className="text-3xl font-bold text-white">Reports</h2>
         <p className="text-gray-400 mt-1">Generate and export analytics reports</p>
       </div>
+
+      {/* Message Display */}
+      {message.text && (
+        <div className={`p-4 rounded-lg ${
+          message.type === 'success' ? 'bg-green-900 border border-green-500 text-green-100' :
+          'bg-red-900 border border-red-500 text-red-100'
+        }`}>
+          {message.text}
+        </div>
+      )}
 
       {/* Report Configuration */}
       <div className="bg-gray-800 rounded-lg p-6 space-y-6">
