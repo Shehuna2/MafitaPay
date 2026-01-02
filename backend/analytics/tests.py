@@ -120,7 +120,7 @@ class AnalyticsAPITestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         
-        # Check structure
+        # Check nested structure (backward compatibility)
         self.assertIn('users', data)
         self.assertIn('wallet', data)
         self.assertIn('transactions', data)
@@ -131,6 +131,36 @@ class AnalyticsAPITestCase(APITestCase):
         
         # Check wallet data exists
         self.assertIsNotNone(data['wallet']['total_balance'])
+        
+        # Check flat keys (frontend compatibility)
+        self.assertIn('total_transactions', data)
+        self.assertIn('total_revenue', data)
+        self.assertIn('active_users', data)
+        self.assertIn('p2p_volume', data)
+        self.assertIn('transactions_trend', data)
+        self.assertIn('revenue_trend', data)
+        self.assertIn('users_trend', data)
+        self.assertIn('p2p_trend', data)
+        self.assertIn('success_rate', data)
+        self.assertIn('successful_transactions', data)
+        self.assertIn('bill_payments_volume', data)
+        self.assertIn('crypto_volume', data)
+        self.assertIn('rewards_distributed', data)
+        
+        # Verify data types
+        self.assertIsInstance(data['total_transactions'], int)
+        self.assertIsInstance(data['total_revenue'], (int, float))
+        self.assertIsInstance(data['active_users'], int)
+        self.assertIsInstance(data['p2p_volume'], (int, float))
+        self.assertIsInstance(data['success_rate'], (int, float))
+        self.assertIsInstance(data['successful_transactions'], int)
+        self.assertIsInstance(data['bill_payments_volume'], (int, float))
+        self.assertIsInstance(data['crypto_volume'], (int, float))
+        self.assertIsInstance(data['rewards_distributed'], (int, float))
+        
+        # Verify success rate is valid percentage
+        self.assertGreaterEqual(data['success_rate'], 0)
+        self.assertLessEqual(data['success_rate'], 100)
     
     def test_transaction_analytics_endpoint(self):
         """Test transaction analytics endpoint"""
@@ -253,6 +283,99 @@ class AnalyticsAPITestCase(APITestCase):
         
         # Data should be identical
         self.assertEqual(response1.json()['users'], response2.json()['users'])
+    
+    def test_dashboard_overview_flat_keys_with_data(self):
+        """Test that flat keys return correct data when transactions and bonuses exist"""
+        # Create bill payment transactions
+        WalletTransaction.objects.create(
+            user=self.user1,
+            wallet=self.wallet1,
+            tx_type='debit',
+            category='airtime',
+            amount=Decimal('50.00'),
+            balance_before=Decimal('1000.00'),
+            balance_after=Decimal('950.00'),
+            status='success'
+        )
+        
+        WalletTransaction.objects.create(
+            user=self.user1,
+            wallet=self.wallet1,
+            tx_type='debit',
+            category='data',
+            amount=Decimal('100.00'),
+            balance_before=Decimal('950.00'),
+            balance_after=Decimal('850.00'),
+            status='success'
+        )
+        
+        # Create a failed transaction to test success rate
+        WalletTransaction.objects.create(
+            user=self.user2,
+            wallet=self.wallet2,
+            tx_type='credit',
+            category='deposit',
+            amount=Decimal('200.00'),
+            balance_before=Decimal('2000.00'),
+            balance_after=Decimal('2000.00'),
+            status='failed'
+        )
+        
+        # Create bonus rewards
+        bonus_type, _ = BonusType.objects.get_or_create(
+            name='welcome',
+            defaults={'default_amount': Decimal('100.00')}
+        )
+        
+        Bonus.objects.create(
+            user=self.user1,
+            bonus_type=bonus_type,
+            amount=Decimal('100.00'),
+            status='unlocked'
+        )
+        
+        Bonus.objects.create(
+            user=self.user2,
+            bonus_type=bonus_type,
+            amount=Decimal('50.00'),
+            status='locked'
+        )
+        
+        # Clear cache to ensure fresh data
+        from django.core.cache import cache
+        cache.clear()
+        
+        self.client.force_authenticate(user=self.admin_user)
+        url = reverse('analytics-dashboard-overview')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        
+        # Verify bill payments volume includes airtime and data
+        self.assertEqual(data['bill_payments_volume'], 150.0)  # 50 + 100
+        
+        # Verify rewards distributed
+        self.assertEqual(data['rewards_distributed'], 150.0)  # 100 + 50
+        
+        # Verify active users (should be 2 - user1 and user2 have transactions)
+        self.assertGreaterEqual(data['active_users'], 2)
+        
+        # Verify success rate calculation
+        # Total transactions: 2 (from setUp) + 2 (airtime+data) + 1 (failed) = 5
+        # Successful: 2 (setUp) + 2 (bills) = 4
+        # Success rate: 4/5 * 100 = 80%
+        self.assertGreaterEqual(data['success_rate'], 75.0)
+        self.assertLessEqual(data['success_rate'], 85.0)
+        
+        # Verify successful_transactions count
+        self.assertGreaterEqual(data['successful_transactions'], 4)
+        
+        # Verify trend fields exist and are numbers
+        self.assertIsInstance(data['transactions_trend'], (int, float))
+        self.assertIsInstance(data['revenue_trend'], (int, float))
+        self.assertIsInstance(data['users_trend'], (int, float))
+        self.assertIsInstance(data['p2p_trend'], (int, float))
 
 
 class AnalyticsManagementCommandTestCase(TestCase):

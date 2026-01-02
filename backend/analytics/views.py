@@ -51,9 +51,23 @@ class DashboardOverviewView(APIView):
             if cached_data:
                 return Response(cached_data)
             
+            # Calculate previous period for trend comparison
+            previous_start_date = start_date - timedelta(days=days)
+            
             # Total users
             total_users = User.objects.count()
             new_users = User.objects.filter(date_joined__gte=start_date).count()
+            
+            # Active users (users with transactions in the period)
+            active_users = WalletTransaction.objects.filter(
+                created_at__gte=start_date
+            ).values('user').distinct().count()
+            
+            # Previous period active users for trend
+            prev_active_users = WalletTransaction.objects.filter(
+                created_at__gte=previous_start_date,
+                created_at__lt=start_date
+            ).values('user').distinct().count()
             
             # Wallet metrics
             total_balance = Wallet.objects.aggregate(
@@ -64,12 +78,29 @@ class DashboardOverviewView(APIView):
                 total=Sum('locked_balance')
             )['total'] or Decimal('0.00')
             
-            # Transaction metrics
+            # Transaction metrics - all transactions in current period
+            all_tx_stats = WalletTransaction.objects.filter(
+                created_at__gte=start_date
+            ).aggregate(
+                total_count=Count('id'),
+                successful_count=Count('id', filter=Q(status='success'))
+            )
+            
+            # Successful transaction metrics
             tx_stats = WalletTransaction.objects.filter(
                 created_at__gte=start_date,
                 status='success'
             ).aggregate(
                 total_volume=Sum('amount'),
+                total_count=Count('id')
+            )
+            
+            # Previous period transactions for trend
+            prev_tx_stats = WalletTransaction.objects.filter(
+                created_at__gte=previous_start_date,
+                created_at__lt=start_date,
+                status='success'
+            ).aggregate(
                 total_count=Count('id')
             )
             
@@ -80,12 +111,29 @@ class DashboardOverviewView(APIView):
                 created_at__gte=start_date
             ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
             
+            # Previous period revenue for trend
+            prev_revenue = WalletTransaction.objects.filter(
+                category='deposit',
+                status='success',
+                created_at__gte=previous_start_date,
+                created_at__lt=start_date
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            
             # P2P stats
             p2p_orders = DepositOrder.objects.filter(
                 created_at__gte=start_date,
                 status='completed'
             ).aggregate(
                 count=Count('id'),
+                volume=Sum('total_price')
+            )
+            
+            # Previous period P2P for trend
+            prev_p2p_orders = DepositOrder.objects.filter(
+                created_at__gte=previous_start_date,
+                created_at__lt=start_date,
+                status='completed'
+            ).aggregate(
                 volume=Sum('total_price')
             )
             
@@ -98,8 +146,97 @@ class DashboardOverviewView(APIView):
                 volume=Sum('total_price')
             )
             
+            # Bill payments (airtime + data)
+            bill_payments = WalletTransaction.objects.filter(
+                created_at__gte=start_date,
+                category__in=['airtime', 'data'],
+                status='success'
+            ).aggregate(
+                total_volume=Sum('amount')
+            )
+            
+            # Rewards distributed (exclude reversed bonuses)
+            rewards_distributed = Bonus.objects.filter(
+                created_at__gte=start_date
+            ).exclude(
+                status='reversed'
+            ).aggregate(
+                total_amount=Sum('amount')
+            )
+            
+            # Calculate success rate
+            total_tx_count = all_tx_stats['total_count'] or 0
+            successful_tx_count = all_tx_stats['successful_count'] or 0
+            success_rate = round(safe_divide(successful_tx_count, total_tx_count, 0) * 100, 2)
+            
+            # Calculate trends (percentage change from previous period)
+            # When previous period has no data, show 0 trend instead of artificial values
+            if prev_tx_stats['total_count'] and prev_tx_stats['total_count'] > 0:
+                transactions_trend = round(
+                    safe_divide(
+                        (tx_stats['total_count'] or 0) - prev_tx_stats['total_count'],
+                        prev_tx_stats['total_count'],
+                        0
+                    ) * 100,
+                    2
+                )
+            else:
+                transactions_trend = 0.0
+            
+            if prev_revenue and float(prev_revenue) > 0:
+                revenue_trend = round(
+                    safe_divide(
+                        float(total_revenue) - float(prev_revenue),
+                        float(prev_revenue),
+                        0
+                    ) * 100,
+                    2
+                )
+            else:
+                revenue_trend = 0.0
+            
+            if prev_active_users and prev_active_users > 0:
+                users_trend = round(
+                    safe_divide(
+                        active_users - prev_active_users,
+                        prev_active_users,
+                        0
+                    ) * 100,
+                    2
+                )
+            else:
+                users_trend = 0.0
+            
+            prev_p2p_volume = float(prev_p2p_orders['volume'] or 0)
+            if prev_p2p_volume > 0:
+                p2p_trend = round(
+                    safe_divide(
+                        float(p2p_orders['volume'] or 0) - prev_p2p_volume,
+                        prev_p2p_volume,
+                        0
+                    ) * 100,
+                    2
+                )
+            else:
+                p2p_trend = 0.0
+            
             data = {
                 'period_days': days,
+                # Flat keys for frontend compatibility
+                'total_transactions': tx_stats['total_count'] or 0,
+                'total_revenue': float(total_revenue),
+                'active_users': active_users,
+                'p2p_volume': float(p2p_orders['volume'] or 0),
+                'transactions_trend': transactions_trend,
+                'revenue_trend': revenue_trend,
+                'users_trend': users_trend,
+                'p2p_trend': p2p_trend,
+                'success_rate': success_rate,
+                'successful_transactions': successful_tx_count,
+                'bill_payments_volume': float(bill_payments['total_volume'] or 0),
+                'crypto_volume': float(crypto_stats['volume'] or 0),
+                'rewards_distributed': float(rewards_distributed['total_amount'] or 0),
+                # Nested data for backward compatibility
                 'users': {
                     'total': total_users,
                     'new': new_users,
