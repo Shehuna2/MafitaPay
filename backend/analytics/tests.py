@@ -171,10 +171,29 @@ class AnalyticsAPITestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         
+        # Check backward compatibility
         self.assertIn('summary', data)
         self.assertIn('by_category', data)
         self.assertIn('by_type', data)
         self.assertIn('daily_trend', data)
+        
+        # Check new flat keys
+        self.assertIn('total_volume', data)
+        self.assertIn('total_count', data)
+        self.assertIn('average_transaction', data)
+        self.assertIn('volume_over_time', data)
+        self.assertIn('type_breakdown', data)
+        self.assertIn('status_breakdown', data)
+        self.assertIn('transactions', data)
+        
+        # Verify data types
+        self.assertIsInstance(data['total_volume'], (int, float))
+        self.assertIsInstance(data['total_count'], int)
+        self.assertIsInstance(data['average_transaction'], (int, float))
+        self.assertIsInstance(data['volume_over_time'], list)
+        self.assertIsInstance(data['type_breakdown'], list)
+        self.assertIsInstance(data['status_breakdown'], list)
+        self.assertIsInstance(data['transactions'], list)
     
     def test_revenue_analytics_endpoint(self):
         """Test revenue analytics endpoint"""
@@ -185,9 +204,26 @@ class AnalyticsAPITestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         
+        # Check backward compatibility
         self.assertIn('total_revenue', data)
         self.assertIn('by_source', data)
         self.assertIn('monthly_trend', data)
+        
+        # Check new flat keys
+        self.assertIn('net_profit', data)
+        self.assertIn('total_expenses', data)
+        self.assertIn('revenue_trend', data)
+        self.assertIn('payment_method_breakdown', data)
+        self.assertIn('service_breakdown', data)
+        self.assertIn('top_payment_methods', data)
+        
+        # Verify data types
+        self.assertIsInstance(data['net_profit'], (int, float))
+        self.assertIsInstance(data['total_expenses'], (int, float))
+        self.assertIsInstance(data['revenue_trend'], list)
+        self.assertIsInstance(data['payment_method_breakdown'], list)
+        self.assertIsInstance(data['service_breakdown'], list)
+        self.assertIsInstance(data['top_payment_methods'], list)
     
     def test_user_analytics_endpoint(self):
         """Test user analytics endpoint"""
@@ -198,9 +234,36 @@ class AnalyticsAPITestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         
+        # Check backward compatibility
         self.assertIn('summary', data)
         self.assertIn('engagement', data)
         self.assertIn('daily_registrations', data)
+        
+        # Check new flat keys
+        self.assertIn('total_users', data)
+        self.assertIn('new_users', data)
+        self.assertIn('active_users', data)
+        self.assertIn('verified_users', data)
+        self.assertIn('retention_rate', data)
+        self.assertIn('merchant_count', data)
+        self.assertIn('regular_user_count', data)
+        self.assertIn('avg_daily_users', data)
+        self.assertIn('user_growth', data)
+        self.assertIn('user_segmentation', data)
+        self.assertIn('top_referrers', data)
+        
+        # Verify data types
+        self.assertIsInstance(data['total_users'], int)
+        self.assertIsInstance(data['new_users'], int)
+        self.assertIsInstance(data['active_users'], int)
+        self.assertIsInstance(data['verified_users'], int)
+        self.assertIsInstance(data['retention_rate'], (int, float))
+        self.assertIsInstance(data['merchant_count'], int)
+        self.assertIsInstance(data['regular_user_count'], int)
+        self.assertIsInstance(data['avg_daily_users'], (int, float))
+        self.assertIsInstance(data['user_growth'], list)
+        self.assertIsInstance(data['user_segmentation'], list)
+        self.assertIsInstance(data['top_referrers'], list)
     
     def test_service_analytics_endpoint(self):
         """Test service analytics endpoint"""
@@ -211,9 +274,40 @@ class AnalyticsAPITestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         
+        # Check backward compatibility
         self.assertIn('p2p', data)
         self.assertIn('crypto', data)
         self.assertIn('bills', data)
+        
+        # Check new flat keys
+        self.assertIn('p2p_volume', data)
+        self.assertIn('bill_payment_volume', data)
+        self.assertIn('crypto_volume', data)
+        self.assertIn('total_service_transactions', data)
+        self.assertIn('airtime_volume', data)
+        self.assertIn('data_volume', data)
+        self.assertIn('cable_volume', data)
+        self.assertIn('electricity_volume', data)
+        self.assertIn('education_volume', data)
+        self.assertIn('p2p_data', data)
+        self.assertIn('bill_payment_breakdown', data)
+        self.assertIn('service_usage', data)
+        self.assertIn('top_services', data)
+        
+        # Verify data types
+        self.assertIsInstance(data['p2p_volume'], (int, float))
+        self.assertIsInstance(data['bill_payment_volume'], (int, float))
+        self.assertIsInstance(data['crypto_volume'], (int, float))
+        self.assertIsInstance(data['total_service_transactions'], int)
+        self.assertIsInstance(data['airtime_volume'], (int, float))
+        self.assertIsInstance(data['data_volume'], (int, float))
+        self.assertIsInstance(data['cable_volume'], (int, float))
+        self.assertIsInstance(data['electricity_volume'], (int, float))
+        self.assertIsInstance(data['education_volume'], (int, float))
+        self.assertIsInstance(data['p2p_data'], list)
+        self.assertIsInstance(data['bill_payment_breakdown'], list)
+        self.assertIsInstance(data['service_usage'], list)
+        self.assertIsInstance(data['top_services'], list)
     
     def test_kpi_analytics_endpoint(self):
         """Test KPI analytics endpoint"""
@@ -224,8 +318,51 @@ class AnalyticsAPITestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         
+        # Check backward compatibility
         self.assertIn('kpis', data)
         self.assertIn('bonuses', data)
+        
+        # Check new flat KPI keys
+        self.assertIn('dau', data)
+        self.assertIn('mau', data)
+        self.assertIn('cac', data)
+        self.assertIn('ltv', data)
+        self.assertIn('arpu', data)
+        self.assertIn('transaction_success_rate', data)
+        self.assertIn('churn_rate', data)
+        self.assertIn('retention_rate', data)
+        self.assertIn('user_growth_rate', data)
+        self.assertIn('revenue_growth_rate', data)
+        self.assertIn('transaction_growth_rate', data)
+        
+        # Check trend values
+        self.assertIn('dau_trend', data)
+        self.assertIn('mau_trend', data)
+        self.assertIn('cac_trend', data)
+        self.assertIn('ltv_trend', data)
+        self.assertIn('arpu_trend', data)
+        self.assertIn('success_rate_trend', data)
+        self.assertIn('churn_rate_trend', data)
+        self.assertIn('retention_trend', data)
+        self.assertIn('stickiness_trend', data)
+        self.assertIn('ltv_cac_ratio_trend', data)
+        
+        # Check target values
+        self.assertIn('dau_target', data)
+        self.assertIn('mau_target', data)
+        
+        # Verify data types
+        self.assertIsInstance(data['dau'], int)
+        self.assertIsInstance(data['mau'], int)
+        self.assertIsInstance(data['cac'], (int, float))
+        self.assertIsInstance(data['ltv'], (int, float))
+        self.assertIsInstance(data['arpu'], (int, float))
+        self.assertIsInstance(data['transaction_success_rate'], (int, float))
+        self.assertIsInstance(data['churn_rate'], (int, float))
+        self.assertIsInstance(data['retention_rate'], (int, float))
+        self.assertIsInstance(data['dau_target'], int)
+        self.assertIsInstance(data['mau_target'], int)
+
     
     def test_report_export_json(self):
         """Test report export as JSON"""
