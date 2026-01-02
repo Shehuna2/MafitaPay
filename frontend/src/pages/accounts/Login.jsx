@@ -138,8 +138,14 @@ export default function Login() {
       let msg = errors.detail || "Invalid credentials.  Please try again.";
 
       if (errors.action === "resend_verification") {
-        setShowResend(true);
-        msg = "Account not verified. Please check your email. ";
+        const userEmail = errors.email || formData.email;
+        navigate("/verify-email", { 
+          state: { 
+            email: userEmail,
+            fromLogin: true
+          } 
+        });
+        return;
       } else if (errors.non_field_errors?.[0]) {
         msg = errors.non_field_errors[0];
       }

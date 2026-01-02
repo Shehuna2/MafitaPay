@@ -138,8 +138,9 @@ class LoginSerializer(serializers.Serializer):
 
         if not user.is_email_verified:
             raise serializers.ValidationError({
-                "detail": "Please verify your email before logging in.",
-                "action": "resend_verification"
+                "detail": "Your email address has not been verified yet. Please check your inbox for the verification link or request a new one.",
+                "action": "resend_verification",
+                "email": user.email
             })
 
         # ---- 2FA Handling ----
