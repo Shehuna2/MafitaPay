@@ -18,6 +18,7 @@ export default function VerifyEmail() {
 
   // Email passed via location state (after registering) or via URL param
   const stateEmail = location.state?.email;
+  const fromLogin = location.state?.fromLogin || false;
   const email = stateEmail || urlEmail || "";
 
   // Cooldown key depends on email (useMemo to avoid recreating on every render)
@@ -129,13 +130,32 @@ export default function VerifyEmail() {
             <>
               <div className="space-y-6 animate-fade-in-up">
                 <Mail className="w-20 h-20 mx-auto text-indigo-400" />
-                <h1 className="text-3xl font-bold text-indigo-400">Check Your Email</h1>
+                <h1 className="text-3xl font-bold text-indigo-400">
+                  {fromLogin ? "Email Verification Required" : "Check Your Email"}
+                </h1>
                 <p className="text-gray-300">
-                  We sent a verification link to:
-                  <br />
-                  <strong className="text-white">{email}</strong>
+                  {fromLogin 
+                    ? <>
+                        Your account exists but your email has not been verified yet.
+                        <br />
+                        <br />
+                        Verification email sent to:
+                        <br />
+                        <strong className="text-white">{email}</strong>
+                        <br />
+                        <br />
+                        Please check your inbox for the verification link or request a new one below.
+                      </>
+                    : <>
+                        We sent a verification link to:
+                        <br />
+                        <strong className="text-white">{email}</strong>
+                      </>
+                  }
                 </p>
-                <p className="text-sm text-gray-400">Click the link in your email to activate your account.</p>
+                {!fromLogin && (
+                  <p className="text-sm text-gray-400">Click the link in your email to activate your account.</p>
+                )}
               </div>
 
               <div className="space-y-6 animate-fade-in-up">
