@@ -1,7 +1,34 @@
 # File: backend/gasfee/utils.py
+"""
+Crypto Payment Utilities
+
+This module provides essential utilities for cryptocurrency payments including:
+
+1. Enhanced Wallet Address Validation:
+   - EVM chains: EIP-55 checksum validation
+   - Solana: Base58 format validation with 32-byte key verification
+   - NEAR: Named and implicit account validation
+   - TON: Base64url format validation with workchain support
+
+2. Security Monitoring:
+   - Rapid purchase detection
+   - Unusual transaction amount detection
+   - Secure error message sanitization
+
+3. Price and Rate Utilities:
+   - Asset price fetching with caching
+   - USD-NGN rate conversion with margin support
+
+All validation functions are designed to prevent invalid addresses before 
+blockchain submission, reducing failed transactions and improving security.
+"""
+
 from decimal import Decimal, InvalidOperation, getcontext
 import logging
 import os
+import re
+import base64
+import base58
 from typing import Optional
 
 from django.conf import settings
@@ -106,4 +133,377 @@ def send_bsc(to_address: str, amount: Decimal, order_id: Optional[int] = None) -
     signed_tx = w3_bsc.eth.account.sign_transaction(tx, BSC_PRIVATE_KEY)
     tx_hash = w3_bsc.eth.send_raw_transaction(signed_tx.raw_transaction)
     return tx_hash.hex()
+
+
+# ==============================
+# Enhanced Wallet Address Validation
+# ==============================
+
+def validate_evm_address(address: str) -> bool:
+    """
+    Validate EVM address with EIP-55 checksum verification.
+    Returns True if address is valid and checksummed correctly.
+    """
+    if not address or not isinstance(address, str):
+        return False
+    
+    try:
+        # Check basic format
+        if not Web3.is_address(address):
+            return False
+        
+        # Verify EIP-55 checksum
+        # If the address contains mixed case, it must be checksummed correctly
+        if address != address.lower() and address != address.upper():
+            # Mixed case - must match checksum
+            checksummed = Web3.to_checksum_address(address)
+            return address == checksummed
+        
+        # All lowercase or all uppercase is acceptable (no checksum)
+        return True
+        
+    except Exception as e:
+        logger.debug(f"EVM address validation failed for {address}: {e}")
+        return False
+
+
+def validate_solana_address(address: str) -> bool:
+    """
+    Validate Solana base58 address format.
+    Solana addresses are 32-44 characters in base58 encoding.
+    """
+    if not address or not isinstance(address, str):
+        return False
+    
+    # Solana addresses are typically 32-44 characters
+    if not (32 <= len(address) <= 44):
+        return False
+    
+    try:
+        # Try to decode as base58
+        decoded = base58.b58decode(address)
+        # Solana public keys are 32 bytes
+        if len(decoded) != 32:
+            return False
+        return True
+    except (ValueError, TypeError) as e:
+        # base58.b58decode can raise ValueError for invalid base58
+        logger.debug(f"Solana address validation failed for {address}: {e}")
+        return False
+    except Exception as e:
+        logger.debug(f"Solana address validation failed for {address}: {e}")
+        return False
+
+
+def validate_near_address(address: str) -> bool:
+    """
+    Validate NEAR protocol address format.
+    NEAR supports both implicit (64 hex chars) and named accounts.
+    """
+    if not address or not isinstance(address, str):
+        return False
+    
+    # NEAR addresses must be lowercase
+    if address != address.lower():
+        return False
+    
+    address = address.strip().lower()
+    
+    # Length check
+    if len(address) < 2 or len(address) > 64:
+        return False
+    
+    # Implicit account: 64 hex characters
+    if len(address) == 64:
+        if re.fullmatch(r'[0-9a-f]{64}', address):
+            return True
+        return False
+    
+    # Named account rules:
+    # - lowercase letters, digits, underscores, hyphens, dots
+    # - must not start or end with separator
+    # - separators cannot be consecutive
+    if not re.fullmatch(r'[a-z0-9]([-_.]?[a-z0-9])*', address):
+        return False
+    
+    # Additional NEAR-specific rules
+    # Account ID cannot start with a hyphen or underscore
+    if address.startswith('-') or address.startswith('_'):
+        return False
+    
+    return True
+
+
+def validate_ton_address(address: str) -> bool:
+    """
+    Validate TON address format.
+    TON addresses are base64url encoded with optional workchain prefix.
+    Format: [workchain:]<base64url-address>
+    
+    Note: Only workchains -1 (masterchain) and 0 (basechain) are accepted for production.
+    Other workchains can be enabled via ALLOWED_TON_WORKCHAINS setting if needed.
+    """
+    if not address or not isinstance(address, str):
+        return False
+    
+    # TON addresses are typically 48-66 characters
+    if not (20 <= len(address) <= 100):
+        return False
+    
+    # Get allowed workchains from settings (default to production chains)
+    allowed_workchains = getattr(settings, 'ALLOWED_TON_WORKCHAINS', [-1, 0])
+    
+    try:
+        # TON addresses can have workchain prefix (e.g., "0:...")
+        parts = address.split(':', 1)
+        
+        if len(parts) == 2:
+            # Validate workchain is a number
+            workchain = parts[0]
+            addr_part = parts[1]
+            
+            if not workchain.lstrip('-').isdigit():
+                return False
+            
+            # Check if workchain is in allowed list
+            workchain_num = int(workchain)
+            if workchain_num not in allowed_workchains:
+                logger.warning(f"Rejecting TON address with disallowed workchain: {workchain_num}")
+                return False
+        else:
+            addr_part = address
+        
+        # Validate base64url format (TON uses base64url encoding)
+        # Base64url uses: A-Z, a-z, 0-9, -, _
+        if not re.fullmatch(r'[A-Za-z0-9\-_]+={0,2}', addr_part):
+            return False
+        
+        # Try to decode base64
+        # Add padding if needed
+        padding = len(addr_part) % 4
+        if padding:
+            addr_part += '=' * (4 - padding)
+        
+        # Replace URL-safe chars with standard base64
+        standard_b64 = addr_part.replace('-', '+').replace('_', '/')
+        decoded = base64.b64decode(standard_b64)
+        
+        # TON address payload should be at least 32 bytes
+        if len(decoded) < 32:
+            return False
+        
+        return True
+        
+    except Exception as e:
+        logger.debug(f"TON address validation failed for {address}: {e}")
+        return False
+
+
+def validate_wallet_address(symbol: str, address: str) -> bool:
+    """
+    Enhanced wallet address validation with chain-specific rules.
+    
+    Args:
+        symbol: Crypto symbol (e.g., 'ETH', 'SOL', 'NEAR', 'TON')
+        address: Wallet address to validate
+    
+    Returns:
+        True if address is valid for the given chain, False otherwise
+    """
+    if not address or not isinstance(address, str):
+        return False
+    
+    symbol = symbol.upper()
+    
+    try:
+        # EVM chains with EIP-55 checksum validation
+        # Note: BASE-ETH, BASE-ARB, etc. are BASE network tokens, still use EVM validation
+        if symbol in {'ETH', 'ARB', 'BNB', 'BASE', 'OP', 'POL', 'AVAX', 'LINEA'} or symbol.startswith('BASE-'):
+            return validate_evm_address(address)
+        
+        # Solana with base58 validation
+        elif symbol == 'SOL':
+            return validate_solana_address(address)
+        
+        # NEAR protocol
+        elif symbol == 'NEAR':
+            return validate_near_address(address)
+        
+        # TON
+        elif symbol == 'TON':
+            return validate_ton_address(address)
+        
+        # Fallback for other chains: basic non-empty check
+        else:
+            logger.warning(f"No specific validation for symbol: {symbol}")
+            return len(address.strip()) > 0
+            
+    except Exception as e:
+        logger.error(f"Address validation error for {symbol}: {e}")
+        return False
+
+
+# ==============================
+# Security Logging and Monitoring
+# ==============================
+
+# Cache threshold values to avoid repeated conversions
+_THRESHOLDS_CACHE = None
+
+def _get_thresholds():
+    """Get cached security thresholds from settings."""
+    global _THRESHOLDS_CACHE
+    if _THRESHOLDS_CACHE is None:
+        _THRESHOLDS_CACHE = {
+            'very_low': Decimal(str(getattr(settings, 'CRYPTO_MIN_ALERT_THRESHOLD', 100))),
+            'high': Decimal(str(getattr(settings, 'CRYPTO_HIGH_ALERT_THRESHOLD', 1000000))),
+            'very_high': Decimal(str(getattr(settings, 'CRYPTO_VERY_HIGH_ALERT_THRESHOLD', 5000000))),
+        }
+    return _THRESHOLDS_CACHE
+
+
+def log_suspicious_transaction(user, event_type: str, description: str, metadata: dict = None, severity: str = 'medium'):
+    """
+    Log suspicious transaction patterns for fraud detection.
+    
+    Args:
+        user: User object
+        event_type: Type of suspicious event (e.g., 'rapid_purchase', 'unusual_amount')
+        description: Human-readable description
+        metadata: Additional metadata about the event
+        severity: Severity level ('low', 'medium', 'high')
+    """
+    from .models import TransactionMonitoring
+    
+    try:
+        TransactionMonitoring.objects.create(
+            user=user,
+            event_type=event_type,
+            severity=severity,
+            description=description,
+            metadata=metadata or {}
+        )
+        logger.warning(
+            f"[SECURITY] {event_type} detected for user {user.id}: {description}",
+            extra={'user_id': user.id, 'event_type': event_type, 'severity': severity}
+        )
+    except Exception as e:
+        logger.error(f"Failed to log suspicious transaction: {e}")
+
+
+def check_rapid_purchases(user, time_window_minutes: int = 5, max_purchases: int = 3) -> bool:
+    """
+    Check if user has made rapid successive purchases.
+    
+    Args:
+        user: User object
+        time_window_minutes: Time window to check (default 5 minutes)
+        max_purchases: Maximum allowed purchases in time window
+    
+    Returns:
+        True if rapid purchases detected, False otherwise
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    from .models import CryptoPurchase
+    
+    cutoff_time = timezone.now() - timedelta(minutes=time_window_minutes)
+    recent_purchases = CryptoPurchase.objects.filter(
+        user=user,
+        created_at__gte=cutoff_time
+    ).count()
+    
+    if recent_purchases >= max_purchases:
+        log_suspicious_transaction(
+            user=user,
+            event_type='rapid_purchase',
+            description=f'User made {recent_purchases} purchases in {time_window_minutes} minutes',
+            metadata={
+                'purchase_count': recent_purchases,
+                'time_window_minutes': time_window_minutes,
+                'threshold': max_purchases
+            },
+            severity='high'
+        )
+        return True
+    
+    return False
+
+
+def check_unusual_amount(user, amount_ngn: Decimal, crypto_symbol: str) -> bool:
+    """
+    Check if transaction amount is unusually high or low.
+    
+    Args:
+        user: User object
+        amount_ngn: Transaction amount in NGN
+        crypto_symbol: Crypto symbol being purchased
+    
+    Returns:
+        True if unusual amount detected, False otherwise
+    """
+    # Get cached thresholds
+    thresholds = _get_thresholds()
+    VERY_LOW_THRESHOLD = thresholds['very_low']
+    HIGH_THRESHOLD = thresholds['high']
+    VERY_HIGH_THRESHOLD = thresholds['very_high']
+    
+    is_unusual = False
+    severity = 'low'
+    reason = ''
+    
+    if amount_ngn < VERY_LOW_THRESHOLD:
+        is_unusual = True
+        severity = 'low'
+        reason = f'Amount {amount_ngn} NGN is below minimum threshold'
+    elif amount_ngn >= VERY_HIGH_THRESHOLD:
+        is_unusual = True
+        severity = 'high'
+        reason = f'Amount {amount_ngn} NGN is very high (>= {VERY_HIGH_THRESHOLD} NGN)'
+    elif amount_ngn >= HIGH_THRESHOLD:
+        is_unusual = True
+        severity = 'medium'
+        reason = f'Amount {amount_ngn} NGN is high (>= {HIGH_THRESHOLD} NGN)'
+    
+    if is_unusual:
+        log_suspicious_transaction(
+            user=user,
+            event_type='unusual_amount',
+            description=reason,
+            metadata={
+                'amount_ngn': str(amount_ngn),
+                'crypto_symbol': crypto_symbol,
+                'threshold_type': 'very_low' if amount_ngn < VERY_LOW_THRESHOLD else 'high'
+            },
+            severity=severity
+        )
+    
+    return is_unusual
+
+
+def sanitize_error_message(error_msg: str) -> str:
+    """
+    Sanitize error messages to avoid exposing sensitive information.
+    
+    Args:
+        error_msg: Raw error message
+    
+    Returns:
+        Sanitized error message safe for client display
+    """
+    # List of patterns to remove/replace
+    sensitive_patterns = [
+        (r'\b0x[a-fA-F0-9]{40}\b', '[REDACTED_ADDRESS]'),  # Ethereum addresses (exactly 40 hex)
+        (r'\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b', '[REDACTED_ADDRESS]'),  # Bitcoin addresses
+        (r'private[_-]?key', '[REDACTED]'),
+        (r'secret', '[REDACTED]'),
+        (r'password', '[REDACTED]'),
+        (r'\b\d{10,}\b', '[REDACTED_NUMBER]'),  # Long numbers
+    ]
+    
+    sanitized = str(error_msg)
+    for pattern, replacement in sensitive_patterns:
+        sanitized = re.sub(pattern, replacement, sanitized, flags=re.IGNORECASE)
+    
+    return sanitized
 

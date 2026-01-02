@@ -2,7 +2,7 @@ from django.contrib import admin
 from django import forms
 from .models import (
     AssetSellOrder, PaymentProof, Crypto,
-    CryptoPurchase, ExchangeRateMargin, Asset,  # AssetPrice
+    CryptoPurchase, ExchangeRateMargin, Asset, TransactionMonitoring
 )
 
 
@@ -118,3 +118,35 @@ class SellOrderAdmin(admin.ModelAdmin):
 class PaymentProofAdmin(admin.ModelAdmin):
     list_display = ("order", "uploaded_at")
     readonly_fields = ("uploaded_at",)
+
+
+@admin.register(TransactionMonitoring)
+class TransactionMonitoringAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'user', 'event_type', 'severity', 
+        'created_at', 'reviewed', 'reviewed_by'
+    )
+    list_filter = ('event_type', 'severity', 'reviewed', 'created_at')
+    search_fields = ('user__username', 'user__email', 'description')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at', 'metadata')
+    
+    fieldsets = (
+        (None, {
+            'fields': ('user', 'event_type', 'severity', 'description')
+        }),
+        ('Metadata', {
+            'fields': ('metadata', 'created_at'),
+        }),
+        ('Review', {
+            'fields': ('reviewed', 'reviewed_at', 'reviewed_by', 'notes'),
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        """Auto-set reviewed_by to current admin user when marking as reviewed"""
+        if obj.reviewed and not obj.reviewed_by:
+            obj.reviewed_by = request.user
+            from django.utils import timezone
+            obj.reviewed_at = timezone.now()
+        super().save_model(request, obj, form, change)

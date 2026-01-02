@@ -26,7 +26,10 @@ from wallet.models import Wallet, WalletTransaction, Notification
 
 from .services import lookup_rate, get_receiving_details
 from .price_service import get_crypto_prices_in_usd, get_usd_ngn_rate_with_margin
-from .utils import send_bsc
+from .utils import (
+    send_bsc, validate_wallet_address, check_rapid_purchases, 
+    check_unusual_amount, sanitize_error_message
+)
 from .evm_sender import send_evm
 from .near_utils import send_near
 from .sol_utils import send_solana
@@ -91,28 +94,10 @@ def _decimal_to_str(d: Decimal) -> str:
 
 def _validate_wallet_address(symbol: str, address: str) -> bool:
     """
-    Minimal wallet address validation before debiting.
-    - For EVM chains use Web3.is_address
-    - For Solana, NEAR, TON we do a basic length check (best-effort).
-    This is intentionally conservative: callers should still rely on sender RPC errors.
+    Enhanced wallet address validation with comprehensive chain-specific checks.
+    Delegates to validate_wallet_address utility function.
     """
-    if not address:
-        return False
-
-    sym = symbol.upper()
-    try:
-        if sym in {"ETH", "ARB", "BNB", "BASE-ETH", "BASE-ARB", "BASE-OPT", "OP"}:
-            return Web3.is_address(address)
-        if sym == "SOL":
-            return 40 <= len(address) <= 88  # reasonable range for base58
-        if sym == "NEAR":
-            return 2 <= len(address) <= 64
-        if sym == "TON":
-            return 20 <= len(address) <= 100
-        # Fallback: non-empty
-        return True
-    except Exception:
-        return False
+    return validate_wallet_address(symbol, address)
 
 
 def _perform_chain_send(sender_fn, crypto_symbol, wallet_address, crypto_amount, order_id, max_attempts=1) -> tuple[bool, str]:
@@ -311,7 +296,19 @@ class BuyCryptoAPI(APIView):
         if total_ngn > MAX_BUY_NGN:
             return Response({"error": "amount_too_large"}, status=drf_status.HTTP_400_BAD_REQUEST)
 
-        # ---- 4) Atomic debit & create pending records ----
+        # ---- 4) Security checks for fraud detection ----
+        # Note: These checks log suspicious patterns but do NOT block transactions.
+        # Admins can review alerts in the TransactionMonitoring admin panel.
+        # To block transactions based on these checks, modify the functions to raise
+        # ValidationError instead of just logging.
+        
+        # Check for rapid successive purchases
+        check_rapid_purchases(request.user, time_window_minutes=5, max_purchases=3)
+        
+        # Check for unusual transaction amounts
+        check_unusual_amount(request.user, total_ngn, crypto.symbol)
+
+        # ---- 5) Atomic debit & create pending records ----
         try:
             with transaction.atomic():
                 # lock wallet row
@@ -420,7 +417,10 @@ class BuyCryptoAPI(APIView):
             elif "network" in err_msg.lower():
                 msg = "Network problem — try again soon."
 
-            return Response({"error": msg, "detail": str(err_msg)}, status=drf_status.HTTP_400_BAD_REQUEST)
+            # Sanitize error message before returning to client
+            sanitized_detail = sanitize_error_message(err_msg)
+            
+            return Response({"error": msg, "detail": sanitized_detail}, status=drf_status.HTTP_400_BAD_REQUEST)
 
         # ---- 6) success path — mark order + tx success and release locked funds appropriately ----
         tx_hash = result
