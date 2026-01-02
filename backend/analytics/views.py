@@ -17,10 +17,18 @@ from wallet.models import Wallet, WalletTransaction
 from p2p.models import DepositOrder, WithdrawOrder, Deposit_P2P_Offer, Withdraw_P2P_Offer
 from gasfee.models import CryptoPurchase
 from rewards.models import Bonus
+from referrals.models import Referral
 
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Analytics Configuration Constants
+PROFIT_MARGIN = 0.80  # 80% profit margin for revenue calculations
+EXPENSE_RATIO = 0.20  # 20% expense ratio for revenue calculations
+CAC_EXPENSE_RATIO = 0.20  # Customer acquisition cost as 20% of revenue
+DAU_TARGET_PERCENTAGE = 0.30  # Target 30% of total users as daily active users
+MAU_TARGET_PERCENTAGE = 0.70  # Target 70% of total users as monthly active users
 
 
 def safe_divide(numerator, denominator, default=0):
@@ -514,9 +522,9 @@ class RevenueAnalyticsView(APIView):
             total_revenue += p2p_revenue['total'] or Decimal('0.00')
             total_revenue += crypto_revenue['total'] or Decimal('0.00')
             
-            # Calculate net profit and expenses (simplified - using 80/20 split)
-            net_profit = float(total_revenue) * 0.80
-            total_expenses = float(total_revenue) * 0.20
+            # Calculate net profit and expenses using configured ratios
+            net_profit = float(total_revenue) * PROFIT_MARGIN
+            total_expenses = float(total_revenue) * EXPENSE_RATIO
             
             # Daily revenue trend for frontend
             daily_revenue_trend = WalletTransaction.objects.filter(
@@ -541,7 +549,7 @@ class RevenueAnalyticsView(APIView):
                     {
                         'date': item['date'].isoformat(),
                         'revenue': float(item['revenue'] or 0),
-                        'profit': round(float(item['revenue'] or 0) * 0.80, 2)
+                        'profit': round(float(item['revenue'] or 0) * PROFIT_MARGIN, 2)
                     }
                     for item in daily_revenue_trend
                 ],
@@ -686,8 +694,7 @@ class UserAnalyticsView(APIView):
                     'active_users': day_active_users
                 })
             
-            # Top referrers (mock data for now - requires referral model updates)
-            from referrals.models import Referral
+            # Top referrers - using Referral model if available
             top_referrers_data = []
             try:
                 # Get top referrers by referral count
@@ -835,11 +842,21 @@ class ServiceAnalyticsView(APIView):
                 status='success'
             ).aggregate(volume=Sum('amount'), count=Count('id'))
             
+            airtime_total = WalletTransaction.objects.filter(
+                created_at__gte=start_date,
+                category='airtime'
+            ).count()
+            
             data_volume = WalletTransaction.objects.filter(
                 created_at__gte=start_date,
                 category='data',
                 status='success'
             ).aggregate(volume=Sum('amount'), count=Count('id'))
+            
+            data_total = WalletTransaction.objects.filter(
+                created_at__gte=start_date,
+                category='data'
+            ).count()
             
             cable_volume = WalletTransaction.objects.filter(
                 created_at__gte=start_date,
@@ -966,13 +983,13 @@ class ServiceAnalyticsView(APIView):
                         'service_name': 'Airtime',
                         'usage_count': airtime_volume['count'] or 0,
                         'revenue': float(airtime_volume['volume'] or 0),
-                        'success_rate': 100.0  # All completed transactions
+                        'success_rate': round(safe_divide(airtime_volume['count'] or 0, airtime_total, 0) * 100, 2)
                     },
                     {
                         'service_name': 'Data',
                         'usage_count': data_volume['count'] or 0,
                         'revenue': float(data_volume['volume'] or 0),
-                        'success_rate': 100.0
+                        'success_rate': round(safe_divide(data_volume['count'] or 0, data_total, 0) * 100, 2)
                     }
                 ],
                 # Backward compatibility - nested structure
@@ -1131,7 +1148,7 @@ class KPIAnalyticsView(APIView):
             # CAC - Customer Acquisition Cost (simplified - marketing spend / new users)
             # Using a simplified calculation: total expenses / new users in period
             new_users_period = User.objects.filter(date_joined__gte=start_date).count()
-            cac = safe_divide(float(total_revenue) * 0.20, new_users_period, 0)  # Assume 20% of revenue as acquisition cost
+            cac = safe_divide(float(total_revenue) * CAC_EXPENSE_RATIO, new_users_period, 0)
             
             # ARPU - Average Revenue Per User
             arpu = safe_divide(float(total_revenue), active_users, 0)
@@ -1159,9 +1176,9 @@ class KPIAnalyticsView(APIView):
             ltv_cac_ratio = safe_divide(clv, cac, 0)
             ltv_cac_ratio_trend = 0.0  # Simplified
             
-            # Targets (these would ideally come from a settings/config)
-            dau_target = int(total_users * 0.3)  # 30% of total users as daily target
-            mau_target = int(total_users * 0.7)  # 70% of total users as monthly target
+            # Targets (using configured percentages)
+            dau_target = int(total_users * DAU_TARGET_PERCENTAGE)
+            mau_target = int(total_users * MAU_TARGET_PERCENTAGE)
             
             # Bonus distribution
             bonus_stats = Bonus.objects.filter(
