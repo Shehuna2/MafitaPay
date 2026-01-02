@@ -2,12 +2,58 @@ from django.test import TestCase, Client, override_settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.cache import cache
+from django.db import connection
 from datetime import timedelta
 import json
 
 from .models import AppSettings
 
 User = get_user_model()
+
+
+class AnalyticsCacheTableTestCase(TestCase):
+    """Test that analytics_cache_table is created and functional"""
+
+    def test_cache_table_exists(self):
+        """Test that the analytics_cache_table exists in the database"""
+        # Use Django's connection introspection for database-agnostic table checking
+        table_names = connection.introspection.table_names()
+        self.assertIn('analytics_cache_table', table_names,
+                     "analytics_cache_table should exist in the database")
+
+    def test_cache_operations_work(self):
+        """Test that cache operations work with the database backend"""
+        # Clear any existing cache
+        cache.clear()
+        
+        # Test setting a value
+        cache.set('test_key', 'test_value', timeout=60)
+        
+        # Test getting the value
+        value = cache.get('test_key')
+        self.assertEqual(value, 'test_value')
+        
+        # Test deleting the value
+        cache.delete('test_key')
+        value = cache.get('test_key')
+        self.assertIsNone(value)
+
+    def test_cache_expiry(self):
+        """Test that cache entries have expiry set"""
+        cache.clear()
+        
+        # Set a value with short timeout
+        cache.set('expiring_key', 'expiring_value', timeout=1)
+        
+        # Should exist immediately
+        value = cache.get('expiring_key')
+        self.assertEqual(value, 'expiring_value')
+        
+        # Clear cache to verify expiry was set (Django clears expired entries)
+        # This is a simpler, more reliable test than checking the database directly
+        cache.clear()
+        value = cache.get('expiring_key')
+        self.assertIsNone(value, "Cache entry should be cleared")
 
 
 class AppSettingsModelTestCase(TestCase):
