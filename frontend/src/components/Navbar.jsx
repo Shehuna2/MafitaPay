@@ -1,13 +1,13 @@
 // src/components/Navbar.jsx
 import { Link, useLocation } from "react-router-dom";
-import { Bell, Headphones, X } from "lucide-react";
+import { Bell, Headphones, X, BarChart2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import client from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
   const location = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const access = localStorage.getItem("access");
 
   const [notifications, setNotifications] = useState([]);
@@ -94,6 +94,9 @@ export default function Navbar() {
     window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
   };
 
+  // Check if user is admin/staff for analytics access
+  const isAdmin = user?.is_staff || user?.is_superuser;
+
   return (
     <nav className="fixed top-0 left-0 w-full bg-gray-950/40 backdrop-blur-md border-b border-gray-800 z-50">
       <div className="container mx-auto px-4 py-3.5 flex justify-between items-center">
@@ -116,6 +119,20 @@ export default function Navbar() {
 
         {/* Icons */}
         <div className="flex items-center gap-4">
+          {/* Analytics - Admin/Staff Only */}
+          {isAdmin && (
+            <Link to="/analytics/overview" className="p-1.5">
+              <BarChart2
+                size={22}
+                className={`transition ${
+                  location.pathname.startsWith("/analytics")
+                    ? "text-green-400"
+                    : "text-gray-300 hover:text-green-400"
+                }`}
+              />
+            </Link>
+          )}
+
           {/* Notifications */}
           <div className="relative" ref={notificationRef}>
             <button onClick={handleToggleNotifications} className="relative p-1.5">
