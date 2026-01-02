@@ -17,7 +17,6 @@ from wallet.models import Wallet, WalletTransaction
 from p2p.models import DepositOrder, WithdrawOrder, Deposit_P2P_Offer, Withdraw_P2P_Offer
 from gasfee.models import CryptoPurchase
 from rewards.models import Bonus
-from referrals.models import Referral
 
 import logging
 
@@ -29,6 +28,7 @@ EXPENSE_RATIO = 0.20  # 20% expense ratio for revenue calculations
 CAC_EXPENSE_RATIO = 0.20  # Customer acquisition cost as 20% of revenue
 DAU_TARGET_PERCENTAGE = 0.30  # Target 30% of total users as daily active users
 MAU_TARGET_PERCENTAGE = 0.70  # Target 70% of total users as monthly active users
+BILL_PAYMENT_CATEGORIES = ['airtime', 'data', 'cable', 'electricity', 'education']
 
 
 def safe_divide(numerator, denominator, default=0):
@@ -694,20 +694,21 @@ class UserAnalyticsView(APIView):
                     'active_users': day_active_users
                 })
             
-            # Top referrers - using Referral model if available
+            # Top referrers - using User.referred_by relationship
             top_referrers_data = []
             try:
-                # Get top referrers by referral count
-                referrer_stats = Referral.objects.filter(
-                    created_at__gte=start_date
-                ).values('referrer__email').annotate(
+                # Get users who have been referred and group by referrer
+                referrer_stats = User.objects.filter(
+                    referred_by__isnull=False,
+                    date_joined__gte=start_date
+                ).values('referred_by__email').annotate(
                     referral_count=Count('id'),
-                    active_referrals=Count('id', filter=Q(referee__is_active=True))
+                    active_referrals=Count('id', filter=Q(is_active=True))
                 ).order_by('-referral_count')[:10]
                 
                 top_referrers_data = [
                     {
-                        'username': item['referrer__email'] or 'Unknown',
+                        'username': item['referred_by__email'] or 'Unknown',
                         'referral_count': item['referral_count'],
                         'active_referrals': item['active_referrals'],
                         'total_revenue': 0.0  # Can be calculated from referee transactions
@@ -715,7 +716,7 @@ class UserAnalyticsView(APIView):
                     for item in referrer_stats
                 ]
             except Exception:
-                # If referral model doesn't have the expected structure, use empty list
+                # If the query fails for any reason, use empty list
                 pass
             
             data = {
@@ -828,7 +829,7 @@ class ServiceAnalyticsView(APIView):
             # Bills Analytics (from transactions)
             bills_transactions = WalletTransaction.objects.filter(
                 created_at__gte=start_date,
-                category__in=['airtime', 'data', 'cable', 'electricity', 'education'],
+                category__in=BILL_PAYMENT_CATEGORIES,
                 status='success'
             ).aggregate(
                 total_count=Count('id'),
@@ -1173,7 +1174,7 @@ class KPIAnalyticsView(APIView):
             churn_rate_trend = 0.0  # Simplified
             retention_trend = round(safe_divide(active_users - prev_active_users, prev_active_users, 0) * 100, 2) if prev_active_users > 0 else 0.0
             stickiness_trend = round(safe_divide(dau, mau, 0) * 100, 2) if mau > 0 else 0.0
-            ltv_cac_ratio = safe_divide(clv, cac, 0)
+            ltv_cac_ratio = safe_divide(float(clv), cac, 0)
             ltv_cac_ratio_trend = 0.0  # Simplified
             
             # Targets (using configured percentages)
