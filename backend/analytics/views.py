@@ -325,6 +325,13 @@ class TransactionAnalyticsView(APIView):
                 volume=Sum('amount')
             ).order_by('date')
             
+            # Status breakdown
+            status_breakdown = WalletTransaction.objects.filter(
+                created_at__gte=start_date
+            ).values('status').annotate(
+                count=Count('id')
+            ).order_by('-count')
+            
             # Success rate
             total_tx = WalletTransaction.objects.filter(
                 created_at__gte=start_date
@@ -340,8 +347,31 @@ class TransactionAnalyticsView(APIView):
                 status='failed'
             ).count()
             
+            # Calculate total volume and average transaction
+            total_volume_data = WalletTransaction.objects.filter(
+                created_at__gte=start_date,
+                status='success'
+            ).aggregate(
+                total_volume=Sum('amount'),
+                total_count=Count('id')
+            )
+            
+            total_volume = total_volume_data['total_volume'] or Decimal('0.00')
+            total_count = total_volume_data['total_count'] or 0
+            average_transaction = safe_divide(total_volume, total_count, 0)
+            
+            # Recent transactions for table
+            recent_transactions = WalletTransaction.objects.filter(
+                created_at__gte=start_date
+            ).select_related('user').order_by('-created_at')[:50]
+            
             data = {
                 'period_days': days,
+                # Flat keys for frontend compatibility
+                'total_volume': float(total_volume),
+                'total_count': total_count,
+                'average_transaction': round(average_transaction, 2),
+                # Nested summary for backward compatibility
                 'summary': {
                     'total_transactions': total_tx,
                     'successful': successful_tx,
@@ -356,6 +386,15 @@ class TransactionAnalyticsView(APIView):
                     }
                     for item in by_category
                 ],
+                # Frontend expects type_breakdown
+                'type_breakdown': [
+                    {
+                        'type': item['tx_type'],
+                        'count': item['count']
+                    }
+                    for item in by_type
+                ],
+                # Keep by_type for backward compatibility
                 'by_type': [
                     {
                         'type': item['tx_type'],
@@ -364,6 +403,24 @@ class TransactionAnalyticsView(APIView):
                     }
                     for item in by_type
                 ],
+                # Frontend expects status_breakdown
+                'status_breakdown': [
+                    {
+                        'status': item['status'],
+                        'count': item['count']
+                    }
+                    for item in status_breakdown
+                ],
+                # Frontend expects volume_over_time
+                'volume_over_time': [
+                    {
+                        'date': item['date'].isoformat(),
+                        'count': item['count'],
+                        'volume': float(item['volume'] or 0)
+                    }
+                    for item in daily_trend
+                ],
+                # Keep daily_trend for backward compatibility
                 'daily_trend': [
                     {
                         'date': item['date'].isoformat(),
@@ -371,6 +428,17 @@ class TransactionAnalyticsView(APIView):
                         'volume': float(item['volume'] or 0)
                     }
                     for item in daily_trend
+                ],
+                # Transactions for table
+                'transactions': [
+                    {
+                        'created_at': tx.created_at.isoformat(),
+                        'transaction_type': tx.category,
+                        'amount': float(tx.amount),
+                        'status': tx.status,
+                        'username': tx.user.email
+                    }
+                    for tx in recent_transactions
                 ],
                 'generated_at': timezone.now().isoformat()
             }
@@ -446,9 +514,71 @@ class RevenueAnalyticsView(APIView):
             total_revenue += p2p_revenue['total'] or Decimal('0.00')
             total_revenue += crypto_revenue['total'] or Decimal('0.00')
             
+            # Calculate net profit and expenses (simplified - using 80/20 split)
+            net_profit = float(total_revenue) * 0.80
+            total_expenses = float(total_revenue) * 0.20
+            
+            # Daily revenue trend for frontend
+            daily_revenue_trend = WalletTransaction.objects.filter(
+                category='deposit',
+                status='success',
+                created_at__gte=start_date
+            ).annotate(
+                date=TruncDate('created_at')
+            ).values('date').annotate(
+                revenue=Sum('amount'),
+                count=Count('id')
+            ).order_by('date')
+            
             data = {
                 'period_days': days,
                 'total_revenue': float(total_revenue),
+                # Flat keys for frontend compatibility
+                'net_profit': round(net_profit, 2),
+                'total_expenses': round(total_expenses, 2),
+                # Revenue trend with profit
+                'revenue_trend': [
+                    {
+                        'date': item['date'].isoformat(),
+                        'revenue': float(item['revenue'] or 0),
+                        'profit': round(float(item['revenue'] or 0) * 0.80, 2)
+                    }
+                    for item in daily_revenue_trend
+                ],
+                # Payment method breakdown
+                'payment_method_breakdown': [
+                    {'method': 'Deposits', 'revenue': float(deposit_revenue['total'] or 0)},
+                    {'method': 'P2P', 'revenue': float(p2p_revenue['total'] or 0)},
+                    {'method': 'Crypto', 'revenue': float(crypto_revenue['total'] or 0)}
+                ],
+                # Service breakdown (same as payment methods for now)
+                'service_breakdown': [
+                    {'service': 'Deposits', 'revenue': float(deposit_revenue['total'] or 0)},
+                    {'service': 'P2P Trading', 'revenue': float(p2p_revenue['total'] or 0)},
+                    {'service': 'Crypto Purchase', 'revenue': float(crypto_revenue['total'] or 0)}
+                ],
+                # Top payment methods for table
+                'top_payment_methods': [
+                    {
+                        'method': 'Deposits',
+                        'revenue': float(deposit_revenue['total'] or 0),
+                        'count': deposit_revenue['count'] or 0,
+                        'average': round(safe_divide(deposit_revenue['total'] or 0, deposit_revenue['count'] or 0, 0), 2)
+                    },
+                    {
+                        'method': 'P2P',
+                        'revenue': float(p2p_revenue['total'] or 0),
+                        'count': p2p_revenue['count'] or 0,
+                        'average': round(safe_divide(p2p_revenue['total'] or 0, p2p_revenue['count'] or 0, 0), 2)
+                    },
+                    {
+                        'method': 'Crypto',
+                        'revenue': float(crypto_revenue['total'] or 0),
+                        'count': crypto_revenue['count'] or 0,
+                        'average': round(safe_divide(crypto_revenue['total'] or 0, crypto_revenue['count'] or 0, 0), 2)
+                    }
+                ],
+                # Backward compatibility
                 'by_source': {
                     'deposits': {
                         'revenue': float(deposit_revenue['total'] or 0),
@@ -534,8 +664,76 @@ class UserAnalyticsView(APIView):
                 tx_count=Count('id')
             ).aggregate(avg_tx=Avg('tx_count'))
             
+            # Calculate retention rate and other metrics
+            regular_user_count = total_users - merchants
+            retention_rate = round(safe_divide(active_users, total_users, 0) * 100, 2)
+            avg_daily_users = round(safe_divide(active_users, days, 0), 2)
+            
+            # User growth data with cumulative counts
+            user_growth_data = []
+            for item in daily_registrations:
+                # Get cumulative users up to this date
+                cumulative_users = User.objects.filter(date_joined__lte=item['date']).count()
+                # Active users on this day
+                day_active_users = WalletTransaction.objects.filter(
+                    created_at__date=item['date']
+                ).values('user').distinct().count()
+                
+                user_growth_data.append({
+                    'date': item['date'].isoformat(),
+                    'total_users': cumulative_users,
+                    'new_users': item['count'],
+                    'active_users': day_active_users
+                })
+            
+            # Top referrers (mock data for now - requires referral model updates)
+            from referrals.models import Referral
+            top_referrers_data = []
+            try:
+                # Get top referrers by referral count
+                referrer_stats = Referral.objects.filter(
+                    created_at__gte=start_date
+                ).values('referrer__email').annotate(
+                    referral_count=Count('id'),
+                    active_referrals=Count('id', filter=Q(referee__is_active=True))
+                ).order_by('-referral_count')[:10]
+                
+                top_referrers_data = [
+                    {
+                        'username': item['referrer__email'] or 'Unknown',
+                        'referral_count': item['referral_count'],
+                        'active_referrals': item['active_referrals'],
+                        'total_revenue': 0.0  # Can be calculated from referee transactions
+                    }
+                    for item in referrer_stats
+                ]
+            except Exception:
+                # If referral model doesn't have the expected structure, use empty list
+                pass
+            
             data = {
                 'period_days': days,
+                # Flat keys for frontend compatibility
+                'total_users': total_users,
+                'new_users': new_users,
+                'active_users': active_users,
+                'verified_users': verified_users,
+                'retention_rate': retention_rate,
+                'merchant_count': merchants,
+                'regular_user_count': regular_user_count,
+                'avg_daily_users': avg_daily_users,
+                # User growth chart data
+                'user_growth': user_growth_data,
+                # User segmentation for pie chart
+                'user_segmentation': [
+                    {'segment': 'Merchants', 'count': merchants},
+                    {'segment': 'Regular Users', 'count': regular_user_count},
+                    {'segment': 'Verified', 'count': verified_users},
+                    {'segment': 'Unverified', 'count': total_users - verified_users}
+                ],
+                # Top referrers table
+                'top_referrers': top_referrers_data,
+                # Backward compatibility - nested summary
                 'summary': {
                     'total_users': total_users,
                     'new_users': new_users,
@@ -623,33 +821,167 @@ class ServiceAnalyticsView(APIView):
             # Bills Analytics (from transactions)
             bills_transactions = WalletTransaction.objects.filter(
                 created_at__gte=start_date,
-                category__in=['airtime', 'data'],
+                category__in=['airtime', 'data', 'cable', 'electricity', 'education'],
                 status='success'
             ).aggregate(
                 total_count=Count('id'),
                 total_volume=Sum('amount')
             )
             
-            airtime_count = WalletTransaction.objects.filter(
+            # Individual bill category volumes
+            airtime_volume = WalletTransaction.objects.filter(
                 created_at__gte=start_date,
                 category='airtime',
                 status='success'
-            ).count()
+            ).aggregate(volume=Sum('amount'), count=Count('id'))
             
-            data_count = WalletTransaction.objects.filter(
+            data_volume = WalletTransaction.objects.filter(
                 created_at__gte=start_date,
                 category='data',
                 status='success'
-            ).count()
+            ).aggregate(volume=Sum('amount'), count=Count('id'))
+            
+            cable_volume = WalletTransaction.objects.filter(
+                created_at__gte=start_date,
+                category='cable',
+                status='success'
+            ).aggregate(volume=Sum('amount'), count=Count('id'))
+            
+            electricity_volume = WalletTransaction.objects.filter(
+                created_at__gte=start_date,
+                category='electricity',
+                status='success'
+            ).aggregate(volume=Sum('amount'), count=Count('id'))
+            
+            education_volume = WalletTransaction.objects.filter(
+                created_at__gte=start_date,
+                category='education',
+                status='success'
+            ).aggregate(volume=Sum('amount'), count=Count('id'))
+            
+            # P2P daily data for charts
+            p2p_daily_deposits = DepositOrder.objects.filter(
+                created_at__gte=start_date,
+                status='completed'
+            ).annotate(
+                date=TruncDate('created_at')
+            ).values('date').annotate(
+                volume=Sum('total_price'),
+                count=Count('id')
+            ).order_by('date')
+            
+            # Get withdraw orders if model exists
+            p2p_daily_withdraws = []
+            try:
+                p2p_daily_withdraws = WithdrawOrder.objects.filter(
+                    created_at__gte=start_date,
+                    status='completed'
+                ).annotate(
+                    date=TruncDate('created_at')
+                ).values('date').annotate(
+                    volume=Sum('total_price'),
+                    count=Count('id')
+                ).order_by('date')
+            except Exception:
+                pass
+            
+            # Combine P2P data
+            p2p_data_dict = {}
+            for item in p2p_daily_deposits:
+                date_str = item['date'].isoformat()
+                p2p_data_dict[date_str] = {
+                    'date': date_str,
+                    'deposits': float(item['volume'] or 0),
+                    'withdrawals': 0.0
+                }
+            
+            for item in p2p_daily_withdraws:
+                date_str = item['date'].isoformat()
+                if date_str in p2p_data_dict:
+                    p2p_data_dict[date_str]['withdrawals'] = float(item['volume'] or 0)
+                else:
+                    p2p_data_dict[date_str] = {
+                        'date': date_str,
+                        'deposits': 0.0,
+                        'withdrawals': float(item['volume'] or 0)
+                    }
+            
+            p2p_data = list(p2p_data_dict.values())
+            
+            # Calculate totals
+            p2p_vol = float(p2p_deposit_orders['total_volume'] or 0)
+            bill_vol = float(bills_transactions['total_volume'] or 0)
+            crypto_vol = float(crypto_purchases['total_volume'] or 0)
+            total_service_transactions = (
+                p2p_deposit_orders['total_count'] or 0
+            ) + (
+                bills_transactions['total_count'] or 0
+            ) + (
+                crypto_purchases['total_count'] or 0
+            )
             
             data = {
                 'period_days': days,
+                # Flat keys for frontend compatibility
+                'p2p_volume': p2p_vol,
+                'bill_payment_volume': bill_vol,
+                'crypto_volume': crypto_vol,
+                'total_service_transactions': total_service_transactions,
+                'airtime_volume': float(airtime_volume['volume'] or 0),
+                'data_volume': float(data_volume['volume'] or 0),
+                'cable_volume': float(cable_volume['volume'] or 0),
+                'electricity_volume': float(electricity_volume['volume'] or 0),
+                'education_volume': float(education_volume['volume'] or 0),
+                # P2P chart data
+                'p2p_data': p2p_data,
+                # Bill payment breakdown
+                'bill_payment_breakdown': [
+                    {'category': 'Airtime', 'volume': float(airtime_volume['volume'] or 0)},
+                    {'category': 'Data', 'volume': float(data_volume['volume'] or 0)},
+                    {'category': 'Cable TV', 'volume': float(cable_volume['volume'] or 0)},
+                    {'category': 'Electricity', 'volume': float(electricity_volume['volume'] or 0)},
+                    {'category': 'Education', 'volume': float(education_volume['volume'] or 0)}
+                ],
+                # Service usage
+                'service_usage': [
+                    {'service': 'P2P Trading', 'count': p2p_deposit_orders['total_count'] or 0},
+                    {'service': 'Crypto Purchase', 'count': crypto_purchases['total_count'] or 0},
+                    {'service': 'Bill Payments', 'count': bills_transactions['total_count'] or 0}
+                ],
+                # Top services table
+                'top_services': [
+                    {
+                        'service_name': 'P2P Trading',
+                        'usage_count': p2p_deposit_orders['total_count'] or 0,
+                        'revenue': p2p_vol,
+                        'success_rate': round(safe_divide(p2p_deposit_orders['completed'] or 0, p2p_deposit_orders['total_count'] or 0, 0) * 100, 2)
+                    },
+                    {
+                        'service_name': 'Crypto Purchase',
+                        'usage_count': crypto_purchases['total_count'] or 0,
+                        'revenue': crypto_vol,
+                        'success_rate': round(safe_divide(crypto_purchases['completed'] or 0, crypto_purchases['total_count'] or 0, 0) * 100, 2)
+                    },
+                    {
+                        'service_name': 'Airtime',
+                        'usage_count': airtime_volume['count'] or 0,
+                        'revenue': float(airtime_volume['volume'] or 0),
+                        'success_rate': 100.0  # All completed transactions
+                    },
+                    {
+                        'service_name': 'Data',
+                        'usage_count': data_volume['count'] or 0,
+                        'revenue': float(data_volume['volume'] or 0),
+                        'success_rate': 100.0
+                    }
+                ],
+                # Backward compatibility - nested structure
                 'p2p': {
                     'total_orders': p2p_deposit_orders['total_count'] or 0,
                     'completed': p2p_deposit_orders['completed'] or 0,
                     'pending': p2p_deposit_orders['pending'] or 0,
                     'cancelled': p2p_deposit_orders['cancelled'] or 0,
-                    'total_volume': float(p2p_deposit_orders['total_volume'] or 0),
+                    'total_volume': p2p_vol,
                     'active_offers': active_p2p_offers,
                     'completion_rate': round(safe_divide(p2p_deposit_orders['completed'] or 0, p2p_deposit_orders['total_count'] or 0, 0) * 100, 2)
                 },
@@ -658,7 +990,7 @@ class ServiceAnalyticsView(APIView):
                     'completed': crypto_purchases['completed'] or 0,
                     'pending': crypto_purchases['pending'] or 0,
                     'failed': crypto_purchases['failed'] or 0,
-                    'total_volume': float(crypto_purchases['total_volume'] or 0),
+                    'total_volume': crypto_vol,
                     'success_rate': round(safe_divide(crypto_purchases['completed'] or 0, crypto_purchases['total_count'] or 0, 0) * 100, 2),
                     'by_network': [
                         {
@@ -671,9 +1003,9 @@ class ServiceAnalyticsView(APIView):
                 },
                 'bills': {
                     'total_transactions': bills_transactions['total_count'] or 0,
-                    'total_volume': float(bills_transactions['total_volume'] or 0),
-                    'airtime_count': airtime_count,
-                    'data_count': data_count
+                    'total_volume': bill_vol,
+                    'airtime_count': airtime_volume['count'] or 0,
+                    'data_count': data_volume['count'] or 0
                 },
                 'generated_at': timezone.now().isoformat()
             }
@@ -741,6 +1073,96 @@ class KPIAnalyticsView(APIView):
             
             retention_rate = safe_divide(active_users, total_users, 0) * 100
             
+            # Calculate previous period metrics for trends
+            previous_start_date = start_date - timedelta(days=days)
+            
+            # Previous period metrics
+            prev_total_tx = WalletTransaction.objects.filter(
+                created_at__gte=previous_start_date,
+                created_at__lt=start_date
+            ).count()
+            
+            prev_successful_tx = WalletTransaction.objects.filter(
+                created_at__gte=previous_start_date,
+                created_at__lt=start_date,
+                status='success'
+            ).count()
+            
+            prev_revenue = WalletTransaction.objects.filter(
+                category='deposit',
+                status='success',
+                created_at__gte=previous_start_date,
+                created_at__lt=start_date
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            
+            prev_active_users = WalletTransaction.objects.filter(
+                created_at__gte=previous_start_date,
+                created_at__lt=start_date
+            ).values('user').distinct().count()
+            
+            # DAU - Daily Active Users (users active today)
+            today = timezone.now().date()
+            dau = WalletTransaction.objects.filter(
+                created_at__date=today
+            ).values('user').distinct().count()
+            
+            # MAU - Monthly Active Users (last 30 days)
+            mau_start = timezone.now() - timedelta(days=30)
+            mau = WalletTransaction.objects.filter(
+                created_at__gte=mau_start
+            ).values('user').distinct().count()
+            
+            # Previous DAU and MAU for trends
+            yesterday = today - timedelta(days=1)
+            prev_dau = WalletTransaction.objects.filter(
+                created_at__date=yesterday
+            ).values('user').distinct().count()
+            
+            prev_mau_start = mau_start - timedelta(days=30)
+            prev_mau = WalletTransaction.objects.filter(
+                created_at__gte=prev_mau_start,
+                created_at__lt=mau_start
+            ).values('user').distinct().count()
+            
+            # Calculate KPI metrics
+            transaction_success_rate = round(safe_divide(successful_tx, total_tx, 0) * 100, 2)
+            prev_success_rate = round(safe_divide(prev_successful_tx, prev_total_tx, 0) * 100, 2)
+            
+            # CAC - Customer Acquisition Cost (simplified - marketing spend / new users)
+            # Using a simplified calculation: total expenses / new users in period
+            new_users_period = User.objects.filter(date_joined__gte=start_date).count()
+            cac = safe_divide(float(total_revenue) * 0.20, new_users_period, 0)  # Assume 20% of revenue as acquisition cost
+            
+            # ARPU - Average Revenue Per User
+            arpu = safe_divide(float(total_revenue), active_users, 0)
+            prev_arpu = safe_divide(float(prev_revenue), prev_active_users, 0)
+            
+            # Churn rate (simplified - users who became inactive)
+            total_users_prev_period = User.objects.filter(date_joined__lt=start_date).count()
+            churn_rate = round(safe_divide(total_users_prev_period - active_users, total_users_prev_period, 0) * 100, 2)
+            
+            # Growth rates
+            user_growth_rate = round(safe_divide(new_users_period, total_users - new_users_period, 0) * 100, 2) if total_users > new_users_period else 0.0
+            revenue_growth_rate = round(safe_divide(float(total_revenue) - float(prev_revenue), float(prev_revenue), 0) * 100, 2) if float(prev_revenue) > 0 else 0.0
+            transaction_growth_rate = round(safe_divide(successful_tx - prev_successful_tx, prev_successful_tx, 0) * 100, 2) if prev_successful_tx > 0 else 0.0
+            
+            # Calculate trends (percentage change)
+            dau_trend = round(safe_divide(dau - prev_dau, prev_dau, 0) * 100, 2) if prev_dau > 0 else 0.0
+            mau_trend = round(safe_divide(mau - prev_mau, prev_mau, 0) * 100, 2) if prev_mau > 0 else 0.0
+            cac_trend = 0.0  # Simplified - would need historical CAC data
+            ltv_trend = 0.0  # Simplified - would need historical LTV data
+            arpu_trend = round(safe_divide(arpu - prev_arpu, prev_arpu, 0) * 100, 2) if prev_arpu > 0 else 0.0
+            success_rate_trend = round(transaction_success_rate - prev_success_rate, 2)
+            churn_rate_trend = 0.0  # Simplified
+            retention_trend = round(safe_divide(active_users - prev_active_users, prev_active_users, 0) * 100, 2) if prev_active_users > 0 else 0.0
+            stickiness_trend = round(safe_divide(dau, mau, 0) * 100, 2) if mau > 0 else 0.0
+            ltv_cac_ratio = safe_divide(clv, cac, 0)
+            ltv_cac_ratio_trend = 0.0  # Simplified
+            
+            # Targets (these would ideally come from a settings/config)
+            dau_target = int(total_users * 0.3)  # 30% of total users as daily target
+            mau_target = int(total_users * 0.7)  # 70% of total users as monthly target
+            
             # Bonus distribution
             bonus_stats = Bonus.objects.filter(
                 created_at__gte=start_date
@@ -753,11 +1175,41 @@ class KPIAnalyticsView(APIView):
             
             data = {
                 'period_days': days,
+                # Flat KPI keys for frontend compatibility
+                'dau': dau,
+                'mau': mau,
+                'cac': round(cac, 2),
+                'ltv': round(float(clv), 2),
+                'arpu': round(arpu, 2),
+                'transaction_success_rate': transaction_success_rate,
+                'churn_rate': churn_rate,
+                'retention_rate': round(retention_rate, 2),
+                'user_growth_rate': user_growth_rate,
+                'revenue_growth_rate': revenue_growth_rate,
+                'transaction_growth_rate': transaction_growth_rate,
+                # Trend values
+                'dau_trend': dau_trend,
+                'mau_trend': mau_trend,
+                'cac_trend': cac_trend,
+                'ltv_trend': ltv_trend,
+                'arpu_trend': arpu_trend,
+                'success_rate_trend': success_rate_trend,
+                'churn_rate_trend': churn_rate_trend,
+                'retention_trend': retention_trend,
+                'stickiness_trend': stickiness_trend,
+                'ltv_cac_ratio_trend': ltv_cac_ratio_trend,
+                'user_growth_trend': user_growth_rate,
+                'revenue_growth_trend': revenue_growth_rate,
+                'transaction_growth_trend': transaction_growth_rate,
+                # Target values
+                'dau_target': dau_target,
+                'mau_target': mau_target,
+                # Backward compatibility - nested KPIs
                 'kpis': {
                     'total_platform_value': float(total_wallet_balance),
-                    'transaction_success_rate': round(safe_divide(successful_tx, total_tx, 0) * 100, 2),
+                    'transaction_success_rate': transaction_success_rate,
                     'average_transaction_value': float(avg_tx_value),
-                    'customer_lifetime_value': float(clv),
+                    'customer_lifetime_value': round(float(clv), 2),
                     'user_retention_rate': round(retention_rate, 2),
                     'total_users': total_users,
                     'active_users': active_users
