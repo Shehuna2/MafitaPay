@@ -155,9 +155,11 @@ class DashboardOverviewView(APIView):
                 total_volume=Sum('amount')
             )
             
-            # Rewards distributed
+            # Rewards distributed (exclude reversed bonuses)
             rewards_distributed = Bonus.objects.filter(
                 created_at__gte=start_date
+            ).exclude(
+                status='reversed'
             ).aggregate(
                 total_amount=Sum('amount')
             )
@@ -168,41 +170,55 @@ class DashboardOverviewView(APIView):
             success_rate = round(safe_divide(successful_tx_count, total_tx_count, 0) * 100, 2)
             
             # Calculate trends (percentage change from previous period)
-            transactions_trend = round(
-                safe_divide(
-                    (tx_stats['total_count'] or 0) - (prev_tx_stats['total_count'] or 0),
-                    prev_tx_stats['total_count'] or 1,
-                    0
-                ) * 100,
-                2
-            )
+            # When previous period has no data, show 0 trend instead of artificial values
+            if prev_tx_stats['total_count'] and prev_tx_stats['total_count'] > 0:
+                transactions_trend = round(
+                    safe_divide(
+                        (tx_stats['total_count'] or 0) - prev_tx_stats['total_count'],
+                        prev_tx_stats['total_count'],
+                        0
+                    ) * 100,
+                    2
+                )
+            else:
+                transactions_trend = 0.0
             
-            revenue_trend = round(
-                safe_divide(
-                    float(total_revenue) - float(prev_revenue),
-                    float(prev_revenue) or 1,
-                    0
-                ) * 100,
-                2
-            )
+            if prev_revenue and float(prev_revenue) > 0:
+                revenue_trend = round(
+                    safe_divide(
+                        float(total_revenue) - float(prev_revenue),
+                        float(prev_revenue),
+                        0
+                    ) * 100,
+                    2
+                )
+            else:
+                revenue_trend = 0.0
             
-            users_trend = round(
-                safe_divide(
-                    active_users - prev_active_users,
-                    prev_active_users or 1,
-                    0
-                ) * 100,
-                2
-            )
+            if prev_active_users and prev_active_users > 0:
+                users_trend = round(
+                    safe_divide(
+                        active_users - prev_active_users,
+                        prev_active_users,
+                        0
+                    ) * 100,
+                    2
+                )
+            else:
+                users_trend = 0.0
             
-            p2p_trend = round(
-                safe_divide(
-                    float(p2p_orders['volume'] or 0) - float(prev_p2p_orders['volume'] or 0),
-                    float(prev_p2p_orders['volume'] or 1),
-                    0
-                ) * 100,
-                2
-            )
+            prev_p2p_volume = float(prev_p2p_orders['volume'] or 0)
+            if prev_p2p_volume > 0:
+                p2p_trend = round(
+                    safe_divide(
+                        float(p2p_orders['volume'] or 0) - prev_p2p_volume,
+                        prev_p2p_volume,
+                        0
+                    ) * 100,
+                    2
+                )
+            else:
+                p2p_trend = 0.0
             
             data = {
                 'period_days': days,
