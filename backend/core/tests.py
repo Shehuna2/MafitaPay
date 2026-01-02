@@ -58,8 +58,8 @@ class AnalyticsCacheTableTestCase(TestCase):
     def test_cache_timezone_aware_datetime(self):
         """
         Test that cache operations work with timezone-aware datetimes.
-        This validates the fix for: TypeError: can't compare offset-naive 
-        and offset-aware datetimes
+        This validates the fix for TypeError when comparing offset-naive
+        and offset-aware datetimes.
         """
         cache.clear()
         

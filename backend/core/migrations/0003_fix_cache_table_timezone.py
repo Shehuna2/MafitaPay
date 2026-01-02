@@ -53,6 +53,7 @@ def reverse_fix(apps, schema_editor):
     """
     Reverse migration - recreate table with old schema.
     Note: This will lose timezone awareness and may reintroduce the bug.
+    In production, this reverse migration should ideally not be used.
     """
     table_name = 'analytics_cache_table'
     qn = schema_editor.connection.ops.quote_name
@@ -60,12 +61,22 @@ def reverse_fix(apps, schema_editor):
     with schema_editor.connection.cursor() as cursor:
         cursor.execute(f"DROP TABLE IF EXISTS {qn(table_name)}")
         
-        # Recreate with old schema (may cause timezone issues)
+        # Use Django field types for consistency, even in reverse
+        cache_key_field = models.CharField(max_length=255, primary_key=True)
+        value_field = models.TextField()
+        # Note: Using DateTimeField here too for consistency
+        # The bug would only appear with raw TIMESTAMP on PostgreSQL
+        expires_field = models.DateTimeField(db_index=True)
+        
+        cache_key_type = cache_key_field.db_type(connection=schema_editor.connection)
+        value_type = value_field.db_type(connection=schema_editor.connection)
+        expires_type = expires_field.db_type(connection=schema_editor.connection)
+        
         cursor.execute(f"""
             CREATE TABLE {qn(table_name)} (
-                {qn('cache_key')} VARCHAR(255) NOT NULL PRIMARY KEY,
-                {qn('value')} TEXT NOT NULL,
-                {qn('expires')} TIMESTAMP NOT NULL
+                {qn('cache_key')} {cache_key_type} NOT NULL PRIMARY KEY,
+                {qn('value')} {value_type} NOT NULL,
+                {qn('expires')} {expires_type} NOT NULL
             )
         """)
         
