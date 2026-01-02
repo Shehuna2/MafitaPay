@@ -190,4 +190,5 @@ class TransactionMonitoring(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.event_type} - {self.user.username} - {self.created_at}"
+        username = getattr(self.user, 'username', 'Unknown User') if self.user else 'Unknown User'
+        return f"{self.event_type} - {username} - {self.created_at}"

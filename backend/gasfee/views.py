@@ -297,6 +297,11 @@ class BuyCryptoAPI(APIView):
             return Response({"error": "amount_too_large"}, status=drf_status.HTTP_400_BAD_REQUEST)
 
         # ---- 4) Security checks for fraud detection ----
+        # Note: These checks log suspicious patterns but do NOT block transactions.
+        # Admins can review alerts in the TransactionMonitoring admin panel.
+        # To block transactions based on these checks, modify the functions to raise
+        # ValidationError instead of just logging.
+        
         # Check for rapid successive purchases
         check_rapid_purchases(request.user, time_window_minutes=5, max_purchases=3)
         

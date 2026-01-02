@@ -186,6 +186,10 @@ def validate_solana_address(address: str) -> bool:
         if len(decoded) != 32:
             return False
         return True
+    except (ValueError, TypeError) as e:
+        # base58.b58decode can raise ValueError for invalid base58
+        logger.debug(f"Solana address validation failed for {address}: {e}")
+        return False
     except Exception as e:
         logger.debug(f"Solana address validation failed for {address}: {e}")
         return False
@@ -235,6 +239,9 @@ def validate_ton_address(address: str) -> bool:
     Validate TON address format.
     TON addresses are base64url encoded with optional workchain prefix.
     Format: [workchain:]<base64url-address>
+    
+    Note: Only workchains -1 (masterchain) and 0 (basechain) are accepted for production.
+    Other workchains can be enabled via ALLOWED_TON_WORKCHAINS setting if needed.
     """
     if not address or not isinstance(address, str):
         return False
@@ -242,6 +249,9 @@ def validate_ton_address(address: str) -> bool:
     # TON addresses are typically 48-66 characters
     if not (20 <= len(address) <= 100):
         return False
+    
+    # Get allowed workchains from settings (default to production chains)
+    allowed_workchains = getattr(settings, 'ALLOWED_TON_WORKCHAINS', [-1, 0])
     
     try:
         # TON addresses can have workchain prefix (e.g., "0:...")
@@ -255,11 +265,10 @@ def validate_ton_address(address: str) -> bool:
             if not workchain.lstrip('-').isdigit():
                 return False
             
-            # Workchain is typically -1 or 0 for production
-            # Reject other workchains as potentially invalid
+            # Check if workchain is in allowed list
             workchain_num = int(workchain)
-            if workchain_num not in [-1, 0]:
-                logger.warning(f"Rejecting TON address with unusual workchain: {workchain_num}")
+            if workchain_num not in allowed_workchains:
+                logger.warning(f"Rejecting TON address with disallowed workchain: {workchain_num}")
                 return False
         else:
             addr_part = address
@@ -337,6 +346,21 @@ def validate_wallet_address(symbol: str, address: str) -> bool:
 # ==============================
 # Security Logging and Monitoring
 # ==============================
+
+# Cache threshold values to avoid repeated conversions
+_THRESHOLDS_CACHE = None
+
+def _get_thresholds():
+    """Get cached security thresholds from settings."""
+    global _THRESHOLDS_CACHE
+    if _THRESHOLDS_CACHE is None:
+        _THRESHOLDS_CACHE = {
+            'very_low': Decimal(str(getattr(settings, 'CRYPTO_MIN_ALERT_THRESHOLD', 100))),
+            'high': Decimal(str(getattr(settings, 'CRYPTO_HIGH_ALERT_THRESHOLD', 1000000))),
+            'very_high': Decimal(str(getattr(settings, 'CRYPTO_VERY_HIGH_ALERT_THRESHOLD', 5000000))),
+        }
+    return _THRESHOLDS_CACHE
+
 
 def log_suspicious_transaction(user, event_type: str, description: str, metadata: dict = None, severity: str = 'medium'):
     """
@@ -418,10 +442,11 @@ def check_unusual_amount(user, amount_ngn: Decimal, crypto_symbol: str) -> bool:
     Returns:
         True if unusual amount detected, False otherwise
     """
-    # Get thresholds from Django settings with fallback defaults
-    VERY_LOW_THRESHOLD = Decimal(str(getattr(settings, 'CRYPTO_MIN_ALERT_THRESHOLD', 100)))
-    HIGH_THRESHOLD = Decimal(str(getattr(settings, 'CRYPTO_HIGH_ALERT_THRESHOLD', 1000000)))
-    VERY_HIGH_THRESHOLD = Decimal(str(getattr(settings, 'CRYPTO_VERY_HIGH_ALERT_THRESHOLD', 5000000)))
+    # Get cached thresholds
+    thresholds = _get_thresholds()
+    VERY_LOW_THRESHOLD = thresholds['very_low']
+    HIGH_THRESHOLD = thresholds['high']
+    VERY_HIGH_THRESHOLD = thresholds['very_high']
     
     is_unusual = False
     severity = 'low'
@@ -468,8 +493,8 @@ def sanitize_error_message(error_msg: str) -> str:
     """
     # List of patterns to remove/replace
     sensitive_patterns = [
-        (r'0x[a-fA-F0-9]{40}\b', '[REDACTED_ADDRESS]'),  # Ethereum addresses (exactly 40 hex)
-        (r'[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b', '[REDACTED_ADDRESS]'),  # Bitcoin addresses
+        (r'\b0x[a-fA-F0-9]{40}\b', '[REDACTED_ADDRESS]'),  # Ethereum addresses (exactly 40 hex)
+        (r'\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b', '[REDACTED_ADDRESS]'),  # Bitcoin addresses
         (r'private[_-]?key', '[REDACTED]'),
         (r'secret', '[REDACTED]'),
         (r'password', '[REDACTED]'),
