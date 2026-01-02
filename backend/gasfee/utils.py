@@ -255,10 +255,12 @@ def validate_ton_address(address: str) -> bool:
             if not workchain.lstrip('-').isdigit():
                 return False
             
-            # Workchain is typically -1 or 0
+            # Workchain is typically -1 or 0 for production
+            # Reject other workchains as potentially invalid
             workchain_num = int(workchain)
             if workchain_num not in [-1, 0]:
-                logger.debug(f"Unusual TON workchain: {workchain_num}")
+                logger.warning(f"Rejecting TON address with unusual workchain: {workchain_num}")
+                return False
         else:
             addr_part = address
         
@@ -306,7 +308,8 @@ def validate_wallet_address(symbol: str, address: str) -> bool:
     
     try:
         # EVM chains with EIP-55 checksum validation
-        if symbol in {'ETH', 'ARB', 'BNB', 'BASE', 'OP', 'POL', 'AVAX', 'LINEA'}:
+        # Note: BASE-ETH, BASE-ARB, etc. are BASE network tokens, still use EVM validation
+        if symbol in {'ETH', 'ARB', 'BNB', 'BASE', 'OP', 'POL', 'AVAX', 'LINEA'} or symbol.startswith('BASE-'):
             return validate_evm_address(address)
         
         # Solana with base58 validation
@@ -415,10 +418,10 @@ def check_unusual_amount(user, amount_ngn: Decimal, crypto_symbol: str) -> bool:
     Returns:
         True if unusual amount detected, False otherwise
     """
-    # Define thresholds (can be moved to settings)
-    VERY_LOW_THRESHOLD = Decimal("100")  # Suspiciously low
-    HIGH_THRESHOLD = Decimal("1000000")  # 1M NGN
-    VERY_HIGH_THRESHOLD = Decimal("5000000")  # 5M NGN
+    # Get thresholds from Django settings with fallback defaults
+    VERY_LOW_THRESHOLD = Decimal(str(getattr(settings, 'CRYPTO_MIN_ALERT_THRESHOLD', 100)))
+    HIGH_THRESHOLD = Decimal(str(getattr(settings, 'CRYPTO_HIGH_ALERT_THRESHOLD', 1000000)))
+    VERY_HIGH_THRESHOLD = Decimal(str(getattr(settings, 'CRYPTO_VERY_HIGH_ALERT_THRESHOLD', 5000000)))
     
     is_unusual = False
     severity = 'low'
@@ -431,11 +434,11 @@ def check_unusual_amount(user, amount_ngn: Decimal, crypto_symbol: str) -> bool:
     elif amount_ngn >= VERY_HIGH_THRESHOLD:
         is_unusual = True
         severity = 'high'
-        reason = f'Amount {amount_ngn} NGN is very high (>= 5M NGN)'
+        reason = f'Amount {amount_ngn} NGN is very high (>= {VERY_HIGH_THRESHOLD} NGN)'
     elif amount_ngn >= HIGH_THRESHOLD:
         is_unusual = True
         severity = 'medium'
-        reason = f'Amount {amount_ngn} NGN is high (>= 1M NGN)'
+        reason = f'Amount {amount_ngn} NGN is high (>= {HIGH_THRESHOLD} NGN)'
     
     if is_unusual:
         log_suspicious_transaction(
@@ -465,8 +468,8 @@ def sanitize_error_message(error_msg: str) -> str:
     """
     # List of patterns to remove/replace
     sensitive_patterns = [
-        (r'0x[a-fA-F0-9]{40,}', '[REDACTED_ADDRESS]'),  # Ethereum addresses
-        (r'[13][a-km-zA-HJ-NP-Z1-9]{25,34}', '[REDACTED_ADDRESS]'),  # Bitcoin addresses
+        (r'0x[a-fA-F0-9]{40}\b', '[REDACTED_ADDRESS]'),  # Ethereum addresses (exactly 40 hex)
+        (r'[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b', '[REDACTED_ADDRESS]'),  # Bitcoin addresses
         (r'private[_-]?key', '[REDACTED]'),
         (r'secret', '[REDACTED]'),
         (r'password', '[REDACTED]'),
