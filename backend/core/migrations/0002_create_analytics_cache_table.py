@@ -1,7 +1,7 @@
 # Generated migration for analytics cache table
 # This creates the cache table required by Django's DatabaseCache backend
 # for the CEO Analytics Dashboard (PR #61)
-from django.db import migrations, connection
+from django.db import migrations
 
 
 def create_cache_table(apps, schema_editor):
