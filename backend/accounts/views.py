@@ -57,8 +57,11 @@ class RegisterView(generics.GenericAPIView):
 
             # Send verification email synchronously - but don't fail registration if it fails
             try:
-                send_verification_email_sync(user.email, verification_url, first_name, last_name)
-                logger.info(f"Verification email sent to {user.email}")
+                result = send_verification_email_sync(user.email, verification_url, first_name, last_name)
+                if result:
+                    logger.info(f"Verification email sent to {user.email}")
+                else:
+                    logger.warning(f"Verification email failed for {user.email}, user can resend later")
             except Exception as e:
                 logger.error(f"Failed to send verification email to {user.email}, user can resend later: {e}")
 
@@ -185,9 +188,16 @@ class ResendVerificationEmailView(APIView):
 
             # Send verification email - but don't fail if email service is down
             try:
-                send_verification_email_sync(user.email, verification_url, first_name, last_name)
-                logger.info(f"Verification email resent to {email} with link {verification_url}")
-                return Response({"message": "Verification email resent successfully."}, status=status.HTTP_200_OK)
+                result = send_verification_email_sync(user.email, verification_url, first_name, last_name)
+                if result:
+                    logger.info(f"Verification email resent to {email} with link {verification_url}")
+                    return Response({"message": "Verification email resent successfully."}, status=status.HTTP_200_OK)
+                else:
+                    logger.error(f"Failed to resend verification email to {email}")
+                    return Response(
+                        {"error": "Failed to send verification email. Please try again later."},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
             except Exception as e:
                 logger.error(f"Failed to resend verification email to {email}: {e}")
                 return Response(
