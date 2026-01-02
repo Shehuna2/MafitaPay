@@ -1,4 +1,28 @@
 # File: backend/gasfee/utils.py
+"""
+Crypto Payment Utilities
+
+This module provides essential utilities for cryptocurrency payments including:
+
+1. Enhanced Wallet Address Validation:
+   - EVM chains: EIP-55 checksum validation
+   - Solana: Base58 format validation with 32-byte key verification
+   - NEAR: Named and implicit account validation
+   - TON: Base64url format validation with workchain support
+
+2. Security Monitoring:
+   - Rapid purchase detection
+   - Unusual transaction amount detection
+   - Secure error message sanitization
+
+3. Price and Rate Utilities:
+   - Asset price fetching with caching
+   - USD-NGN rate conversion with margin support
+
+All validation functions are designed to prevent invalid addresses before 
+blockchain submission, reducing failed transactions and improving security.
+"""
+
 from decimal import Decimal, InvalidOperation, getcontext
 import logging
 import os
@@ -173,6 +197,10 @@ def validate_near_address(address: str) -> bool:
     NEAR supports both implicit (64 hex chars) and named accounts.
     """
     if not address or not isinstance(address, str):
+        return False
+    
+    # NEAR addresses must be lowercase
+    if address != address.lower():
         return False
     
     address = address.strip().lower()
