@@ -110,7 +110,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         profile.save()
 
         verification_url = f"{settings.BASE_URL}/api/verify-email/{verification_token}/"
-        send_verification_email_sync(user.email, verification_url, first_name=first_name, last_name=last_name)
+        try:
+            result = send_verification_email_sync(user.email, verification_url, first_name=first_name, last_name=last_name)
+            if not result:
+                logger.warning(f"Email sending failed for {user.email}, user can resend verification later")
+        except Exception as e:
+            logger.error(f"Email sending failed for {user.email}, user can resend verification later: {e}")
+            # Registration still succeeds - user can use "Resend Verification" button
 
         logger.debug(f"Registration completed for {user.email} in {time.time() - start_time:.2f} seconds")
         return user

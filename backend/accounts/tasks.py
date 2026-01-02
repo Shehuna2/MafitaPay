@@ -35,9 +35,10 @@ def send_verification_email_sync(email, verification_url, first_name=None, last_
         }
         msg.send(fail_silently=False)
         logger.info("Verification email sent to %s", email)
+        return True  # Indicate success
     except Exception as e:
         logger.exception("Failed to send verification email to %s: %s", email, e)
-        raise
+        return False  # Indicate failure, but don't crash
 
 def send_reset_email_sync(email, reset_url, first_name=None, last_name=None):
     try:
