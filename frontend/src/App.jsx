@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import Layout from "./layouts/Layout";
 import Navbar from "./components/Navbar";
 import PrivateRoute from "./components/PrivateRoute";
+import AdminRoute from "./components/AdminRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
 import MaintenancePage from "./components/MaintenancePage";
 import useMaintenanceCheck from "./hooks/useMaintenanceCheck";
@@ -46,6 +47,18 @@ import OrderDetails from "./pages/p2p/OrderDetails";
 import OffersHub from "./pages/p2p/OffersHub";
 import WithdrawOrderDetails from "./pages/p2p/WithdrawOrderDetails";
 import MerchantWithdrawOrderDetails from "./pages/p2p/MerchantWithdrawOrderDetails";
+
+// Analytics Pages
+import AnalyticsLayout from "./layouts/AnalyticsLayout";
+import AnalyticsOverview from "./pages/analytics/AnalyticsOverview";
+import AnalyticsDemoOverview from "./pages/analytics/AnalyticsDemoOverview";
+import TransactionsDemoAnalytics from "./pages/analytics/TransactionsDemoAnalytics";
+import TransactionsAnalytics from "./pages/analytics/TransactionsAnalytics";
+import RevenueAnalytics from "./pages/analytics/RevenueAnalytics";
+import UsersAnalytics from "./pages/analytics/UsersAnalytics";
+import ServicesAnalytics from "./pages/analytics/ServicesAnalytics";
+import KPIsAnalytics from "./pages/analytics/KPIsAnalytics";
+import ReportsAnalytics from "./pages/analytics/ReportsAnalytics";
 
 function App() {
   const { isAuthenticated, logout, user } = useAuth();
@@ -313,6 +326,32 @@ function App() {
                 </PrivateRoute>
               }
             />
+
+            {/* Analytics Routes - Admin/CEO Only */}
+            <Route
+              path="/analytics"
+              element={
+                <PrivateRoute>
+                  <AdminRoute>
+                    <AnalyticsLayout />
+                  </AdminRoute>
+                </PrivateRoute>
+              }
+            >
+              <Route path="overview" element={<AnalyticsOverview />} />
+              <Route path="transactions" element={<TransactionsAnalytics />} />
+              <Route path="revenue" element={<RevenueAnalytics />} />
+              <Route path="users" element={<UsersAnalytics />} />
+              <Route path="services" element={<ServicesAnalytics />} />
+              <Route path="kpis" element={<KPIsAnalytics />} />
+              <Route path="reports" element={<ReportsAnalytics />} />
+            </Route>
+
+            {/* Analytics Demo Route - No auth required for showcase */}
+            <Route path="/analytics-demo" element={<AnalyticsLayout />}>
+              <Route path="overview" element={<AnalyticsDemoOverview />} />
+              <Route path="transactions" element={<TransactionsDemoAnalytics />} />
+            </Route>
           </Routes>
         </ErrorBoundary>
       </main>
