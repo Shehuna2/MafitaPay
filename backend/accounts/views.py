@@ -56,16 +56,22 @@ class RegisterView(generics.GenericAPIView):
             last_name = getattr(profile, "last_name", "")
 
             # Send verification email synchronously - but don't fail registration if it fails
+            email_sent = False
             try:
                 result = send_verification_email_sync(user.email, verification_url, first_name, last_name)
                 if result:
                     logger.info(f"Verification email sent to {user.email}")
+                    email_sent = True
                 else:
                     logger.warning(f"Verification email failed for {user.email}, user can resend later")
             except Exception as e:
                 logger.error(f"Failed to send verification email to {user.email}, user can resend later: {e}")
 
-            logger.info(f"Registration complete for {user.email}, verification sent to {verification_url}")
+            if email_sent:
+                logger.info(f"Registration complete for {user.email}, verification sent to {verification_url}")
+            else:
+                logger.info(f"Registration complete for {user.email}, but email sending failed")
+            
             return Response(
                 {"message": "Registration successful. Please verify your email."},
                 status=status.HTTP_201_CREATED,
@@ -192,18 +198,15 @@ class ResendVerificationEmailView(APIView):
                 if result:
                     logger.info(f"Verification email resent to {email} with link {verification_url}")
                     return Response({"message": "Verification email resent successfully."}, status=status.HTTP_200_OK)
-                else:
-                    logger.error(f"Failed to resend verification email to {email}")
-                    return Response(
-                        {"error": "Failed to send verification email. Please try again later."},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                    )
             except Exception as e:
                 logger.error(f"Failed to resend verification email to {email}: {e}")
-                return Response(
-                    {"error": "Failed to send verification email. Please try again later."},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+            
+            # If we reach here, email sending failed
+            logger.error(f"Failed to resend verification email to {email}")
+            return Response(
+                {"error": "Failed to send verification email. Please try again later."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         except User.DoesNotExist:
             return Response({"error": "No account found with this email."}, status=status.HTTP_404_NOT_FOUND)
