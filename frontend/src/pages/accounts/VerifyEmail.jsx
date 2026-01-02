@@ -135,7 +135,17 @@ export default function VerifyEmail() {
                 </h1>
                 <p className="text-gray-300">
                   {fromLogin 
-                    ? "Your account exists but your email has not been verified yet. Please check your inbox for the verification link or request a new one below."
+                    ? <>
+                        Your account exists but your email has not been verified yet.
+                        <br />
+                        <br />
+                        Verification email sent to:
+                        <br />
+                        <strong className="text-white">{email}</strong>
+                        <br />
+                        <br />
+                        Please check your inbox for the verification link or request a new one below.
+                      </>
                     : <>
                         We sent a verification link to:
                         <br />
@@ -145,11 +155,6 @@ export default function VerifyEmail() {
                 </p>
                 {!fromLogin && (
                   <p className="text-sm text-gray-400">Click the link in your email to activate your account.</p>
-                )}
-                {fromLogin && email && (
-                  <p className="text-sm text-gray-400">
-                    Verification email sent to: <strong className="text-white">{email}</strong>
-                  </p>
                 )}
               </div>
 
