@@ -2,12 +2,65 @@ from django.test import TestCase, Client, override_settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.cache import cache
+from django.db import connection
 from datetime import timedelta
 import json
 
 from .models import AppSettings
 
 User = get_user_model()
+
+
+class AnalyticsCacheTableTestCase(TestCase):
+    """Test that analytics_cache_table is created and functional"""
+
+    def test_cache_table_exists(self):
+        """Test that the analytics_cache_table exists in the database"""
+        with connection.cursor() as cursor:
+            # Check if table exists
+            cursor.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='analytics_cache_table'
+                UNION ALL
+                SELECT tablename FROM pg_tables 
+                WHERE tablename='analytics_cache_table'
+            """)
+            result = cursor.fetchone()
+            self.assertIsNotNone(result, "analytics_cache_table should exist")
+
+    def test_cache_operations_work(self):
+        """Test that cache operations work with the database backend"""
+        # Clear any existing cache
+        cache.clear()
+        
+        # Test setting a value
+        cache.set('test_key', 'test_value', timeout=60)
+        
+        # Test getting the value
+        value = cache.get('test_key')
+        self.assertEqual(value, 'test_value')
+        
+        # Test deleting the value
+        cache.delete('test_key')
+        value = cache.get('test_key')
+        self.assertIsNone(value)
+
+    def test_cache_expiry(self):
+        """Test that cache entries can expire"""
+        cache.clear()
+        
+        # Set a value with very short timeout
+        cache.set('expiring_key', 'expiring_value', timeout=1)
+        
+        # Should exist immediately
+        value = cache.get('expiring_key')
+        self.assertEqual(value, 'expiring_value')
+        
+        # After timeout, should return default
+        import time
+        time.sleep(2)
+        value = cache.get('expiring_key', default='not_found')
+        self.assertEqual(value, 'not_found')
 
 
 class AppSettingsModelTestCase(TestCase):
