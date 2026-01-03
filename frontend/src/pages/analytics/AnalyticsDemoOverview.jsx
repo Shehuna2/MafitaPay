@@ -67,7 +67,7 @@ const AnalyticsDemoOverview = () => {
           value={formatNumber(metrics.active_users)}
           icon={FiUsers}
           trend={metrics.users_trend}
-          color="purple"
+          color="cyan"
         />
         <MetricCard
           title="P2P Trading Volume"
@@ -79,12 +79,12 @@ const AnalyticsDemoOverview = () => {
       </div>
 
       {/* Success Rate */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl">
         <h3 className="text-xl font-bold text-white mb-4">Transaction Success Rate</h3>
         <div className="flex items-center gap-4">
-          <div className="flex-1 bg-gray-700 rounded-full h-4 overflow-hidden">
+          <div className="flex-1 bg-gray-700/50 rounded-full h-4 overflow-hidden">
             <div 
-              className="bg-green-500 h-full transition-all duration-500"
+              className="bg-gradient-to-r from-green-500 to-green-600 h-full transition-all duration-500 shadow-lg"
               style={{ width: `${metrics.success_rate}%` }}
             />
           </div>
@@ -134,20 +134,20 @@ const AnalyticsDemoOverview = () => {
 
       {/* Additional Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Bill Payments</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Bill Payments</h4>
           <p className="text-2xl font-bold text-white">
             {formatCurrency(metrics.bill_payments_volume)}
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Crypto Purchases</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Crypto Purchases</h4>
           <p className="text-2xl font-bold text-white">
             {formatCurrency(metrics.crypto_volume)}
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Rewards Distributed</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Rewards Distributed</h4>
           <p className="text-2xl font-bold text-white">
             {formatCurrency(metrics.rewards_distributed)}
           </p>

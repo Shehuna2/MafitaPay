@@ -85,26 +85,26 @@ const ServicesAnalytics = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">P2P Trading</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">P2P Trading</h4>
           <p className="text-2xl font-bold text-white">
             {formatCurrency(analytics.p2p_volume || 0)}
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Bill Payments</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Bill Payments</h4>
           <p className="text-2xl font-bold text-white">
             {formatCurrency(analytics.bill_payment_volume || 0)}
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Crypto Purchases</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Crypto Purchases</h4>
           <p className="text-2xl font-bold text-white">
             {formatCurrency(analytics.crypto_volume || 0)}
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Total Transactions</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Total Transactions</h4>
           <p className="text-2xl font-bold text-white">
             {formatNumber(analytics.total_service_transactions || 0)}
           </p>
@@ -150,35 +150,35 @@ const ServicesAnalytics = () => {
       </div>
 
       {/* Bill Payment Categories */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl">
         <h3 className="text-xl font-bold text-white mb-4">Bill Payment Categories</h3>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="text-center p-4 bg-gray-700 rounded-lg">
-            <p className="text-gray-400 text-sm mb-2">Airtime</p>
+          <div className="text-center p-4 bg-gray-700/50 rounded-xl border border-gray-600/30">
+            <p className="text-gray-400 text-sm mb-2 tracking-wide">Airtime</p>
             <p className="text-xl font-bold text-white">
               {formatCurrency(analytics.airtime_volume || 0)}
             </p>
           </div>
-          <div className="text-center p-4 bg-gray-700 rounded-lg">
-            <p className="text-gray-400 text-sm mb-2">Data</p>
+          <div className="text-center p-4 bg-gray-700/50 rounded-xl border border-gray-600/30">
+            <p className="text-gray-400 text-sm mb-2 tracking-wide">Data</p>
             <p className="text-xl font-bold text-white">
               {formatCurrency(analytics.data_volume || 0)}
             </p>
           </div>
-          <div className="text-center p-4 bg-gray-700 rounded-lg">
-            <p className="text-gray-400 text-sm mb-2">Cable TV</p>
+          <div className="text-center p-4 bg-gray-700/50 rounded-xl border border-gray-600/30">
+            <p className="text-gray-400 text-sm mb-2 tracking-wide">Cable TV</p>
             <p className="text-xl font-bold text-white">
               {formatCurrency(analytics.cable_volume || 0)}
             </p>
           </div>
-          <div className="text-center p-4 bg-gray-700 rounded-lg">
-            <p className="text-gray-400 text-sm mb-2">Electricity</p>
+          <div className="text-center p-4 bg-gray-700/50 rounded-xl border border-gray-600/30">
+            <p className="text-gray-400 text-sm mb-2 tracking-wide">Electricity</p>
             <p className="text-xl font-bold text-white">
               {formatCurrency(analytics.electricity_volume || 0)}
             </p>
           </div>
-          <div className="text-center p-4 bg-gray-700 rounded-lg">
-            <p className="text-gray-400 text-sm mb-2">Education</p>
+          <div className="text-center p-4 bg-gray-700/50 rounded-xl border border-gray-600/30">
+            <p className="text-gray-400 text-sm mb-2 tracking-wide">Education</p>
             <p className="text-xl font-bold text-white">
               {formatCurrency(analytics.education_volume || 0)}
             </p>

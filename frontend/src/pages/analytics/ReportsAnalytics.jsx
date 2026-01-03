@@ -96,7 +96,7 @@ const ReportsAnalytics = () => {
       )}
 
       {/* Report Configuration */}
-      <div className="bg-gray-800 rounded-lg p-6 space-y-6">
+      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl space-y-6">
         <h3 className="text-xl font-bold text-white">Report Configuration</h3>
 
         {/* Date Range */}
@@ -193,7 +193,7 @@ const ReportsAnalytics = () => {
       </div>
 
       {/* Report History */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl">
         <h3 className="text-xl font-bold text-white mb-4">Report History</h3>
         
         {reportHistory.length === 0 ? (
