@@ -710,3 +710,16 @@ class CryptoL2CoinGeckoIDTestCase(TestCase):
         )
         self.assertEqual(bnb_usdc.coingecko_id, "usd-coin")
 
+    def test_tokens_containing_eth_substring_not_affected(self):
+        """Test that tokens with 'ETH' as a substring (but not exact match) are not affected"""
+        # Create a hypothetical token with ETH in the name but not as the asset
+        # For example, if there were a METH or SETH token on BASE
+        base_meth = Crypto.objects.create(
+            name="Synthetic ETH on Base",
+            symbol="BASE-SETH",  # Contains 'ETH' but doesn't end with '-ETH'
+            network="BASE",
+            coingecko_id="synthetic-eth"
+        )
+        # Should keep its original coingecko_id, not be forced to 'ethereum'
+        self.assertEqual(base_meth.coingecko_id, "synthetic-eth")
+
