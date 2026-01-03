@@ -39,11 +39,11 @@ const AnalyticsOverview = () => {
   const metrics = data || {};
 
   return (
-    <div className="space-y-6">
+    <div className="section-gap">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="section-header">
         <div>
-          <h2 className="text-3xl font-bold text-white">Overview</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-white">Overview</h2>
           <p className="text-gray-400 mt-1">Quick glance at key metrics</p>
         </div>
         <DateRangePicker
@@ -55,7 +55,7 @@ const AnalyticsOverview = () => {
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <MetricCard
           title="Total Transactions"
           value={formatNumber(metrics.total_transactions || 0)}
@@ -87,16 +87,16 @@ const AnalyticsOverview = () => {
       </div>
 
       {/* Success Rate */}
-      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl">
+      <div className="glass-panel p-6">
         <h3 className="text-xl font-bold text-white mb-4">Transaction Success Rate</h3>
         <div className="flex items-center gap-4">
-          <div className="flex-1 bg-gray-700/50 rounded-full h-4 overflow-hidden">
+          <div className="flex-1 bg-white/5 rounded-full h-4 overflow-hidden">
             <div 
               className="bg-gradient-to-r from-green-500 to-green-600 h-full transition-all duration-500 shadow-lg"
               style={{ width: `${metrics.success_rate || 0}%` }}
             />
           </div>
-          <span className="text-2xl font-bold text-white">
+          <span className="text-xl md:text-2xl font-bold text-white">
             {formatPercentage(metrics.success_rate || 0)}
           </span>
         </div>
@@ -107,22 +107,22 @@ const AnalyticsOverview = () => {
       </div>
 
       {/* Additional Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+      <div className="panel-grid">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Bill Payments</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatCurrency(metrics.bill_payments_volume || 0)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Crypto Purchases</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatCurrency(metrics.crypto_volume || 0)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Rewards Distributed</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatCurrency(metrics.rewards_distributed || 0)}
           </p>
         </div>

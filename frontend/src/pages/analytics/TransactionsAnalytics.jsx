@@ -85,11 +85,11 @@ const TransactionsAnalytics = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="section-gap">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="section-header">
         <div>
-          <h2 className="text-3xl font-bold text-white">Transactions</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-white">Transactions</h2>
           <p className="text-gray-400 mt-1">Detailed transaction analytics</p>
         </div>
         <DateRangePicker
@@ -101,30 +101,30 @@ const TransactionsAnalytics = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+      <div className="panel-grid">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Total Volume</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatCurrency(analytics.total_volume || 0)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Transaction Count</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatNumber(analytics.total_count || 0)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Average Transaction</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatCurrency(analytics.average_transaction || 0)}
           </p>
         </div>
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
+      <div className="chart-grid">
+        <div className="glass-panel p-6">
           <h3 className="text-xl font-bold text-white mb-4">Volume Over Time</h3>
           <AnalyticsLineChart
             data={volumeData}
@@ -135,7 +135,7 @@ const TransactionsAnalytics = () => {
           />
         </div>
 
-        <div>
+        <div className="glass-panel p-6">
           <h3 className="text-xl font-bold text-white mb-4">Transaction Types</h3>
           <AnalyticsPieChart
             data={typeBreakdown}
@@ -146,7 +146,7 @@ const TransactionsAnalytics = () => {
       </div>
 
       {/* Status Breakdown */}
-      <div>
+      <div className="glass-panel p-6">
         <h3 className="text-xl font-bold text-white mb-4">Status Breakdown</h3>
         <AnalyticsPieChart
           data={statusBreakdown}
@@ -157,7 +157,7 @@ const TransactionsAnalytics = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl">
+      <div className="glass-panel p-6">
         <h3 className="text-lg font-bold text-white mb-4">Filters</h3>
         <div className="flex flex-wrap gap-4">
           <div>
@@ -165,8 +165,8 @@ const TransactionsAnalytics = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 bg-gray-700 text-white rounded-lg border 
-                border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="px-4 py-2 bg-white/5 text-white rounded-lg border 
+                border-white/10 focus:border-blue-500 focus:outline-none"
             >
               <option value="all">All Status</option>
               <option value="completed">Completed</option>
@@ -180,8 +180,8 @@ const TransactionsAnalytics = () => {
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="px-4 py-2 bg-gray-700 text-white rounded-lg border 
-                border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="px-4 py-2 bg-white/5 text-white rounded-lg border 
+                border-white/10 focus:border-blue-500 focus:outline-none"
             >
               <option value="all">All Types</option>
               <option value="p2p">P2P</option>
@@ -195,7 +195,7 @@ const TransactionsAnalytics = () => {
       </div>
 
       {/* Transaction Table */}
-      <div>
+      <div className="glass-panel p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold text-white">Transaction History</h3>
           <ExportButton 

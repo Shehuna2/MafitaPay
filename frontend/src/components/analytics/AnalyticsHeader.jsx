@@ -14,33 +14,35 @@ const AnalyticsHeader = ({ onMenuClick }) => {
   };
 
   return (
-    <header className="bg-gray-800 border-b border-gray-700">
-      <div className="flex items-center justify-between px-6 py-4">
+    <header className="sticky top-0 z-30 glass-panel border-b border-white/10">
+      <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4">
         {/* Left side */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 md:gap-4">
           <button
             onClick={onMenuClick}
-            className="lg:hidden text-gray-300 hover:text-white"
+            className="lg:hidden text-gray-300 hover:text-white p-2 hover:bg-white/5 rounded-lg transition-all"
           >
-            <FiMenu size={24} />
+            <FiMenu size={20} />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-white">CEO Analytics Dashboard</h1>
-            <p className="text-sm text-gray-400">Real-time insights and metrics</p>
+            <h1 className="text-lg md:text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+              CEO Analytics Dashboard
+            </h1>
+            <p className="text-xs md:text-sm text-gray-400 hidden md:block">Real-time insights and metrics</p>
           </div>
         </div>
 
         {/* Right side */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           {/* User menu */}
           <div className="relative">
             <button
               onClick={() => setShowDropdown(!showDropdown)}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg 
-                bg-gray-700 hover:bg-gray-600 transition-colors"
+              className="flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2 rounded-xl 
+                glass-card hover:bg-white/10 transition-all"
             >
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center 
-                justify-center text-white font-bold">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 
+                flex items-center justify-center text-white font-bold text-sm shadow-lg">
                 {user?.username?.charAt(0).toUpperCase() || 'A'}
               </div>
               <div className="text-left hidden md:block">
@@ -58,16 +60,14 @@ const AnalyticsHeader = ({ onMenuClick }) => {
                   className="fixed inset-0 z-10"
                   onClick={() => setShowDropdown(false)}
                 />
-                <div className="absolute right-0 mt-2 w-48 bg-gray-700 rounded-lg 
-                  shadow-lg border border-gray-600 z-20">
+                <div className="absolute right-0 mt-2 w-48 glass-panel rounded-xl shadow-2xl border border-white/20 z-20 overflow-hidden">
                   <button
                     onClick={() => {
                       setShowDropdown(false);
                       // Navigate to settings
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 
-                      hover:bg-gray-600 text-white transition-colors 
-                      rounded-t-lg"
+                      hover:bg-white/5 text-white transition-all"
                   >
                     <FiSettings size={16} />
                     <span>Settings</span>
@@ -78,8 +78,7 @@ const AnalyticsHeader = ({ onMenuClick }) => {
                       handleLogout();
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 
-                      hover:bg-gray-600 text-white transition-colors 
-                      rounded-b-lg border-t border-gray-600"
+                      hover:bg-white/5 text-white transition-all border-t border-white/10"
                   >
                     <FiLogOut size={16} />
                     <span>Logout</span>
