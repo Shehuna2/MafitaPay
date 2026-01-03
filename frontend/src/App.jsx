@@ -84,8 +84,15 @@ function App() {
   // Check if user is admin/staff
   const isAdmin = user?.is_staff || user?.is_superuser;
 
-  // Show maintenance page if maintenance mode is active and user is not admin
-  if (!isLoading && isMaintenanceMode && !isAdmin) {
+  // Define auth-related paths that should be accessible during maintenance
+  const authPaths = ['/login', '/register', '/verify-email', '/reset-password', '/reset-password-request'];
+  const isAuthPage = authPaths.some(path => location.pathname.startsWith(path)) || location.pathname === '/';
+
+  // Show maintenance page if:
+  // - Maintenance mode is active
+  // - User is not admin/staff
+  // - User is not on an auth page (login, register, verify-email, etc.)
+  if (!isLoading && isMaintenanceMode && !isAdmin && !isAuthPage) {
     return <MaintenancePage maintenanceData={maintenanceData} />;
   }
 

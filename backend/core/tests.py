@@ -291,6 +291,55 @@ class MaintenanceModeMiddlewareTestCase(TestCase):
         self.assertIn('start_time', data)
         self.assertIn('end_time', data)
 
+    def test_auth_endpoints_accessible_during_maintenance(self):
+        """Test that authentication endpoints are accessible during maintenance"""
+        settings = AppSettings.get_settings()
+        settings.maintenance_enabled = True
+        settings.save()
+        cache.clear()
+
+        # Test register endpoint
+        response = self.client.get('/api/register/')
+        self.assertNotEqual(response.status_code, 503)
+
+        # Test login endpoint
+        response = self.client.get('/api/login/')
+        self.assertNotEqual(response.status_code, 503)
+
+        # Test verify-email endpoint
+        response = self.client.get('/api/verify-email/test-token/')
+        self.assertNotEqual(response.status_code, 503)
+
+        # Test resend verification endpoint
+        response = self.client.get('/api/resend-verification/')
+        self.assertNotEqual(response.status_code, 503)
+
+        # Test password reset endpoint
+        response = self.client.get('/api/password-reset/')
+        self.assertNotEqual(response.status_code, 503)
+
+        # Test token endpoints
+        response = self.client.get('/api/auth/token/')
+        self.assertNotEqual(response.status_code, 503)
+
+        response = self.client.get('/api/auth/token/refresh/')
+        self.assertNotEqual(response.status_code, 503)
+
+    def test_regular_user_blocked_from_non_auth_endpoints(self):
+        """Test that regular users are still blocked from non-auth endpoints"""
+        settings = AppSettings.get_settings()
+        settings.maintenance_enabled = True
+        settings.save()
+        cache.clear()
+
+        # Login as regular user
+        self.client.force_login(self.user)
+
+        # Non-auth endpoints should be blocked for regular users
+        response = self.client.get('/api/wallet-balance/')
+        self.assertEqual(response.status_code, 503)
+
+
 
 class MaintenanceStatusAPITestCase(TestCase):
     """Test the maintenance status API endpoint"""

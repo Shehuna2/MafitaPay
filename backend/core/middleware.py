@@ -16,6 +16,14 @@ class MaintenanceModeMiddleware(MiddlewareMixin):
     EXEMPT_PATHS = [
         '/admin/',
         '/api/maintenance-status/',
+        # Authentication endpoints - allow during maintenance
+        '/api/register/',
+        '/api/login/',
+        '/api/verify-email/',
+        '/api/resend-verification/',
+        '/api/password-reset/',
+        '/api/auth/token/',
+        '/api/auth/token/refresh/',
     ]
     
     def process_request(self, request):
