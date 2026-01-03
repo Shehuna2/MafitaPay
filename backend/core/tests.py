@@ -340,7 +340,6 @@ class MaintenanceModeMiddlewareTestCase(TestCase):
         self.assertEqual(response.status_code, 503)
 
 
-
 class MaintenanceStatusAPITestCase(TestCase):
     """Test the maintenance status API endpoint"""
 

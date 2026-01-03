@@ -9,6 +9,15 @@ import MaintenancePage from "./components/MaintenancePage";
 import useMaintenanceCheck from "./hooks/useMaintenanceCheck";
 import { useAuth } from "./context/AuthContext";
 
+// Auth paths that should be accessible during maintenance mode
+const AUTH_PATHS_EXEMPT_FROM_MAINTENANCE = [
+  '/login',
+  '/register', 
+  '/verify-email',
+  '/reset-password',
+  '/reset-password-request'
+];
+
 // Pages
 import Home from "./pages/Home";
 import About from "./pages/About";
@@ -84,9 +93,10 @@ function App() {
   // Check if user is admin/staff
   const isAdmin = user?.is_staff || user?.is_superuser;
 
-  // Define auth-related paths that should be accessible during maintenance
-  const authPaths = ['/login', '/register', '/verify-email', '/reset-password', '/reset-password-request'];
-  const isAuthPage = authPaths.some(path => location.pathname.startsWith(path)) || location.pathname === '/';
+  // Check if current page is an auth page that should be accessible during maintenance
+  const isAuthPage = AUTH_PATHS_EXEMPT_FROM_MAINTENANCE.some(path => 
+    location.pathname.startsWith(path)
+  ) || location.pathname === '/';
 
   // Show maintenance page if:
   // - Maintenance mode is active
