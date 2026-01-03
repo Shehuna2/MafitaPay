@@ -79,8 +79,8 @@ if not DEBUG and EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend":
     
     # Log email configuration (without sensitive data)
     email_logger.info(f"Email Configuration: HOST={EMAIL_HOST}, PORT={EMAIL_PORT}, "
-                     f"TLS={EMAIL_USE_TLS}, USER={'set' if EMAIL_HOST_USER else 'NOT SET'}, "
-                     f"PASSWORD={'set' if EMAIL_HOST_PASSWORD else 'NOT SET'}")
+                     f"TLS={EMAIL_USE_TLS}, USER={'SET' if EMAIL_HOST_USER else 'NOT SET'}, "
+                     f"PASSWORD={'SET' if EMAIL_HOST_PASSWORD else 'NOT SET'}")
     
     # Validate required email credentials
     if not EMAIL_HOST_USER or not EMAIL_HOST_PASSWORD:
