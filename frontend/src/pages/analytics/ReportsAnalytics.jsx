@@ -78,25 +78,25 @@ const ReportsAnalytics = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="section-gap">
       {/* Page Header */}
       <div>
-        <h2 className="text-3xl font-bold text-white">Reports</h2>
+        <h2 className="text-2xl md:text-3xl font-bold text-white">Reports</h2>
         <p className="text-gray-400 mt-1">Generate and export analytics reports</p>
       </div>
 
       {/* Message Display */}
       {message.text && (
         <div className={`p-4 rounded-lg ${
-          message.type === 'success' ? 'bg-green-900 border border-green-500 text-green-100' :
-          'bg-red-900 border border-red-500 text-red-100'
+          message.type === 'success' ? 'bg-green-900/20 border border-green-500 text-green-100' :
+          'bg-red-900/20 border border-red-500 text-red-100'
         }`}>
           {message.text}
         </div>
       )}
 
       {/* Report Configuration */}
-      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl space-y-6">
+      <div className="glass-panel p-6 space-y-6">
         <h3 className="text-xl font-bold text-white">Report Configuration</h3>
 
         {/* Date Range */}
@@ -117,15 +117,15 @@ const ReportsAnalytics = () => {
           <label className="block text-sm font-medium text-gray-400 mb-2">
             Report Type
           </label>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-3">
             {['daily', 'weekly', 'monthly', 'custom'].map(type => (
               <button
                 key={type}
                 onClick={() => setReportType(type)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
                   reportType === type
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg'
+                    : 'bg-white/5 text-gray-300 hover:bg-white/10'
                 }`}
               >
                 {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -139,15 +139,15 @@ const ReportsAnalytics = () => {
           <label className="block text-sm font-medium text-gray-400 mb-2">
             Export Format
           </label>
-          <div className="flex gap-4">
+          <div className="flex gap-3">
             {['csv', 'json'].map(fmt => (
               <button
                 key={fmt}
                 onClick={() => setFormat(fmt)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
                   format === fmt
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg'
+                    : 'bg-white/5 text-gray-300 hover:bg-white/10'
                 }`}
               >
                 {fmt.toUpperCase()}
@@ -161,11 +161,11 @@ const ReportsAnalytics = () => {
           <label className="block text-sm font-medium text-gray-400 mb-2">
             Include Metrics
           </label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {Object.keys(selectedMetrics).map(metric => (
               <label
                 key={metric}
-                className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg cursor-pointer hover:bg-gray-600"
+                className="flex items-center gap-3 p-3 glass-card cursor-pointer"
               >
                 <input
                   type="checkbox"
@@ -184,8 +184,9 @@ const ReportsAnalytics = () => {
           onClick={handleGenerateReport}
           disabled={generating || !Object.values(selectedMetrics).some(v => v)}
           className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 
-            bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed
-            text-white font-medium rounded-lg transition-colors"
+            bg-gradient-to-r from-blue-600 to-cyan-600 hover:shadow-lg
+            disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed
+            text-white font-medium rounded-lg transition-all"
         >
           <FiDownload />
           {generating ? 'Generating...' : 'Generate Report'}
@@ -193,7 +194,7 @@ const ReportsAnalytics = () => {
       </div>
 
       {/* Report History */}
-      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl">
+      <div className="glass-panel p-6">
         <h3 className="text-xl font-bold text-white mb-4">Report History</h3>
         
         {reportHistory.length === 0 ? (
@@ -203,10 +204,10 @@ const ReportsAnalytics = () => {
             {reportHistory.map(report => (
               <div 
                 key={report.id}
-                className="flex items-center justify-between p-4 bg-gray-700 rounded-lg hover:bg-gray-650 transition-colors"
+                className="flex flex-col md:flex-row md:items-center md:justify-between p-4 glass-card gap-4"
               >
                 <div className="flex items-center gap-4">
-                  <div className="p-2 bg-blue-600 rounded-lg">
+                  <div className="p-2 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-lg flex-shrink-0">
                     <FiFileText className="text-white" size={20} />
                   </div>
                   <div>
@@ -221,8 +222,8 @@ const ReportsAnalytics = () => {
                     </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className="inline-block px-3 py-1 bg-gray-600 text-white text-xs rounded-full">
+                <div className="text-left md:text-right">
+                  <span className="inline-block px-3 py-1 bg-white/10 text-white text-xs rounded-full">
                     {report.format.toUpperCase()}
                   </span>
                   <p className="text-gray-400 text-xs mt-1">
@@ -236,7 +237,7 @@ const ReportsAnalytics = () => {
       </div>
 
       {/* Information */}
-      <div className="bg-blue-900 bg-opacity-20 border border-blue-500 rounded-lg p-4">
+      <div className="glass-panel p-4 border-l-4 border-blue-500">
         <h4 className="text-blue-400 font-medium mb-2">ℹ️ Report Information</h4>
         <ul className="text-gray-300 text-sm space-y-1">
           <li>• Reports are generated based on the selected date range and metrics</li>

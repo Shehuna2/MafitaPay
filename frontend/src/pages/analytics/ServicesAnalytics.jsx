@@ -68,11 +68,11 @@ const ServicesAnalytics = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="section-gap">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="section-header">
         <div>
-          <h2 className="text-3xl font-bold text-white">Services</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-white">Services</h2>
           <p className="text-gray-400 mt-1">Service performance and usage metrics</p>
         </div>
         <DateRangePicker
@@ -84,35 +84,35 @@ const ServicesAnalytics = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">P2P Trading</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatCurrency(analytics.p2p_volume || 0)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Bill Payments</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatCurrency(analytics.bill_payment_volume || 0)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Crypto Purchases</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatCurrency(analytics.crypto_volume || 0)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Total Transactions</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatNumber(analytics.total_service_transactions || 0)}
           </p>
         </div>
       </div>
 
       {/* P2P Trading */}
-      <div>
+      <div className="glass-panel p-6">
         <h3 className="text-xl font-bold text-white mb-4">P2P Trading Volume</h3>
         <AnalyticsLineChart
           data={p2pData}
@@ -126,8 +126,8 @@ const ServicesAnalytics = () => {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
+      <div className="chart-grid">
+        <div className="glass-panel p-6">
           <h3 className="text-xl font-bold text-white mb-4">Bill Payment Breakdown</h3>
           <AnalyticsBarChart
             data={billPaymentBreakdown}
@@ -139,7 +139,7 @@ const ServicesAnalytics = () => {
           />
         </div>
 
-        <div>
+        <div className="glass-panel p-6">
           <h3 className="text-xl font-bold text-white mb-4">Service Usage Distribution</h3>
           <AnalyticsPieChart
             data={serviceUsage}
@@ -150,36 +150,36 @@ const ServicesAnalytics = () => {
       </div>
 
       {/* Bill Payment Categories */}
-      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl">
+      <div className="glass-panel p-6">
         <h3 className="text-xl font-bold text-white mb-4">Bill Payment Categories</h3>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="text-center p-4 bg-gray-700/50 rounded-xl border border-gray-600/30">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="text-center p-4 glass-card">
             <p className="text-gray-400 text-sm mb-2 tracking-wide">Airtime</p>
-            <p className="text-xl font-bold text-white">
+            <p className="text-lg md:text-xl font-bold text-white">
               {formatCurrency(analytics.airtime_volume || 0)}
             </p>
           </div>
-          <div className="text-center p-4 bg-gray-700/50 rounded-xl border border-gray-600/30">
+          <div className="text-center p-4 glass-card">
             <p className="text-gray-400 text-sm mb-2 tracking-wide">Data</p>
-            <p className="text-xl font-bold text-white">
+            <p className="text-lg md:text-xl font-bold text-white">
               {formatCurrency(analytics.data_volume || 0)}
             </p>
           </div>
-          <div className="text-center p-4 bg-gray-700/50 rounded-xl border border-gray-600/30">
+          <div className="text-center p-4 glass-card">
             <p className="text-gray-400 text-sm mb-2 tracking-wide">Cable TV</p>
-            <p className="text-xl font-bold text-white">
+            <p className="text-lg md:text-xl font-bold text-white">
               {formatCurrency(analytics.cable_volume || 0)}
             </p>
           </div>
-          <div className="text-center p-4 bg-gray-700/50 rounded-xl border border-gray-600/30">
+          <div className="text-center p-4 glass-card">
             <p className="text-gray-400 text-sm mb-2 tracking-wide">Electricity</p>
-            <p className="text-xl font-bold text-white">
+            <p className="text-lg md:text-xl font-bold text-white">
               {formatCurrency(analytics.electricity_volume || 0)}
             </p>
           </div>
-          <div className="text-center p-4 bg-gray-700/50 rounded-xl border border-gray-600/30">
+          <div className="text-center p-4 glass-card">
             <p className="text-gray-400 text-sm mb-2 tracking-wide">Education</p>
-            <p className="text-xl font-bold text-white">
+            <p className="text-lg md:text-xl font-bold text-white">
               {formatCurrency(analytics.education_volume || 0)}
             </p>
           </div>
@@ -187,7 +187,7 @@ const ServicesAnalytics = () => {
       </div>
 
       {/* Top Services Table */}
-      <div>
+      <div className="glass-panel p-6">
         <h3 className="text-xl font-bold text-white mb-4">Top Services</h3>
         <DataTable
           columns={tableColumns}
