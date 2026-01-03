@@ -23,6 +23,7 @@ def rate_limited_request(url, params=None, timeout=5):
     Sleeps OUTSIDE the lock to avoid blocking other threads.
     """
     while True:
+        sleep_for = None
         with LOCK:
             last_ts = cache.get(RATE_LIMIT_KEY, 0)
             elapsed = time.time() - last_ts
@@ -36,9 +37,10 @@ def rate_limited_request(url, params=None, timeout=5):
                 # Calculate sleep time
                 sleep_for = MIN_INTERVAL - elapsed
         
-        # Sleep OUTSIDE the lock
-        logger.debug(f"[CG] Sleeping {sleep_for:.2f}s due to global rate limit")
-        time.sleep(sleep_for)
+        # Sleep OUTSIDE the lock (only if needed)
+        if sleep_for is not None:
+            logger.debug(f"[CG] Sleeping {sleep_for:.2f}s due to global rate limit")
+            time.sleep(sleep_for)
 
     resp.raise_for_status()
     return resp
