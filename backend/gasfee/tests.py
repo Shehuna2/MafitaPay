@@ -186,6 +186,45 @@ class WalletAddressValidationTestCase(TestCase):
         self.assertTrue(validate_wallet_address('TON', ton_addr))
         self.assertFalse(validate_wallet_address('TON', eth_addr))
 
+    def test_validate_wallet_address_token_symbols(self):
+        """Test wallet address validation for token-specific symbols (e.g., BNB-USDT, BASE-USDC)"""
+        # EVM address for testing
+        evm_addr = "0x742d35cc6634c0532925a3b844bc9e7595f0beb0"
+        
+        # Token symbols that should be validated as EVM addresses
+        token_symbols = [
+            'BNB-USDT',   # USDT on BNB chain
+            'BASE-USDC',  # USDC on BASE chain
+            'BASE-ETH',   # ETH on BASE chain (already in codebase)
+            'ARB-ETH',    # ETH on Arbitrum (already in codebase)
+            'OP-ETH',     # ETH on Optimism (already in codebase)
+            'LINEA-ETH',  # ETH on Linea (already in codebase)
+        ]
+        
+        for symbol in token_symbols:
+            with self.subTest(symbol=symbol):
+                # Should accept valid EVM address
+                self.assertTrue(
+                    validate_wallet_address(symbol, evm_addr),
+                    f"{symbol} should accept valid EVM address"
+                )
+                
+                # Should reject non-EVM addresses
+                self.assertFalse(
+                    validate_wallet_address(symbol, "alice.near"),
+                    f"{symbol} should reject NEAR address"
+                )
+                self.assertFalse(
+                    validate_wallet_address(symbol, "7EqQdEULxWcraVx3mXKFjc84LhCkMGZCkRuDpvcMwJeK"),
+                    f"{symbol} should reject Solana address"
+                )
+                
+                # Should reject invalid EVM address
+                self.assertFalse(
+                    validate_wallet_address(symbol, "0x123"),
+                    f"{symbol} should reject invalid EVM address"
+                )
+
 
 class SecurityLoggingTestCase(TestCase):
     """Test security logging and fraud detection"""

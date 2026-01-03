@@ -141,6 +141,10 @@ SENDERS = {
     "AVAX": lambda to, amt, oid: send_evm("AVAX", to, amt),
     "LINEA": lambda to, amt, oid: send_evm("LINEA", to, amt),
 
+    # EVM tokens on specific chains
+    "BNB-USDT": lambda to, amt, oid: send_evm("BNB", to, amt),
+    "BASE-USDC": lambda to, amt, oid: send_evm("BASE", to, amt),
+
     # Non-EVM chains
     "BSC": send_bsc,
     "BNB": send_bsc,

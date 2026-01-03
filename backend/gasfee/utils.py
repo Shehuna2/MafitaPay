@@ -304,7 +304,7 @@ def validate_wallet_address(symbol: str, address: str) -> bool:
     Enhanced wallet address validation with chain-specific rules.
     
     Args:
-        symbol: Crypto symbol (e.g., 'ETH', 'SOL', 'NEAR', 'TON')
+        symbol: Crypto symbol (e.g., 'ETH', 'SOL', 'NEAR', 'TON', 'BNB-USDT', 'BASE-USDC')
         address: Wallet address to validate
     
     Returns:
@@ -315,22 +315,30 @@ def validate_wallet_address(symbol: str, address: str) -> bool:
     
     symbol = symbol.upper()
     
+    # Extract base chain from token symbols (e.g., "BNB-USDT" -> "BNB", "BASE-USDC" -> "BASE")
+    # This handles cases like "BNB-USDT", "BASE-USDC", "BASE-ETH", etc.
+    if '-' in symbol:
+        base_chain = symbol.split('-')[0]
+    else:
+        base_chain = symbol
+    
     try:
         # EVM chains with EIP-55 checksum validation
-        # Note: BASE-ETH, BASE-ARB, etc. are BASE network tokens, still use EVM validation
-        if symbol in {'ETH', 'ARB', 'BNB', 'BASE', 'OP', 'POL', 'AVAX', 'LINEA'} or symbol.startswith('BASE-'):
+        # Covers: ETH, ARB, BNB, BASE, OP, POL, AVAX, LINEA
+        # Also covers token variants: BNB-USDT, BASE-USDC, BASE-ETH, etc.
+        if base_chain in {'ETH', 'ARB', 'BNB', 'BASE', 'OP', 'POL', 'AVAX', 'LINEA'}:
             return validate_evm_address(address)
         
         # Solana with base58 validation
-        elif symbol == 'SOL':
+        elif base_chain == 'SOL':
             return validate_solana_address(address)
         
         # NEAR protocol
-        elif symbol == 'NEAR':
+        elif base_chain == 'NEAR':
             return validate_near_address(address)
         
         # TON
-        elif symbol == 'TON':
+        elif base_chain == 'TON':
             return validate_ton_address(address)
         
         # Fallback for other chains: basic non-empty check
