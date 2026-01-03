@@ -449,3 +449,147 @@ class CryptoPurchaseFlowTestCase(TestCase):
         valid_address = "0x742d35cc6634c0532925a3b844bc9e7595f0beb0"
         self.assertTrue(_validate_wallet_address("ETH", valid_address))
 
+
+class RateLimiterNonBlockingTestCase(TestCase):
+    """Test that the rate limiter doesn't block threads unnecessarily"""
+
+    @patch('gasfee.price_service.requests.get')
+    @patch('gasfee.price_service.cache')
+    def test_rate_limiter_sleeps_outside_lock(self, mock_cache, mock_requests):
+        """Test that time.sleep() happens outside the lock"""
+        from gasfee.price_service import rate_limited_request
+        import time
+        
+        # Track when requests were made
+        request_times = []
+        
+        def track_request(*args, **kwargs):
+            request_times.append(time.time())
+            mock_response = MagicMock()
+            mock_response.raise_for_status.return_value = None
+            return mock_response
+        
+        mock_requests.side_effect = track_request
+        
+        # First call - no wait needed
+        mock_cache.get.return_value = 0  # Last call was long ago
+        rate_limited_request("https://api.test.com")
+        
+        # Second call - should wait
+        mock_cache.get.return_value = time.time() - 1  # Last call was 1 second ago
+        rate_limited_request("https://api.test.com")
+        
+        # Verify both requests were made
+        self.assertEqual(len(request_times), 2)
+        
+        # Verify second request was delayed by at least 3 seconds (MIN_INTERVAL=4, elapsed=1)
+        time_diff = request_times[1] - request_times[0]
+        self.assertGreaterEqual(time_diff, 3.0)
+
+    @patch('gasfee.price_service.requests.get')
+    @patch('gasfee.price_service.cache')  
+    def test_rate_limiter_concurrent_access(self, mock_cache, mock_requests):
+        """Test that multiple threads can check rate limit without blocking each other during sleep"""
+        from gasfee.price_service import rate_limited_request
+        import threading
+        import time
+        
+        results = []
+        
+        def make_request(index):
+            try:
+                mock_response = MagicMock()
+                mock_response.raise_for_status.return_value = None
+                mock_requests.return_value = mock_response
+                
+                rate_limited_request("https://api.test.com")
+                results.append({"index": index, "success": True})
+            except Exception as e:
+                results.append({"index": index, "error": str(e)})
+        
+        # Set up cache to require waiting
+        mock_cache.get.return_value = time.time() - 1  # Last call 1 second ago
+        mock_cache.set.return_value = None
+        
+        # Create multiple threads
+        threads = [threading.Thread(target=make_request, args=(i,)) for i in range(3)]
+        
+        start_time = time.time()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=15)  # Wait max 15 seconds
+        
+        total_time = time.time() - start_time
+        
+        # All threads should complete
+        self.assertEqual(len(results), 3)
+        
+        # Total time should be less than if they were sequential (3 * 4 = 12 seconds)
+        # With concurrent sleeping, it should be closer to 4-6 seconds
+        self.assertLess(total_time, 10)
+
+
+class RPCConfigurationTestCase(TestCase):
+    """Test RPC URL configuration for blockchain connections"""
+
+    def test_utilss_send_evm_requires_env_var(self):
+        """Test that send_evm in utilss.py requires BASE_RPC_URL environment variable"""
+        from gasfee.utilss import send_evm
+        import os
+        
+        # Temporarily unset the environment variable
+        old_value = os.environ.get('BASE_RPC_URL')
+        if 'BASE_RPC_URL' in os.environ:
+            del os.environ['BASE_RPC_URL']
+        
+        try:
+            # Should raise ValueError when RPC URL is not set
+            with self.assertRaises(ValueError) as context:
+                send_evm("BASE", "0x742d35cc6634c0532925a3b844bc9e7595f0beb0", 1000000000000000000)
+            
+            self.assertIn("Missing RPC URL", str(context.exception))
+            self.assertIn("BASE_RPC_URL", str(context.exception))
+        finally:
+            # Restore the environment variable
+            if old_value is not None:
+                os.environ['BASE_RPC_URL'] = old_value
+
+    def test_evm_sender_requires_env_var(self):
+        """Test that send_evm in evm_sender.py requires BASE_RPC_URL environment variable"""
+        from gasfee.evm_sender import send_evm
+        from decimal import Decimal
+        import os
+        
+        # Temporarily unset the environment variable
+        old_value = os.environ.get('BASE_RPC_URL')
+        if 'BASE_RPC_URL' in os.environ:
+            del os.environ['BASE_RPC_URL']
+        
+        try:
+            # Should raise ValueError when RPC URL is not set
+            with self.assertRaises(ValueError) as context:
+                send_evm("BASE", "0x742d35cc6634c0532925a3b844bc9e7595f0beb0", Decimal("0.001"))
+            
+            self.assertIn("Missing RPC or private key", str(context.exception))
+        finally:
+            # Restore the environment variable
+            if old_value is not None:
+                os.environ['BASE_RPC_URL'] = old_value
+
+    @patch.dict('os.environ', {'BASE_RPC_URL': 'https://base.example.com'})
+    def test_utilss_send_evm_uses_env_var(self):
+        """Test that send_evm in utilss.py uses the BASE_RPC_URL from environment"""
+        from gasfee.utilss import send_evm
+        from web3 import Web3
+        
+        # This should not raise an error for missing RPC URL
+        # (it will fail later for missing private key, which is expected)
+        try:
+            send_evm("BASE", "0x742d35cc6634c0532925a3b844bc9e7595f0beb0", 1000000000000000000)
+        except ValueError as e:
+            # Should fail on missing wallet config, not RPC URL
+            self.assertNotIn("Missing RPC URL", str(e))
+            # Should be about wallet configuration
+            self.assertIn("Sender wallet not configured", str(e))
+

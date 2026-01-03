@@ -71,13 +71,19 @@ def _normalize_ids(ids: List[str]) -> List[str]:
 
 def send_evm(chain: str, recipient: str, amount_wei: int, order_id: Optional[int] = None) -> str:
     L2_CHAINS = {
-        "ARB": {"rpc": os.getenv("ARBITRUM_RPC_URL", "https://arb1.arbitrum.io/rpc"), "symbol": "ETH"},
-        "BASE": {"rpc": os.getenv("BASE_RPC_URL", "https://mainnet.base.org"), "symbol": "ETH"},
-        "OP": {"rpc": os.getenv("OPTIMISM_RPC_URL", "https://mainnet.optimism.io"), "symbol": "ETH"}
+        "ARB": {"rpc": os.getenv("ARBITRUM_RPC_URL"), "symbol": "ETH", "env_var": "ARBITRUM_RPC_URL"},
+        "BASE": {"rpc": os.getenv("BASE_RPC_URL"), "symbol": "ETH", "env_var": "BASE_RPC_URL"},
+        "OP": {"rpc": os.getenv("OPTIMISM_RPC_URL"), "symbol": "ETH", "env_var": "OPTIMISM_RPC_URL"}
     }
     if chain not in L2_CHAINS:
         raise ValueError(f"Unsupported chain: {chain}")
-    w3_local = Web3(Web3.HTTPProvider(L2_CHAINS[chain]["rpc"]))
+    
+    rpc_url = L2_CHAINS[chain]["rpc"]
+    if not rpc_url:
+        env_var_name = L2_CHAINS[chain]["env_var"]
+        raise ValueError(f"Missing RPC URL for {chain}. Please set {env_var_name} environment variable.")
+    
+    w3_local = Web3(Web3.HTTPProvider(rpc_url))
     sender_private_key = os.getenv(f"{chain}_PRIVATE_KEY")
     sender_address = os.getenv(f"{chain}_SENDER_ADDRESS")
     if not sender_private_key or not sender_address:

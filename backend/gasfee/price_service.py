@@ -20,18 +20,27 @@ RATE_LIMIT_KEY = "cg_last_call_ts"  # shared across workers
 def rate_limited_request(url, params=None, timeout=5):
     """
     Enforces API rate limit ACROSS all workers/processes.
+    Sleeps OUTSIDE the lock to avoid blocking other threads.
     """
-    with LOCK:
-        last_ts = cache.get(RATE_LIMIT_KEY, 0)
-        elapsed = time.time() - last_ts
+    while True:
+        sleep_for = None
+        with LOCK:
+            last_ts = cache.get(RATE_LIMIT_KEY, 0)
+            elapsed = time.time() - last_ts
 
-        if elapsed < MIN_INTERVAL:
-            sleep_for = MIN_INTERVAL - elapsed
+            if elapsed >= MIN_INTERVAL:
+                # We can proceed with the request
+                resp = requests.get(url, params=params, timeout=timeout)
+                cache.set(RATE_LIMIT_KEY, time.time(), MIN_INTERVAL * 2)
+                break
+            else:
+                # Calculate sleep time
+                sleep_for = MIN_INTERVAL - elapsed
+        
+        # Sleep OUTSIDE the lock (only if needed)
+        if sleep_for is not None:
             logger.debug(f"[CG] Sleeping {sleep_for:.2f}s due to global rate limit")
             time.sleep(sleep_for)
-
-        resp = requests.get(url, params=params, timeout=timeout)
-        cache.set(RATE_LIMIT_KEY, time.time(), MIN_INTERVAL * 2)
 
     resp.raise_for_status()
     return resp
