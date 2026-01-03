@@ -42,7 +42,7 @@ class Crypto(models.Model):
         unique_together = ('coingecko_id', 'network')
 
     def save(self, *args, **kwargs):
-        if self.network in ['ARB', 'BASE', 'OP']:
+        if self.network in ['ARB', 'BASE', 'OP'] and 'ETH' in self.symbol:
             self.coingecko_id = 'ethereum'
         super().save(*args, **kwargs)
 
