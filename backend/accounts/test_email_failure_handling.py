@@ -167,3 +167,29 @@ class EmailFailureHandlingTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
         self.assertIn('error', response.data)
         self.assertIn('Failed to send verification email', response.data['error'])
+
+    @patch('accounts.tasks.EmailMultiAlternatives.send')
+    def test_verification_email_sent_only_once_during_registration(self, mock_send):
+        """Test that verification email is sent only once during registration (not duplicated)"""
+        # Email sending succeeds
+        mock_send.return_value = 1
+        
+        response = self.client.post('/api/register/', {
+            'email': 'oncetest@example.com',
+            'password': 'TestPass123!',
+            'password2': 'TestPass123!',
+            'first_name': 'Once',
+            'last_name': 'Test'
+        })
+        
+        # Registration should succeed
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # User should exist
+        self.assertTrue(User.objects.filter(email='oncetest@example.com').exists())
+        
+        # Email should be sent ONLY ONCE (not twice)
+        # This verifies the fix for duplicate email sending
+        # Before the fix, this would be called twice (once in serializer, once in view)
+        self.assertEqual(mock_send.call_count, 1, 
+                        "Verification email should be sent exactly once during registration")
