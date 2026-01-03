@@ -593,3 +593,133 @@ class RPCConfigurationTestCase(TestCase):
             # Should be about wallet configuration
             self.assertIn("Sender wallet not configured", str(e))
 
+
+class CryptoL2CoinGeckoIDTestCase(TestCase):
+    """Test CoinGecko ID handling for Layer 2 networks"""
+
+    def test_l2_eth_token_forces_ethereum_coingecko_id(self):
+        """Test that ETH tokens on L2 networks get coingecko_id='ethereum'"""
+        # Test for BASE network
+        base_eth = Crypto.objects.create(
+            name="Ethereum on Base",
+            symbol="BASE-ETH",
+            network="BASE",
+            coingecko_id="some-other-id"  # This should be overridden
+        )
+        self.assertEqual(base_eth.coingecko_id, "ethereum")
+        
+        # Test for Arbitrum network
+        arb_eth = Crypto.objects.create(
+            name="Ethereum on Arbitrum",
+            symbol="ARB-ETH",
+            network="ARB",
+            coingecko_id="some-other-id"  # This should be overridden
+        )
+        self.assertEqual(arb_eth.coingecko_id, "ethereum")
+        
+        # Test for Optimism network
+        op_eth = Crypto.objects.create(
+            name="Ethereum on Optimism",
+            symbol="OP-ETH",
+            network="OP",
+            coingecko_id="some-other-id"  # This should be overridden
+        )
+        self.assertEqual(op_eth.coingecko_id, "ethereum")
+
+    def test_l2_non_eth_token_keeps_original_coingecko_id(self):
+        """Test that non-ETH tokens on L2 networks keep their original coingecko_id"""
+        # Create USDC on BASE
+        base_usdc = Crypto.objects.create(
+            name="USD Coin on Base",
+            symbol="BASE-USDC",
+            network="BASE",
+            coingecko_id="usd-coin"
+        )
+        self.assertEqual(base_usdc.coingecko_id, "usd-coin")
+        
+        # Create USDT on BASE
+        base_usdt = Crypto.objects.create(
+            name="Tether on Base",
+            symbol="BASE-USDT",
+            network="BASE",
+            coingecko_id="tether"
+        )
+        self.assertEqual(base_usdt.coingecko_id, "tether")
+        
+        # Create USDC on Arbitrum
+        arb_usdc = Crypto.objects.create(
+            name="USD Coin on Arbitrum",
+            symbol="ARB-USDC",
+            network="ARB",
+            coingecko_id="usd-coin"
+        )
+        self.assertEqual(arb_usdc.coingecko_id, "usd-coin")
+        
+        # Create USDT on Optimism
+        op_usdt = Crypto.objects.create(
+            name="Tether on Optimism",
+            symbol="OP-USDT",
+            network="OP",
+            coingecko_id="tether"
+        )
+        self.assertEqual(op_usdt.coingecko_id, "tether")
+
+    def test_multiple_tokens_same_l2_network_no_constraint_violation(self):
+        """Test that multiple different tokens can be created on the same L2 network"""
+        # This is the main scenario from the issue - should not raise IntegrityError
+        base_eth = Crypto.objects.create(
+            name="Ethereum on Base",
+            symbol="BASE-ETH",
+            network="BASE",
+            coingecko_id="ethereum"
+        )
+        
+        # This should work now without constraint violation
+        base_usdc = Crypto.objects.create(
+            name="USD Coin on Base",
+            symbol="BASE-USDC",
+            network="BASE",
+            coingecko_id="usd-coin"
+        )
+        
+        # Verify both exist with different coingecko_ids
+        self.assertEqual(base_eth.coingecko_id, "ethereum")
+        self.assertEqual(base_usdc.coingecko_id, "usd-coin")
+        
+        # Verify both are on BASE network
+        self.assertEqual(base_eth.network, "BASE")
+        self.assertEqual(base_usdc.network, "BASE")
+
+    def test_non_l2_network_keeps_original_coingecko_id(self):
+        """Test that tokens on non-L2 networks are not affected by the L2 logic"""
+        # Create ETH on mainnet
+        eth_mainnet = Crypto.objects.create(
+            name="Ethereum",
+            symbol="ETH",
+            network="ETH",
+            coingecko_id="ethereum"
+        )
+        self.assertEqual(eth_mainnet.coingecko_id, "ethereum")
+        
+        # Create USDC on BNB chain
+        bnb_usdc = Crypto.objects.create(
+            name="USD Coin on BNB",
+            symbol="BNB-USDC",
+            network="BNB",
+            coingecko_id="usd-coin"
+        )
+        self.assertEqual(bnb_usdc.coingecko_id, "usd-coin")
+
+    def test_tokens_containing_eth_substring_not_affected(self):
+        """Test that tokens with 'ETH' as a substring (but not exact match) are not affected"""
+        # Create a hypothetical token with ETH in the name but not as the asset
+        # For example, if there were a METH or SETH token on BASE
+        base_meth = Crypto.objects.create(
+            name="Synthetic ETH on Base",
+            symbol="BASE-SETH",  # Contains 'ETH' but doesn't end with '-ETH'
+            network="BASE",
+            coingecko_id="synthetic-eth"
+        )
+        # Should keep its original coingecko_id, not be forced to 'ethereum'
+        self.assertEqual(base_meth.coingecko_id, "synthetic-eth")
+
