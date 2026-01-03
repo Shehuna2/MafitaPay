@@ -40,37 +40,6 @@ class RegisterView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-
-            # Generate verification token
-            verification_token = get_random_string(32)
-            user.verification_token = verification_token
-            user.save()
-
-            # ✅ Use BACKEND_URL (not FRONTEND_URL) so Django handles token validation
-            backend_url = getattr(settings, "BACKEND_URL", settings.BASE_URL)
-            verification_url = f"{backend_url}/api/verify-email/{verification_token}/"
-
-            # Get user profile info
-            profile = getattr(user, "profile", None)
-            first_name = getattr(profile, "first_name", "")
-            last_name = getattr(profile, "last_name", "")
-
-            # Send verification email synchronously - but don't fail registration if it fails
-            email_sent = False
-            try:
-                result = send_verification_email_sync(user.email, verification_url, first_name, last_name)
-                if result:
-                    logger.info(f"Verification email sent to {user.email}")
-                    email_sent = True
-                else:
-                    logger.warning(f"Verification email failed for {user.email}, user can resend later")
-            except Exception as e:
-                logger.error(f"Failed to send verification email to {user.email}, user can resend later: {e}")
-
-            if email_sent:
-                logger.info(f"Registration complete for {user.email}, verification sent to {verification_url}")
-            else:
-                logger.info(f"Registration complete for {user.email}, but email sending failed")
             
             return Response(
                 {"message": "Registration successful. Please verify your email."},
