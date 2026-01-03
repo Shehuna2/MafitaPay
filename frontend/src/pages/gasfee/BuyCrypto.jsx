@@ -371,7 +371,7 @@ export default function BuyCrypto() {
 
         /* ---------- EVM Chains ---------- */
         const EVM = [
-          "ETH-ERC20", "BNB", "POL-MATIC", "AVAX", "BNB-USDT", "BASE-USDC", 
+          "ETH-ERC20", "BNB", "POL-MATIC", "AVAX", "BNB-USDT", "BASE", "BASE-USDC", 
           "OP-ETH", "ARB-ETH", "BASE-ETH", "LINEA-ETH"
         ]; 
         if (EVM.includes(symbol)) {
