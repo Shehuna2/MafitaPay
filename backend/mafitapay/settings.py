@@ -65,12 +65,44 @@ if DEBUG:
 else:
     EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 
-EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.sendgrid.net")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp-relay.brevo.com")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "MafitaPay <no-reply@mafitapay.com>")
+
+# Email configuration validation for production
+if not DEBUG and EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend":
+    import logging
+    email_logger = logging.getLogger(__name__)
+    
+    # Log email configuration (without sensitive data)
+    email_logger.info(f"Email Configuration: HOST={EMAIL_HOST}, PORT={EMAIL_PORT}, "
+                     f"TLS={EMAIL_USE_TLS}, USER={'set' if EMAIL_HOST_USER else 'NOT SET'}, "
+                     f"PASSWORD={'set' if EMAIL_HOST_PASSWORD else 'NOT SET'}")
+    
+    # Validate required email credentials
+    if not EMAIL_HOST_USER or not EMAIL_HOST_PASSWORD:
+        email_logger.error("EMAIL_HOST_USER and EMAIL_HOST_PASSWORD are required in production")
+        raise ValueError(
+            "Email configuration incomplete: EMAIL_HOST_USER and EMAIL_HOST_PASSWORD "
+            "must be set in production environment"
+        )
+    
+    # Validate Brevo SMTP format
+    # Brevo SMTP credentials should be in format: xxxxx@smtp-brevo.com
+    # Common mistake: using Gmail address instead of Brevo SMTP username
+    if EMAIL_HOST == "smtp-relay.brevo.com" or "brevo" in EMAIL_HOST.lower():
+        if "@smtp-brevo.com" not in EMAIL_HOST_USER:
+            email_logger.warning(
+                f"EMAIL_HOST_USER='{EMAIL_HOST_USER}' does not match Brevo SMTP format. "
+                f"Brevo SMTP requires format: xxxxx@smtp-brevo.com (not Gmail or other email addresses). "
+                f"Get your Brevo SMTP login from: https://app.brevo.com/settings/keys/smtp"
+            )
+            # Don't raise in case there's a valid custom configuration, just warn
+    
+    email_logger.info("✓ Email configuration validated successfully")
 
 # --------------------------------------------------
 # 7. URLS
