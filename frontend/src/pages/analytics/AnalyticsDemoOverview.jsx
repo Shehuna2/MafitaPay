@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { FiDollarSign, FiTrendingUp, FiUsers, FiActivity } from 'react-icons/fi';
 import MetricCard from '../../components/analytics/MetricCard';
 import AnalyticsLineChart from '../../components/analytics/AnalyticsLineChart';

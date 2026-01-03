@@ -5,7 +5,7 @@ import DateRangePicker from '../../components/analytics/DateRangePicker';
 import ExportButton from '../../components/analytics/ExportButton';
 import { useUserAnalytics } from '../../hooks/useAnalytics';
 import { useFilters } from '../../hooks/useFilters';
-import { formatNumber, formatDate } from '../../services/formatters';
+import { formatNumber } from '../../services/formatters';
 import { PageSkeleton } from '../../components/analytics/LoadingSkeletons';
 
 /**
