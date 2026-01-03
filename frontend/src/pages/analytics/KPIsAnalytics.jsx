@@ -44,8 +44,8 @@ const KPIsAnalytics = () => {
     const isPositive = trend > 0;
 
     return (
-      <div className="bg-gray-800 rounded-lg p-6">
-        <h4 className="text-gray-400 text-sm mb-2">{title}</h4>
+      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <h4 className="text-gray-400 text-sm mb-2 tracking-wide">{title}</h4>
         <p className="text-3xl font-bold text-white mb-2">{value}</p>
         
         {subtitle && (
@@ -72,12 +72,12 @@ const KPIsAnalytics = () => {
               <span>Progress to target</span>
               <span>{progress.toFixed(0)}%</span>
             </div>
-            <div className="bg-gray-700 rounded-full h-2 overflow-hidden">
+            <div className="bg-gray-700/50 rounded-full h-2 overflow-hidden">
               <div 
-                className={`h-full transition-all duration-500 ${
-                  progress >= 100 ? 'bg-green-500' : 
-                  progress >= 75 ? 'bg-blue-500' : 
-                  progress >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                className={`h-full transition-all duration-500 shadow-md ${
+                  progress >= 100 ? 'bg-gradient-to-r from-green-500 to-green-600' : 
+                  progress >= 75 ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 
+                  progress >= 50 ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' : 'bg-gradient-to-r from-red-500 to-red-600'
                 }`}
                 style={{ width: `${Math.min(progress, 100)}%` }}
               />
@@ -211,7 +211,7 @@ const KPIsAnalytics = () => {
       </div>
 
       {/* Summary Section */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl">
         <h3 className="text-xl font-bold text-white mb-4">Performance Summary</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>

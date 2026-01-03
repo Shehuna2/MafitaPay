@@ -86,26 +86,26 @@ const RevenueAnalytics = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Total Revenue</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Total Revenue</h4>
           <p className="text-2xl font-bold text-white">
             {formatCurrency(analytics.total_revenue || 0)}
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Net Profit</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Net Profit</h4>
           <p className="text-2xl font-bold text-white">
             {formatCurrency(analytics.net_profit || 0)}
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Expenses</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Expenses</h4>
           <p className="text-2xl font-bold text-white">
             {formatCurrency(analytics.total_expenses || 0)}
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Profit Margin</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Profit Margin</h4>
           <p className="text-2xl font-bold text-white">
             {analytics.total_revenue > 0 
               ? ((analytics.net_profit / analytics.total_revenue) * 100).toFixed(2)

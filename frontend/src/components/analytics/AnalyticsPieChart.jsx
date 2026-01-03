@@ -11,19 +11,19 @@ const AnalyticsPieChart = ({
   loading = false,
   innerRadius = 0, // Set to create donut chart
 }) => {
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#14b8a6', '#0891b2', '#84cc16'];
 
   if (loading) {
     return (
-      <div className="bg-gray-800 rounded-lg p-6 animate-pulse">
-        <div className="h-64 bg-gray-700 rounded-full mx-auto" style={{ width: 256 }}></div>
+      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl animate-pulse">
+        <div className="h-64 bg-gray-700/50 rounded-full mx-auto" style={{ width: 256 }}></div>
       </div>
     );
   }
 
   if (!data || data.length === 0) {
     return (
-      <div className="bg-gray-800 rounded-lg p-6 flex items-center justify-center h-64">
+      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl flex items-center justify-center h-64">
         <p className="text-gray-400">No data available</p>
       </div>
     );
@@ -42,7 +42,7 @@ const AnalyticsPieChart = ({
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
+    <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl">
       <ResponsiveContainer width="100%" height={height}>
         <PieChart>
           <Pie

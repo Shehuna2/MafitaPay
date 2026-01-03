@@ -84,26 +84,26 @@ const UsersAnalytics = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Total Users</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Total Users</h4>
           <p className="text-2xl font-bold text-white">
             {formatNumber(analytics.total_users || 0)}
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">New Users</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">New Users</h4>
           <p className="text-2xl font-bold text-white">
             {formatNumber(analytics.new_users || 0)}
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Active Users</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Active Users</h4>
           <p className="text-2xl font-bold text-white">
             {formatNumber(analytics.active_users || 0)}
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Retention Rate</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Retention Rate</h4>
           <p className="text-2xl font-bold text-white">
             {(analytics.retention_rate || 0).toFixed(2)}%
           </p>
@@ -136,7 +136,7 @@ const UsersAnalytics = () => {
           />
         </div>
 
-        <div className="bg-gray-800 rounded-lg p-6">
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl">
           <h3 className="text-xl font-bold text-white mb-4">User Metrics</h3>
           <div className="space-y-4">
             <div className="flex justify-between items-center py-3 border-b border-gray-700">

@@ -105,20 +105,20 @@ const TransactionsDemoAnalytics = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Total Volume</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Total Volume</h4>
           <p className="text-2xl font-bold text-white">
             {formatCurrency(analytics.total_volume)}
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Transaction Count</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Transaction Count</h4>
           <p className="text-2xl font-bold text-white">
             {formatNumber(analytics.total_count)}
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-gray-400 text-sm mb-2">Average Transaction</h4>
+        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Average Transaction</h4>
           <p className="text-2xl font-bold text-white">
             {formatCurrency(analytics.average_transaction)}
           </p>
@@ -160,7 +160,7 @@ const TransactionsDemoAnalytics = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl">
         <h3 className="text-lg font-bold text-white mb-4">Filters</h3>
         <div className="flex flex-wrap gap-4">
           <div>
