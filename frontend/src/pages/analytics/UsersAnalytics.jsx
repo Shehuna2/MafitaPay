@@ -5,7 +5,7 @@ import DateRangePicker from '../../components/analytics/DateRangePicker';
 import ExportButton from '../../components/analytics/ExportButton';
 import { useUserAnalytics } from '../../hooks/useAnalytics';
 import { useFilters } from '../../hooks/useFilters';
-import { formatNumber, formatDate } from '../../services/formatters';
+import { formatNumber } from '../../services/formatters';
 import { PageSkeleton } from '../../components/analytics/LoadingSkeletons';
 
 /**
@@ -67,11 +67,11 @@ const UsersAnalytics = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="section-gap">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="section-header">
         <div>
-          <h2 className="text-3xl font-bold text-white">Users</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-white">Users</h2>
           <p className="text-gray-400 mt-1">User analytics and growth metrics</p>
         </div>
         <DateRangePicker
@@ -83,35 +83,35 @@ const UsersAnalytics = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Total Users</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatNumber(analytics.total_users || 0)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">New Users</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatNumber(analytics.new_users || 0)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Active Users</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatNumber(analytics.active_users || 0)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Retention Rate</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {(analytics.retention_rate || 0).toFixed(2)}%
           </p>
         </div>
       </div>
 
       {/* User Growth Chart */}
-      <div>
+      <div className="glass-panel p-6">
         <h3 className="text-xl font-bold text-white mb-4">User Growth</h3>
         <AnalyticsLineChart
           data={userGrowth}
@@ -126,8 +126,8 @@ const UsersAnalytics = () => {
       </div>
 
       {/* User Segmentation */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
+      <div className="chart-grid">
+        <div className="glass-panel p-6">
           <h3 className="text-xl font-bold text-white mb-4">User Segmentation</h3>
           <AnalyticsPieChart
             data={userSegmentation}
@@ -136,22 +136,22 @@ const UsersAnalytics = () => {
           />
         </div>
 
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl">
+        <div className="glass-panel p-6">
           <h3 className="text-xl font-bold text-white mb-4">User Metrics</h3>
           <div className="space-y-4">
-            <div className="flex justify-between items-center py-3 border-b border-gray-700">
+            <div className="flex justify-between items-center py-3 border-b border-white/10">
               <span className="text-gray-400">Merchants</span>
               <span className="text-white font-bold text-lg">
                 {formatNumber(analytics.merchant_count || 0)}
               </span>
             </div>
-            <div className="flex justify-between items-center py-3 border-b border-gray-700">
+            <div className="flex justify-between items-center py-3 border-b border-white/10">
               <span className="text-gray-400">Regular Users</span>
               <span className="text-white font-bold text-lg">
                 {formatNumber(analytics.regular_user_count || 0)}
               </span>
             </div>
-            <div className="flex justify-between items-center py-3 border-b border-gray-700">
+            <div className="flex justify-between items-center py-3 border-b border-white/10">
               <span className="text-gray-400">Verified Users</span>
               <span className="text-white font-bold text-lg">
                 {formatNumber(analytics.verified_users || 0)}
@@ -168,7 +168,7 @@ const UsersAnalytics = () => {
       </div>
 
       {/* Top Referrers Table */}
-      <div>
+      <div className="glass-panel p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold text-white">Top Referrers</h3>
           <ExportButton 

@@ -44,9 +44,9 @@ const KPIsAnalytics = () => {
     const isPositive = trend > 0;
 
     return (
-      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+      <div className="glass-card p-6">
         <h4 className="text-gray-400 text-sm mb-2 tracking-wide">{title}</h4>
-        <p className="text-3xl font-bold text-white mb-2">{value}</p>
+        <p className="text-2xl md:text-3xl font-bold text-white mb-2">{value}</p>
         
         {subtitle && (
           <p className="text-gray-500 text-xs mb-2">{subtitle}</p>
@@ -55,11 +55,11 @@ const KPIsAnalytics = () => {
         {trend !== undefined && (
           <div className="flex items-center mb-2">
             {isPositive ? (
-              <FiTrendingUp className="text-green-500 mr-1" />
+              <FiTrendingUp className="text-green-400 mr-1" size={16} />
             ) : (
-              <FiTrendingDown className="text-red-500 mr-1" />
+              <FiTrendingDown className="text-red-400 mr-1" size={16} />
             )}
-            <span className={`text-sm ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+            <span className={`text-sm font-medium ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
               {trendValue || `${Math.abs(trend).toFixed(2)}%`}
             </span>
             <span className="text-gray-500 text-xs ml-2">vs last period</span>
@@ -72,7 +72,7 @@ const KPIsAnalytics = () => {
               <span>Progress to target</span>
               <span>{progress.toFixed(0)}%</span>
             </div>
-            <div className="bg-gray-700/50 rounded-full h-2 overflow-hidden">
+            <div className="bg-white/5 rounded-full h-2 overflow-hidden">
               <div 
                 className={`h-full transition-all duration-500 shadow-md ${
                   progress >= 100 ? 'bg-gradient-to-r from-green-500 to-green-600' : 
@@ -89,11 +89,11 @@ const KPIsAnalytics = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="section-gap">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="section-header">
         <div>
-          <h2 className="text-3xl font-bold text-white">Key Performance Indicators</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-white">Key Performance Indicators</h2>
           <p className="text-gray-400 mt-1">Track and monitor critical business metrics</p>
         </div>
         <DateRangePicker
@@ -107,7 +107,7 @@ const KPIsAnalytics = () => {
       {/* User Engagement KPIs */}
       <div>
         <h3 className="text-xl font-bold text-white mb-4">User Engagement</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="panel-grid">
           <KPICard
             title="Daily Active Users (DAU)"
             value={formatNumber(kpis.dau || 0)}
@@ -132,7 +132,7 @@ const KPIsAnalytics = () => {
       {/* Financial KPIs */}
       <div>
         <h3 className="text-xl font-bold text-white mb-4">Financial Metrics</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           <KPICard
             title="Customer Acquisition Cost (CAC)"
             value={formatCurrency(kpis.cac || 0)}
@@ -162,7 +162,7 @@ const KPIsAnalytics = () => {
       {/* Operational KPIs */}
       <div>
         <h3 className="text-xl font-bold text-white mb-4">Operational Metrics</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="panel-grid">
           <KPICard
             title="Transaction Success Rate"
             value={formatPercentage(kpis.transaction_success_rate || 0)}
@@ -188,7 +188,7 @@ const KPIsAnalytics = () => {
       {/* Growth Metrics */}
       <div>
         <h3 className="text-xl font-bold text-white mb-4">Growth Metrics</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="panel-grid">
           <KPICard
             title="User Growth Rate"
             value={formatPercentage(kpis.user_growth_rate || 0)}
@@ -211,11 +211,11 @@ const KPIsAnalytics = () => {
       </div>
 
       {/* Summary Section */}
-      <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl">
+      <div className="glass-panel p-6">
         <h3 className="text-xl font-bold text-white mb-4">Performance Summary</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <h4 className="text-green-500 font-bold mb-3">Strengths</h4>
+            <h4 className="text-green-400 font-bold mb-3">Strengths</h4>
             <ul className="space-y-2 text-gray-300">
               {kpis.transaction_success_rate >= 90 && (
                 <li>✓ High transaction success rate</li>
@@ -232,7 +232,7 @@ const KPIsAnalytics = () => {
             </ul>
           </div>
           <div>
-            <h4 className="text-yellow-500 font-bold mb-3">Areas for Improvement</h4>
+            <h4 className="text-yellow-400 font-bold mb-3">Areas for Improvement</h4>
             <ul className="space-y-2 text-gray-300">
               {kpis.churn_rate > 10 && (
                 <li>⚠ High churn rate - focus on retention</li>

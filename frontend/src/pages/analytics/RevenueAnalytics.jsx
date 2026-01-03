@@ -69,11 +69,11 @@ const RevenueAnalytics = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="section-gap">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="section-header">
         <div>
-          <h2 className="text-3xl font-bold text-white">Revenue</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-white">Revenue</h2>
           <p className="text-gray-400 mt-1">Financial metrics and revenue breakdown</p>
         </div>
         <DateRangePicker
@@ -85,28 +85,28 @@ const RevenueAnalytics = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Total Revenue</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatCurrency(analytics.total_revenue || 0)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Net Profit</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatCurrency(analytics.net_profit || 0)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Expenses</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {formatCurrency(analytics.total_expenses || 0)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-gray-800 to-gray-850 rounded-xl p-6 border border-gray-700/50 shadow-xl hover:shadow-2xl transition-all duration-300">
+        <div className="glass-card p-6">
           <h4 className="text-gray-400 text-sm mb-2 tracking-wide">Profit Margin</h4>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl md:text-2xl font-bold text-white">
             {analytics.total_revenue > 0 
               ? ((analytics.net_profit / analytics.total_revenue) * 100).toFixed(2)
               : 0}%
@@ -115,7 +115,7 @@ const RevenueAnalytics = () => {
       </div>
 
       {/* Revenue Trend */}
-      <div>
+      <div className="glass-panel p-6">
         <h3 className="text-xl font-bold text-white mb-4">Revenue Trend</h3>
         <AnalyticsLineChart
           data={revenueTrend}
@@ -129,8 +129,8 @@ const RevenueAnalytics = () => {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
+      <div className="chart-grid">
+        <div className="glass-panel p-6">
           <h3 className="text-xl font-bold text-white mb-4">Revenue by Payment Method</h3>
           <AnalyticsBarChart
             data={paymentMethodBreakdown}
@@ -142,7 +142,7 @@ const RevenueAnalytics = () => {
           />
         </div>
 
-        <div>
+        <div className="glass-panel p-6">
           <h3 className="text-xl font-bold text-white mb-4">Revenue by Service</h3>
           <AnalyticsPieChart
             data={serviceBreakdown}
@@ -153,7 +153,7 @@ const RevenueAnalytics = () => {
       </div>
 
       {/* Top Payment Methods Table */}
-      <div>
+      <div className="glass-panel p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold text-white">Top Payment Methods</h3>
           <ExportButton 

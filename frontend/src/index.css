@@ -143,3 +143,52 @@ html, body, #root {
 .animate-glow-ring {
   animation: glow-ring 1.5s ease-in-out infinite;
 }
+
+/* ─────────── Premium Glass & Layout Utilities ─────────── */
+@layer utilities {
+  /* Glass panels with backdrop blur */
+  .glass-panel {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl;
+  }
+
+  .glass-card {
+    @apply bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-lg border border-white/10 rounded-xl shadow-xl;
+    @apply hover:shadow-2xl hover:border-white/20 transition-all duration-300;
+  }
+
+  /* Soft ring border effect */
+  .soft-ring {
+    @apply ring-1 ring-white/10 ring-offset-0;
+  }
+
+  /* Section spacing utilities */
+  .section-gap {
+    @apply space-y-6;
+  }
+
+  .section-header {
+    @apply flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6;
+  }
+
+  /* Grid layouts */
+  .panel-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
+  }
+
+  .chart-grid {
+    @apply grid grid-cols-1 lg:grid-cols-2 gap-6;
+  }
+
+  /* Analytics specific background */
+  .analytics-bg {
+    @apply bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950;
+  }
+
+  /* Safe area padding for mobile */
+  .safe-area-padding {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
