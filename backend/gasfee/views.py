@@ -26,10 +26,7 @@ from wallet.models import Wallet, WalletTransaction, Notification
 
 from .services import lookup_rate, get_receiving_details
 from .price_service import get_crypto_prices_in_usd, get_usd_ngn_rate_with_margin
-from .utils import (
-    send_bsc, validate_wallet_address, check_rapid_purchases, 
-    check_unusual_amount, sanitize_error_message
-)
+from .utils import send_bsc
 from .evm_sender import send_evm
 from .near_utils import send_near
 from .sol_utils import send_solana
@@ -45,8 +42,6 @@ logger = logging.getLogger(__name__)
 
 
 
-
-
 class AssetListAPI(APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
@@ -58,8 +53,10 @@ class AssetListAPI(APIView):
         prices = get_crypto_prices_in_usd(ids)
 
         # Unified FX rate fetch (with margin awareness)
-        usd_ngn_rate = get_usd_ngn_rate_with_margin("buy")
-        
+        usd_ngn_rate_raw = get_usd_ngn_rate_with_margin("buy")
+        # normalize to Decimal to avoid Decimal * float errors
+        usd_ngn_rate = Decimal(str(usd_ngn_rate_raw or DEFAULT_USD_NGN_FALLBACK))
+
         output = []
         for c in cryptos:
             stablecoins = {"usdt", "usdc"}
@@ -67,15 +64,16 @@ class AssetListAPI(APIView):
             if c.symbol.lower() in stablecoins:
                 usd_price = Decimal("1")
             else:
-                usd_price = prices.get(c.coingecko_id, Decimal("0"))
+                usd_price = Decimal(str(prices.get(c.coingecko_id, Decimal("0"))))
 
+            price_ngn = (usd_price * usd_ngn_rate).quantize(Decimal("0.01"))
 
             output.append({
                 "id": c.id,
                 "name": c.name,
                 "symbol": c.symbol,
                 "price": float(usd_price),
-                "price_ngn": float((usd_price * usd_ngn_rate).quantize(Decimal("0.01"))),
+                "price_ngn": float(price_ngn),
                 "logo_url": request.build_absolute_uri(c.logo.url) if c.logo else None,
             })
 
@@ -83,7 +81,6 @@ class AssetListAPI(APIView):
             "exchange_rate": float(usd_ngn_rate),
             "cryptos": output
         })
-
 
 
 # ensure enough precision
@@ -94,10 +91,28 @@ def _decimal_to_str(d: Decimal) -> str:
 
 def _validate_wallet_address(symbol: str, address: str) -> bool:
     """
-    Enhanced wallet address validation with comprehensive chain-specific checks.
-    Delegates to validate_wallet_address utility function.
+    Minimal wallet address validation before debiting.
+    - For EVM chains use Web3.is_address
+    - For Solana, NEAR, TON we do a basic length check (best-effort).
+    This is intentionally conservative: callers should still rely on sender RPC errors.
     """
-    return validate_wallet_address(symbol, address)
+    if not address:
+        return False
+
+    sym = symbol.upper()
+    try:
+        if sym in {"ETH", "ARB", "BNB", "BASE-ETH", "BASE-ARB", "BASE-OPT", "OP"}:
+            return Web3.is_address(address)
+        if sym == "SOL":
+            return 40 <= len(address) <= 88  # reasonable range for base58
+        if sym == "NEAR":
+            return 2 <= len(address) <= 64
+        if sym == "TON":
+            return 20 <= len(address) <= 100
+        # Fallback: non-empty
+        return True
+    except Exception:
+        return False
 
 
 def _perform_chain_send(sender_fn, crypto_symbol, wallet_address, crypto_amount, order_id, max_attempts=1) -> tuple[bool, str]:
@@ -140,10 +155,6 @@ SENDERS = {
     "POL": lambda to, amt, oid: send_evm("POL", to, amt),
     "AVAX": lambda to, amt, oid: send_evm("AVAX", to, amt),
     "LINEA": lambda to, amt, oid: send_evm("LINEA", to, amt),
-
-    # EVM tokens on specific chains
-    "BNB-USDT": lambda to, amt, oid: send_evm("BNB", to, amt),
-    "BASE-USDC": lambda to, amt, oid: send_evm("BASE", to, amt),
 
     # Non-EVM chains
     "BSC": send_bsc,
@@ -300,19 +311,7 @@ class BuyCryptoAPI(APIView):
         if total_ngn > MAX_BUY_NGN:
             return Response({"error": "amount_too_large"}, status=drf_status.HTTP_400_BAD_REQUEST)
 
-        # ---- 4) Security checks for fraud detection ----
-        # Note: These checks log suspicious patterns but do NOT block transactions.
-        # Admins can review alerts in the TransactionMonitoring admin panel.
-        # To block transactions based on these checks, modify the functions to raise
-        # ValidationError instead of just logging.
-        
-        # Check for rapid successive purchases
-        check_rapid_purchases(request.user, time_window_minutes=5, max_purchases=3)
-        
-        # Check for unusual transaction amounts
-        check_unusual_amount(request.user, total_ngn, crypto.symbol)
-
-        # ---- 5) Atomic debit & create pending records ----
+        # ---- 4) Atomic debit & create pending records ----
         try:
             with transaction.atomic():
                 # lock wallet row
@@ -421,10 +420,7 @@ class BuyCryptoAPI(APIView):
             elif "network" in err_msg.lower():
                 msg = "Network problem — try again soon."
 
-            # Sanitize error message before returning to client
-            sanitized_detail = sanitize_error_message(err_msg)
-            
-            return Response({"error": msg, "detail": sanitized_detail}, status=drf_status.HTTP_400_BAD_REQUEST)
+            return Response({"error": msg, "detail": str(err_msg)}, status=drf_status.HTTP_400_BAD_REQUEST)
 
         # ---- 6) success path — mark order + tx success and release locked funds appropriately ----
         tx_hash = result
