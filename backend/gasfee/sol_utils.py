@@ -6,7 +6,8 @@ import base64
 import requests
 import logging
 import traceback
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP, getcontext
+import traceback
 from django.core.cache import cache
 from django.conf import settings
 from dotenv import load_dotenv
@@ -22,8 +23,8 @@ from solders.system_program import TransferParams, transfer
 from solders.transaction import Transaction
 from solders.message import Message
 
-
-
+# ensure enough precision (keep your existing getcontext call somewhere global)
+getcontext().prec = 28
 
 # Load environment variables
 load_dotenv()
@@ -84,41 +85,69 @@ def validate_solana_address(wallet_address: str) -> bool:
     except Exception:
         return False
 
-def send_solana(receiver_address: str, purchase_sol: float, order_id=None) -> tuple[str, float]:
+def send_solana(receiver_address: str, purchase_sol, order_id=None) -> str:
+    """
+    Send SOL safely using Decimal arithmetic to avoid mixing Decimal and float.
+    Returns tx_signature (string). Raises ValueError on failures.
+    """
     logger.info(f"Initiating SOL transfer: {purchase_sol} SOL -> {receiver_address}")
     if not validate_solana_address(receiver_address):
         raise ValueError(f"Invalid receiver address: {receiver_address}")
-    sender_pubkey = SOLANA_SENDER_KEYPAIR.pubkey()
-    sender_balance = check_solana_balance(str(sender_pubkey))
-    receiver_balance = check_solana_balance(receiver_address)
-    rent_exemption = 0.00089
-    rent_sol = rent_exemption if receiver_balance == 0 else 0
-    total_sol = purchase_sol + rent_sol
-    if sender_balance < total_sol:
-        raise ValueError(f"Insufficient balance: {sender_balance} SOL, need {total_sol} SOL")
+
+    if SOLANA_SENDER_KEYPAIR is None or solana_client is None:
+        raise ValueError("Solana sender or client not configured")
+
     try:
+        # Normalize inputs to Decimal for safe arithmetic
+        purchase_sol = Decimal(str(purchase_sol))
+        rent_exemption = Decimal("0.00089")
+
+        sender_pubkey = SOLANA_SENDER_KEYPAIR.pubkey()
+        # check_solana_balance returns float -> convert to Decimal
+        sender_balance = Decimal(str(check_solana_balance(str(sender_pubkey))))
+        receiver_balance = Decimal(str(check_solana_balance(receiver_address)))
+
+        rent_sol = rent_exemption if receiver_balance == 0 else Decimal("0")
+        total_sol = purchase_sol + rent_sol
+
+        if sender_balance < total_sol:
+            raise ValueError(f"Insufficient balance: {sender_balance} SOL, need {total_sol} SOL")
+
         receiver_pubkey = Pubkey.from_string(receiver_address)
+
+        lamports = int(total_sol * Decimal(1_000_000_000))
+
         transfer_ix = transfer(TransferParams(
             from_pubkey=sender_pubkey,
             to_pubkey=receiver_pubkey,
-            lamports=int(total_sol * 1_000_000_000)
+            lamports=lamports
         ))
+
         blockhash_resp = solana_client.get_latest_blockhash()
         recent_blockhash = blockhash_resp.value.blockhash
+
         msg = Message.new_with_blockhash(
             instructions=[transfer_ix],
             payer=sender_pubkey,
             blockhash=recent_blockhash
         )
+
         txn = Transaction(
             from_keypairs=[SOLANA_SENDER_KEYPAIR],
             message=msg,
             recent_blockhash=recent_blockhash
         )
+
         result = solana_client.send_transaction(txn)
         tx_signature = str(result.value)
         logger.info(f"Solana transaction successful: {tx_signature}")
-        return tx_signature, rent_sol
+        return tx_signature
+
     except Exception as e:
         logger.error(f"Transaction failed: {e}\n{traceback.format_exc()}")
         raise ValueError(f"Transaction failed: {e}")
+
+
+
+
+
