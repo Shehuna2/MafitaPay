@@ -370,6 +370,8 @@ VTPASS_SECRET_KEY = os.getenv("VTPASS_SECRET_KEY", "")
 # VTPASS_SANDBOX_URL = os.getenv("VTPASS_SANDBOX_URL", "")
 VTPASS_LIVE_URL = os.getenv("VTPASS_LIVE_URL", "")
 
+AMIGO_API_KEY = os.getenv("AMIGO_API_KEY", "")  
+AMIGO_BASE_URL = os.getenv("AMIGO_BASE_URL", "https://amigo.ng/api")
 
 TON_SEQNO_CHECK_INTERVAL = int(os.getenv("TON_SEQNO_CHECK_INTERVAL", "10"))
 TON_SEQNO_MAX_ATTEMPTS = int(os.getenv("TON_SEQNO_MAX_ATTEMPTS", "5"))
