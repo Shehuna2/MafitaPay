@@ -8,6 +8,7 @@ import requests
 from decimal import Decimal
 
 from .vtu_ng import get_variations as vtung_get_variations
+from .amigo import get_data_plans as amigo_get_data_plans, purchase_data as amigo_purchase_data
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +259,27 @@ def get_plans_by_network(network: str) -> dict:
         logger.error(f"VTU.ng fetch failed: {e}")
 
     # -------------------------
+    # 2️⃣ REGULAR — Amigo (primary)
+    # -------------------------
+    try:
+        amigo_plans = amigo_get_data_plans(network)
+        for p in amigo_plans:
+            grouped["REGULAR"].append({
+                "id": p["id"],
+                "name": p["name"],
+                "amount": float(p["amount"]),
+                "network": network,
+                "provider": "amigo",
+                "category": "REGULAR",
+            })
+        logger.info(f"Amigo → Loaded {len(amigo_plans)} REGULAR plans for {network.upper()}")
+        return grouped  # ← IMPORTANT: stop here if Amigo works
+
+    except Exception as e:
+        logger.warning(f"Amigo failed → fallback to VTpass → {e}")
+
+
+    # -------------------------
     # 2️⃣ VTpass – REGULAR ONLY
     # -------------------------
     try:
@@ -272,74 +294,6 @@ def get_plans_by_network(network: str) -> dict:
                     "provider": "vtpass",
                     "category": "REGULAR",
                 })
-    except Exception as e:
-        logger.error(f"VTpass fetch failed: {e}")
-
-    return grouped
-
-
-def get_plans_by_network(network: str) -> dict:
-    """
-    Fetch and group data plans by network.
-    VTU.ng supplies SME, SME2, GIFTING, CORPORATE
-    VTpass supplies REGULAR
-    """
-    grouped = {
-        "REGULAR": [],
-        "SME": [],
-        "SME2": [],
-        "GIFTING": [],
-        "CORPORATE": []
-    }
-
-    # Map VTU.ng category names to our grouped keys
-    VTUNG_TO_GROUPED = {
-        "sme": "SME",
-        "sme2": "SME2",
-        "gift": "GIFTING",
-        "gifting": "GIFTING",
-        "corporate": "CORPORATE"
-    }
-
-    # -------------------------
-    # 1️⃣ VTU.ng — SME, SME2, GIFTING, CORPORATE
-    # -------------------------
-    try:
-        vtung_plans = vtung_get_variations(network)
-        for p in vtung_plans:
-            raw_cat = p.get("category", "").lower()
-            cat = VTUNG_TO_GROUPED.get(raw_cat)
-            if not cat:
-                continue  # skip unknown categories
-            grouped[cat].append({
-                "id": p["id"],
-                "name": p["name"],
-                "amount": float(p["amount"]),
-                "network": network,
-                "provider": "vtung",
-                "category": cat,
-            })
-        logger.info(f"VTU.ng → Loaded {len(vtung_plans)} plans for {network.upper()}")
-    except Exception as e:
-        logger.error(f"VTU.ng fetch failed: {e}")
-
-    # -------------------------
-    # 2️⃣ VTpass — REGULAR ONLY
-    # -------------------------
-    try:
-        vtpass_plans = get_data_plans(network)  # already returns REGULAR
-        for p in vtpass_plans:
-            # Only include REGULAR
-            if p["category"].upper() == "REGULAR":
-                grouped["REGULAR"].append({
-                    "id": p["variation_code"],
-                    "name": p["description"],
-                    "amount": float(p["variation_amount"]),
-                    "network": network,
-                    "provider": "vtpass",
-                    "category": "REGULAR",
-                })
-        logger.info(f"VTpass → Loaded {len(vtpass_plans)} plans for {network.upper()}")
     except Exception as e:
         logger.error(f"VTpass fetch failed: {e}")
 
@@ -514,17 +468,45 @@ def get_single_plan(network, variation_id):
 
 
 
-def purchase_data_unified(phone, variation_id, network, amount, category):
-    category = category.upper()
+def purchase_data_unified(phone, variation_id, network, amount, category, provider=None):
+    """
+    Unified purchase: Use provider if specified, else fallback by category
+    """
+    # Explicit provider override (from plan details)
+    if provider == "amigo":
+        res = amigo_purchase_data(phone, variation_id, network)
+        if res.get("success"):
+            return {**res, "provider": "amigo"}
+        raise ValueError(res.get("error", "Amigo failed"))
 
-    # VTU.ng categories
+    if provider == "vtung":
+        res = vtung_purchase_data(phone, variation_id, network)
+        if res.get("success"):
+            return {**res, "provider": "vtung"}
+        raise ValueError(res.get("error", "VTU.ng failed"))
+
+    if provider == "vtpass":
+        return {
+            **purchase_data(phone, amount, network, variation_id),  # VTpass function
+            "provider": "vtpass"
+        }
+
+    # Fallback by category (for legacy or non-specified)
+    category = category.upper() if category else ""
+
     if category in ["SME", "SME2", "GIFTING", "CORPORATE"]:
         res = vtung_purchase_data(phone, variation_id, network)
         if res.get("success"):
             return {**res, "provider": "vtung"}
         raise ValueError(res.get("error", "VTU.ng failed"))
 
-    # REGULAR -> VTpass
+    if category == "REGULAR":
+        res = amigo_purchase_data(phone, variation_id, network)
+        if res.get("success"):
+            return {**res, "provider": "amigo"}
+        raise ValueError(res.get("error", "Amigo failed"))
+
+    # Default to VTpass if nothing matches
     return {
         **purchase_data(phone, amount, network, variation_id),
         "provider": "vtpass"
