@@ -459,12 +459,27 @@ class BuyDataView(APIView):
                 try:
                     if provider == "vtung":
                         result = vtung_purchase_data(phone, variation_id, network)
-                    else:
+                        result["provider"] = "vtung"  # already has it, but safe
+
+                    elif provider == "amigo":
+                        from .amigo import purchase_data as amigo_purchase_data
+                        result = amigo_purchase_data(
+                            phone=phone,
+                            variation_id=variation_id,
+                            network=network,
+                            ported_number=True  # or make configurable if needed
+                        )
+                        if result.get("success"):
+                            result["provider"] = "amigo"
+
+                    elif provider == "vtpass":
                         result = purchase_data(phone, float(amount), network, variation_id)
                         result["provider"] = "vtpass"
 
+                    else:
+                        raise ValueError(f"Unknown provider: {provider}")
+
                 except Exception as api_error:
-                    # API hard error: request timeout, connection dropped, etc.
                     raise Exception(f"Network error contacting provider: {str(api_error)}")
 
                 # --------- HANDLE PROVIDER RESPONSE ----------
