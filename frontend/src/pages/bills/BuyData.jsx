@@ -26,6 +26,22 @@ const CATEGORY_STYLES = {
   REGULAR: { color: "text-gray-400", bg: "bg-gray-700/30", border: "border-gray-600", icon: null, label: "Regular" },
 };
 
+const PROVIDER_BADGES = {
+  amigo: {
+    label: "AMIGO",
+    className: "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
+  },
+  vtung: {
+    label: "VTU",
+    className: "bg-green-500/20 text-green-400 border border-green-500/40"
+  },
+  vtpass: {
+    label: "VTPASS",
+    className: "bg-gray-500/20 text-gray-400 border border-gray-500/40"
+  }
+};
+
+
 /* ----------------------------------------------------
    PHONE DETECTION — EXACT v6 ENGINE
 ---------------------------------------------------- */
@@ -35,6 +51,7 @@ const NETWORK_PREFIXES = {
   glo: ["0805","0807","0705","0815","0811","0905"],
   "9mobile": ["0809","0817","0818","0908","0909"],
 };
+
 
 const normalizePhone = (p) => {
   p = p.replace(/\D/g, "");
@@ -73,6 +90,15 @@ const formatPlanName = (rawName) => {
   return rawName;
 };
 
+// Sort plans: amigo first, then others (preserve relative order within each group)
+const sortPlansWithAmigoFirst = (plans) => {
+  if (!plans || plans.length === 0) return [];
+
+  const amigoPlans = plans.filter(p => p.provider === "amigo");
+  const otherPlans = plans.filter(p => p.provider !== "amigo");
+
+  return [...amigoPlans, ...otherPlans];
+};
 /* ----------------------------------------------------
    CACHING
 ---------------------------------------------------- */
@@ -109,6 +135,7 @@ export default function BuyData() {
     setNetworkLocked(false);
     setLivePhoneInfo({ normalized: "", detected: null, valid: false, message: "" });
   };
+  
 
   /* ----------------------------------------------------
      LOAD PLANS
@@ -122,12 +149,23 @@ export default function BuyData() {
       // Load cached first
       const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
       if (cached?.grouped) {
-        setGroupedPlans(cached.grouped);
+        // Ensure cached data also has amigo on top
+        const sortedCached = Object.keys(cached.grouped).reduce((acc, category) => {
+          acc[category] = sortPlansWithAmigoFirst(cached.grouped[category]);
+          return acc;
+        }, {});
+        setGroupedPlans(sortedCached);
       }
 
       try {
         const res = await client.get(`/bills/data/plans/?network=${form.network}`);
-        const grouped = res.data.plans || {};
+        const groupedRaw = res.data.plans || {};
+
+        // Sort each category to put amigo plans on top
+        const grouped = Object.keys(groupedRaw).reduce((acc, category) => {
+          acc[category] = sortPlansWithAmigoFirst(groupedRaw[category]);
+          return acc;
+        }, {});
 
         if (mounted) {
           setGroupedPlans(grouped);
@@ -383,63 +421,80 @@ export default function BuyData() {
             )}
           </div>
 
-        {/* PLANS */}
+                {/* PLANS */}
         <div>
           <p className="text-xs text-gray-400 mb-3">Available Plans ({selectedCategory})</p>
           <div className="max-h-96 overflow-y-auto">
-            <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
-
-              {loadingPlans ? (
-                [...Array(6)].map((_, i) => (
-                  <div key={i} className="bg-gray-800/60 border border-gray-700 rounded-xl p-4 animate-pulse">
-                    <div className="h-4 bg-gray-700 rounded mb-2"></div>
-                    <div className="h-3 bg-gray-700 rounded w-20"></div>
+            {loadingPlans ? (
+              <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
+                {[...Array(12)].map((_, i) => (
+                  <div key={i} className="bg-gray-800/60 border border-gray-700 rounded-xl pt-4 pb-3 px-3 animate-pulse">
+                    <div className="h-6 bg-gray-700/50 rounded mx-auto mb-2 w-16"></div>
+                    <div className="h-4 bg-gray-700/40 rounded w-12 mx-auto"></div>
                   </div>
-                ))
-              ) : (
-                (groupedPlans[selectedCategory] || []).map(plan => (
+                ))}
+              </div>
+            ) : (groupedPlans[selectedCategory] || []).length > 0 ? (
+              <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
+                {(groupedPlans[selectedCategory] || []).map(plan => (
                   <button
                     key={plan.id}
                     onClick={() => handlePlanClick(plan)}
-                    className="relative p-3 rounded-lg bg-gray-800/60 border border-gray-700 hover:border-indigo-500/50 hover:shadow-md"
+                    className="relative pt-4 pb-3 px-3 rounded-lg bg-gray-800/60 border border-gray-700 hover:border-indigo-500/50 hover:shadow-md hover:scale-105 transition-all"
                   >
-                    <p className="font-semibold text-[12px] text-white">{formatPlanName(plan.name)}</p>
-                    <p className="text-[11px] font-bold text-indigo-300">
-                      ₦{Number(plan.amount).toLocaleString()}
+                    {PROVIDER_BADGES[plan.provider] && (
+                      <div className="absolute -top-2 left-3 -translate-y-1/2">
+                        <span
+                          className={`inline-block px-2 py-1 text-[9px] font-bold rounded-full shadow-md
+                            ${PROVIDER_BADGES[plan.provider].className}`}
+                        >
+                          {PROVIDER_BADGES[plan.provider].label}
+                        </span>
+                      </div>
+                    )}
+
+                    <p className="font-semibold text-[12px] text-white text-center leading-tight">
+                      {formatPlanName(plan.name)}
                     </p>
 
-                    {plan.provider === "vtung" && (
-                      <span className="absolute top-1 right-1 text-[9px] bg-green-500/20 text-green-400 px-1 rounded">
-                        CHEAPEST
-                      </span>
-                    )}
+                    <p className="text-[11px] font-bold text-indigo-300 text-center mt-1">
+                      ₦{Number(plan.amount).toLocaleString()}
+                    </p>
                   </button>
-                ))
-              )}
-
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-12">
+                <p className="text-gray-500 text-sm">
+                  No available plans in this category.
+                </p>
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
-      <Receipt data={receiptData} onClose={() => { setReceiptData(null); resetForm(); }} />
+        {/* ← DO NOT close space-y-5 here! */}
 
-      {/* PIN Verification Modal */}
-      <PINVerificationModal
-        isOpen={showPINModal}
-        onClose={() => {
-          setShowPINModal(false);
-          setPendingTransaction(null);
-        }}
-        onVerified={processPurchase}
-        transactionDetails={pendingTransaction ? {
-          type: "Data Purchase",
-          amount: pendingTransaction.amount,
-          recipient: `${pendingTransaction.network.toUpperCase()} - ${pendingTransaction.phone}`,
-          description: `${pendingTransaction.plan.name || 'Data Bundle'}`
-        } : null}
-      />
+        <Receipt data={receiptData} onClose={() => { setReceiptData(null); resetForm(); }} />
 
-    </ShortFormLayout>
+        {/* PIN Verification Modal */}
+        <PINVerificationModal
+          isOpen={showPINModal}
+          onClose={() => {
+            setShowPINModal(false);
+            setPendingTransaction(null);
+          }}
+          onVerified={processPurchase}
+          transactionDetails={pendingTransaction ? {
+            type: "Data Purchase",
+            amount: pendingTransaction.amount,
+            recipient: `${pendingTransaction.network.toUpperCase()} - ${pendingTransaction.phone}`,
+            description: `${pendingTransaction.plan.name || 'Data Bundle'}`
+          } : null}
+        />
+
+      </div>  
+
+      </ShortFormLayout>
   );
 }
