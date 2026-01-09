@@ -38,7 +38,7 @@ class PalmpayService:
             self.base_url = getattr(
                 settings,
                 "PALMPAY_BASE_URL",
-                "https://api.palmpay.com"
+                "https://open-gw-daily.palmpay-inc.com/api"
             )
         else:
             # Test credentials (if different from live)
@@ -52,7 +52,7 @@ class PalmpayService:
                 settings,
                 "PALMPAY_TEST_BASE_URL",
                 None
-            ) or getattr(settings, "PALMPAY_BASE_URL", "https://api-sandbox.palmpay.com")
+            ) or getattr(settings, "PALMPAY_SANDBOX_BASE_URL", "https://open-gw-daily.palmpay-inc.com/api")
 
         if not self.merchant_id or not self.private_key:
             missing = []
@@ -112,11 +112,10 @@ class PalmpayService:
         signature = self._generate_signature(payload, timestamp)
         
         return {
-            "Content-Type": "application/json",
+            "Content-Type": "application/json;charset=UTF-8",  
             "Authorization": f"Bearer {self.public_key}",
-            "X-Merchant-Id": self.merchant_id,
-            "X-Timestamp": timestamp,
-            "X-Signature": signature,
+            "countryCode": "NG",                               
+            "Signature": signature
         }
 
     # ---------------------------------------------------------
@@ -155,13 +154,15 @@ class PalmpayService:
             reference = f"palmpay_va_{uuid.uuid4().hex[:12]}"
 
             payload_dict = {
-                "merchantId": self.merchant_id,
-                "reference": reference,
-                "customerName": f"{first_name} {last_name}",
-                "customerEmail": user.email,
-                "customerPhone": phone_number,
-                "accountType": "STATIC",  # Static virtual account
-                "currency": "NGN",
+                "requestTime": int(time.time() * 1000),          # ← must be number
+                "identityType": "personal" or "company",         # ← from user profile
+                "licenseNumber": "22438891463",                  # ← must be valid format
+                "virtualAccountName": f"{first_name} {last_name}"[:200],
+                "version": "V2.0",
+                "customerName": f"{first_name} {last_name}"[:200],
+                "email": user.email,
+                "nonceStr": str(uuid.uuid4()),                   # ← random unique per request
+                # optional: "accountReference": reference,
             }
 
             # Add BVN if provided
@@ -171,7 +172,7 @@ class PalmpayService:
             payload = json.dumps(payload_dict)
             headers = self._get_headers(payload)
 
-            endpoint = f"{self.base_url}/api/v1/virtual-account/create"
+            endpoint = f"{self.base_url}/v2/virtual/account/label/create"
 
             logger.info(
                 "Creating PalmPay virtual account for user %s with reference %s",
