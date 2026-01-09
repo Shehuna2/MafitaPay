@@ -66,7 +66,7 @@ export default function Home() {
                 Crypto. Bills. Rewards.
               </h2>
               <p className="text-lg md:text-xl text-gray-300 mb-10 max-w-3xl mx-auto animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
-                Buy crypto instantly, pay airtime, data, electricity, and earn <span className="text-yellow-400 font-bold">₦500+</span> per referral — all in one secure app.
+                Buy crypto instantly, pay airtime, data, electricity, and earn <span className="text-yellow-400 font-bold">up to ₦500+</span> per referral — all in one secure app.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up" style={{ animationDelay: "0.4s" }}>
@@ -92,9 +92,9 @@ export default function Home() {
               <div className="relative bg-gray-800/80 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-gray-700/50 float">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
                   {[
-                    { icon: <Zap className="w-8 h-8" />, title: "Instant Crypto", desc: "Buy BTC, ETH, USDT in seconds" },
+                    { icon: <Zap className="w-8 h-8" />, title: "Instant Crypto and Gasfee", desc: "Buy BTC, ETH, USDT in seconds" },
                     { icon: <Smartphone className="w-8 h-8" />, title: "Pay Bills", desc: "Airtime, Data, Electricity, Cable" },
-                    { icon: <Wallet className="w-8 h-8" />, title: "Earn Rewards", desc: "₦500+ per referral" },
+                    { icon: <Wallet className="w-8 h-8" />, title: "Earn Rewards", desc: "₦200+ per referral" },
                   ].map((item, idx) => (
                     <div key={idx} className="animate-fade-in-up" style={{ animationDelay: `${0.6 + idx * 0.1}s` }}>
                       <div className="w-16 h-16 mx-auto mb-3 bg-indigo-600/20 rounded-2xl flex items-center justify-center text-indigo-400">
@@ -134,7 +134,7 @@ export default function Home() {
                 {
                   icon: <Users className="w-8 h-8" />,
                   title: "Referral Rewards",
-                  desc: "Invite friends, earn ₦500+ per active user. No limits.",
+                  desc: "Invite friends, earn ₦200+ per active user. No limits.",
                   color: "from-yellow-500 to-orange-600",
                 },
               ].map((feature, idx) => (
@@ -184,3 +184,4 @@ export default function Home() {
   );
 
 }
+
