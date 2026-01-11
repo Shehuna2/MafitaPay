@@ -17,21 +17,22 @@ logger = logging.getLogger(__name__)
 DEFAULT_PHONE_NUMBER = "+2340000000000"
 
 
-class PalmpayService: 
+class PalmpayService:
     """PalmPay Virtual Account Service for Nigerian merchants."""
 
     timeout = 60
 
-    def __init__(self, use_live:  bool = False):
+    def __init__(self, use_live: bool = False):
         """
-        Initialize PalmPay service with credentials.
+        Initialize PalmPay service with credentials. 
 
         Args:
-            use_live: Whether to use live or test environment
+            use_live:  Whether to use live or test environment
         """
         if use_live:
             self. merchant_id = getattr(settings, "PALMPAY_MERCHANT_ID", None)
             self.app_id = getattr(settings, "PALMPAY_APP_ID", None)
+            self.public_key = getattr(settings, "PALMPAY_PUBLIC_KEY", None)  # ← ADD THIS! 
             self.private_key = getattr(settings, "PALMPAY_PRIVATE_KEY", None)
             self.base_url = getattr(
                 settings,
@@ -43,6 +44,7 @@ class PalmpayService:
             # Test credentials
             self.merchant_id = getattr(settings, "PALMPAY_TEST_MERCHANT_ID", None)
             self.app_id = getattr(settings, "PALMPAY_TEST_APP_ID", None)
+            self.public_key = getattr(settings, "PALMPAY_TEST_PUBLIC_KEY", None)  # ← ADD THIS!
             self.private_key = getattr(settings, "PALMPAY_TEST_PRIVATE_KEY", None)
             self.base_url = getattr(
                 settings,
@@ -55,12 +57,14 @@ class PalmpayService:
         missing = []
         if not self.merchant_id:
             missing.append("PALMPAY_MERCHANT_ID" if use_live else "PALMPAY_TEST_MERCHANT_ID")
-        if not self.app_id:
-            missing.append("PALMPAY_APP_ID" if use_live else "PALMPAY_TEST_APP_ID")
+        if not self. app_id:
+            missing. append("PALMPAY_APP_ID" if use_live else "PALMPAY_TEST_APP_ID")
+        if not self.public_key:  # ← ADD THIS CHECK!
+            missing.append("PALMPAY_PUBLIC_KEY" if use_live else "PALMPAY_TEST_PUBLIC_KEY")
         if not self.private_key:
             missing.append("PALMPAY_PRIVATE_KEY" if use_live else "PALMPAY_TEST_PRIVATE_KEY")
 
-        if missing:
+        if missing: 
             raise ImproperlyConfigured(
                 f"Missing PalmPay credentials ({env_name}): {', '.join(missing)}"
             )
@@ -93,13 +97,13 @@ class PalmpayService:
             # Many PalmPay endpoints expect signature created from timestamp + payload
             message = f"{timestamp}{payload}"
             signature = hmac.new(
-                self.private_key.encode("utf-8"),
+                self. private_key.encode("utf-8"),
                 message.encode("utf-8"),
-                hashlib. sha256
+                hashlib.sha256
             ).digest()
             return base64.b64encode(signature).decode("utf-8")
         except Exception as e:
-            logger.error("Failed to generate PalmPay signature: %s", str(e))
+            logger.error("Failed to generate PalmPay signature:  %s", str(e))
             raise
 
     def _get_headers(self, payload: str) -> Dict[str, str]:
@@ -118,17 +122,19 @@ class PalmpayService:
         # Authorization header should use appId (not a separate public key)
         headers = {
             "Content-Type": "application/json;charset=UTF-8",
-            "Authorization": f"Bearer {self.app_id}",  # ← Use appId here! 
+            "Authorization": f"Bearer {self.app_id}",  # ← Use appId here!
             "CountryCode": "NG",  # ← Capital C (important!)
             "Signature": signature,
             "Request-Time": timestamp,
+            # Add public key as header (PalmPay expects it)  ← ADD THIS!
+            "Public-Key": self.public_key,
             # Keep variants for compatibility
             "App-Id": str(self.app_id),
             "appId": str(self.app_id),
             "app-id": str(self.app_id),
-            "Merchant-Id": str(self. merchant_id),
+            "Merchant-Id": str(self.merchant_id),
             "merchantId": str(self.merchant_id),
-            "merchant-id": str(self.merchant_id),
+            "merchant-id": str(self. merchant_id),
         }
 
         return headers
