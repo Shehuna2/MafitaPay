@@ -6,6 +6,8 @@ import logging
 import time
 import uuid
 from typing import Optional, Dict, Any
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 
 import requests
 from django.conf import settings
@@ -93,57 +95,36 @@ class PalmpayService:
     # AUTHENTICATION
     # ---------------------------------------------------------
     def _generate_signature(self, payload: str, timestamp: str) -> str:
-        """
-        Generate HMAC signature for PalmPay API requests.
+        message = f"{timestamp}{payload}".encode("utf-8")
 
-        Args:
-            payload: JSON string of the request body
-            timestamp: Request timestamp
+        private_key = serialization.load_pem_private_key(
+            self.private_key.encode("utf-8"),
+            password=None,
+        )
 
-        Returns:
-            Base64-encoded HMAC signature
-        """
-        try:
-            # Many PalmPay endpoints expect signature created from timestamp + payload
-            message = f"{timestamp}{payload}"
-            signature = hmac.new(
-                self. private_key.encode("utf-8"),
-                message.encode("utf-8"),
-                hashlib.sha256
-            ).digest()
-            return base64.b64encode(signature).decode("utf-8")
-        except Exception as e:
-            logger.error("Failed to generate PalmPay signature:  %s", str(e))
-            raise
+        signature = private_key.sign(
+            message,
+            padding.PKCS1v15(),
+            hashes.SHA256(),
+        )
+
+        return base64.b64encode(signature).decode("utf-8")
+
 
     def _get_headers(self, payload: str) -> Dict[str, str]:
-        """
-        Generate headers for PalmPay API requests.
-
-        Args:
-            payload: JSON string of the request body
-
-        Returns:
-            Dictionary of headers
-        """
         timestamp = str(int(time.time() * 1000))
         signature = self._generate_signature(payload, timestamp)
 
-        # Authorization header should use appId (not a separate public key)
-        headers = {
+        return {
             "Content-Type": "application/json;charset=UTF-8",
-            "Authorization": f"Bearer {self.app_id}", 
-            "CountryCode": "NG",  
+            "CountryCode": "NG",
             "Signature": signature,
             "Request-Time": timestamp,
-            "Public-Key": self.public_key,
-            "App-Id": str(self.app_id),
-            "appId": str(self.app_id),
-            "app-id": str(self.app_id),
-            "Merchant-Id": str(self.merchant_id),
-            "merchantId": str(self.merchant_id),
-            "merchant-id": str(self. merchant_id),
+            "Public-Key": self.public_key,  # FULL PEM
+            "App-Id": self.app_id,
+            "Merchant-Id": self.merchant_id,
         }
+
 
         return headers
 
@@ -189,7 +170,7 @@ class PalmpayService:
                 "customerName": f"{first_name} {last_name}",
                 "email": user.email,
                 "nonceStr": str(uuid.uuid4()),
-                "version": "V2. 0",
+                "version": "V2.0",
                 # Explicitly include app and merchant identifiers required by the gateway
                 "appId": self.app_id,
                 "merchantId": self.merchant_id,
