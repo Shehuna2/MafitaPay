@@ -323,19 +323,29 @@ class GenerateDVAAPIView(APIView):
         )
 
         # Check if response is None or contains an error
+        # snippet: updated section of GenerateDVAAPIView.generate_palmpay_va
+
+        palmpay_response = palmpay.create_virtual_account(
+            user=user,
+            bvn=bvn
+        )
+
+        # Check if response is None or contains an error
         if palmpay_response is None:
             return Response({
                 "error": "Failed to create PalmPay VA - no response from service"
             }, status=500)
-        
+
         if palmpay_response.get("error"):
             error_message = palmpay_response.get("error", "Failed to create PalmPay VA")
             # Network errors should return 500, API errors 400
             error_lower = error_message.lower()
             is_network_error = "network" in error_lower or "timeout" in error_lower or "timed out" in error_lower
-            status_code = 500 if is_network_error else 400
+            status_code = 500 if is_network_error else palmpay_response.get("status_code", 400)
+            # Include raw gateway response for debugging (remove in production)
             return Response({
-                "error": error_message
+                "error": error_message,
+                "raw_response": palmpay_response.get("raw_response", {})
             }, status=status_code)
 
         account_number = palmpay_response["account_number"]
