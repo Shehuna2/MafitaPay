@@ -154,7 +154,6 @@ INSTALLED_APPS = [
     "gasfee",
     "bills",
     "core",  # Maintenance mode app
-    "analytics",  # CEO Analytics Dashboard
 ]
 
 MIDDLEWARE = [
@@ -218,22 +217,10 @@ SIMPLE_JWT = {
 }
 
 # --------------------------------------------------
-# 13. CHANNELS & CACHE
+# 13. CHANNELS & CACHE (in-memory = zero config)
 # --------------------------------------------------
-# Use database cache for analytics (built-in, no extra dependencies)
-# For production scaling, can easily switch to Redis without breaking existing code
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
-        "LOCATION": "analytics_cache_table",
-        "OPTIONS": {
-            "MAX_ENTRIES": 1000,  # Limit cache size
-            "CULL_FREQUENCY": 3,  # Remove 1/3 of entries when max is reached
-        }
-    }
-}
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
-
 
 
 # --------------------------------------------------
@@ -360,9 +347,16 @@ NINE_PSB_API_BASE_URL = os.getenv("NINE_PSB_API_BASE_URL", "https://api.9psb.com
 NINE_PSB_WEBHOOK_SECRET = os.getenv("NINE_PSB_WEBHOOK_SECRET", "")
 
 PALMPAY_MERCHANT_ID = os.getenv("PALMPAY_MERCHANT_ID")
+PALMPAY_APP_ID = os.getenv("PALMPAY_APP_ID")
 PALMPAY_PUBLIC_KEY = os.getenv("PALMPAY_PUBLIC_KEY")
 PALMPAY_PRIVATE_KEY = os.getenv("PALMPAY_PRIVATE_KEY")
 PALMPAY_BASE_URL = os.getenv("PALMPAY_BASE_URL")
+
+PALMPAY_TEST_APP_ID = os.getenv("PALMPAY_TEST_APP_ID")
+PALMPAY_TEST_MERCHANT_ID = os.getenv("PALMPAY_TEST_MERCHANT_ID")
+PALMPAY_TEST_PUBLIC_KEY = os.getenv("PALMPAY_TEST_PUBLIC_KEY")
+PALMPAY_TEST_PRIVATE_KEY = os.getenv("PALMPAY_TEST_PRIVATE_KEY")
+PALMPAY_TEST_BASE_URL = os.getenv("PALMPAY_TEST_BASE_URL")
 
 VTPASS_PUBLIC_KEY = os.getenv("VTPASS_PUBLIC_KEY", "")
 VTPASS_API_KEY = os.getenv("VTPASS_API_KEY", "")
@@ -372,6 +366,7 @@ VTPASS_LIVE_URL = os.getenv("VTPASS_LIVE_URL", "")
 
 AMIGO_API_KEY = os.getenv("AMIGO_API_KEY", "")  
 AMIGO_BASE_URL = os.getenv("AMIGO_BASE_URL", "https://amigo.ng/api")
+
 
 TON_SEQNO_CHECK_INTERVAL = int(os.getenv("TON_SEQNO_CHECK_INTERVAL", "10"))
 TON_SEQNO_MAX_ATTEMPTS = int(os.getenv("TON_SEQNO_MAX_ATTEMPTS", "5"))
