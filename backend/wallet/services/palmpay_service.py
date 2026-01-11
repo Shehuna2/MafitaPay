@@ -32,6 +32,10 @@ class PalmpayService:
         if use_live:
             self. merchant_id = getattr(settings, "PALMPAY_MERCHANT_ID", None)
             self.app_id = getattr(settings, "PALMPAY_APP_ID", None)
+            self.merchant_public_key = getattr(
+                settings,
+                "PALMPAY_MERCHANT_PUBLIC_KEY" if use_live else "PALMPAY_MERCHANT_PUBLIC_KEY",
+            None)
             self.public_key = getattr(settings, "PALMPAY_PUBLIC_KEY", None)  # ← ADD THIS! 
             self.private_key = getattr(settings, "PALMPAY_PRIVATE_KEY", None)
             self.base_url = getattr(
@@ -45,6 +49,10 @@ class PalmpayService:
             self.merchant_id = getattr(settings, "PALMPAY_TEST_MERCHANT_ID", None)
             self.app_id = getattr(settings, "PALMPAY_TEST_APP_ID", None)
             self.public_key = getattr(settings, "PALMPAY_TEST_PUBLIC_KEY", None)  # ← ADD THIS!
+            self.merchant_public_key = getattr(
+                settings,
+                "PALMPAY_TEST_MERCHANT_PUBLIC_KEY" if use_live else "PALMPAY_TEST_MERCHANT_PUBLIC_KEY",
+            None)
             self.private_key = getattr(settings, "PALMPAY_TEST_PRIVATE_KEY", None)
             self.base_url = getattr(
                 settings,
@@ -61,6 +69,8 @@ class PalmpayService:
             missing. append("PALMPAY_APP_ID" if use_live else "PALMPAY_TEST_APP_ID")
         if not self.public_key:  # ← ADD THIS CHECK!
             missing.append("PALMPAY_PUBLIC_KEY" if use_live else "PALMPAY_TEST_PUBLIC_KEY")
+        if not self.merchant_public_key:
+            missing.append("PALMPAY_MERCHANT_PUBLIC_KEY" if use_live else "PALMPAY_TEST_MERCHANT_PUBLIC_KEY")
         if not self.private_key:
             missing.append("PALMPAY_PRIVATE_KEY" if use_live else "PALMPAY_TEST_PRIVATE_KEY")
 
@@ -127,7 +137,7 @@ class PalmpayService:
             "Signature": signature,
             "Request-Time": timestamp,
             # Add public key as header (PalmPay expects it)  ← ADD THIS!
-            "Public-Key": self.public_key,
+            "Public-Key": self.merchant_public_key,
             # Keep variants for compatibility
             "App-Id": str(self.app_id),
             "appId": str(self.app_id),
