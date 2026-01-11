@@ -132,13 +132,11 @@ class PalmpayService:
         # Authorization header should use appId (not a separate public key)
         headers = {
             "Content-Type": "application/json;charset=UTF-8",
-            "Authorization": f"Bearer {self.app_id}",  # ← Use appId here!
-            "CountryCode": "NG",  # ← Capital C (important!)
+            "Authorization": f"Bearer {self.app_id}", 
+            "CountryCode": "NG",  
             "Signature": signature,
             "Request-Time": timestamp,
-            # Add public key as header (PalmPay expects it)  ← ADD THIS!
-            "Public-Key": self.merchant_public_key,
-            # Keep variants for compatibility
+            "Public-Key": self.public_key,
             "App-Id": str(self.app_id),
             "appId": str(self.app_id),
             "app-id": str(self.app_id),
