@@ -372,7 +372,7 @@ export default function Dashboard() {
       </div>
 
       {/* FEE INFORMATION NOTICE */}
-      <div className="mx-2 mb-5">
+      {/* <div className="mx-2 mb-5">
         <div className="flex items-start gap-3 bg-indigo-500/10 border border-indigo-500/30 backdrop-blur-md p-3 rounded-2xl animate-fade-in">
           
           <div className="shrink-0 mt-0.5">
@@ -390,7 +390,7 @@ export default function Dashboard() {
             </p>
           </div>
         </div>
-      </div>
+      </div> */}
 
 
 
