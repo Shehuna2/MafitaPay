@@ -281,12 +281,6 @@ class GenerateDVAAPIView(APIView):
 
     def generate_palmpay_va(self, request, user):
         logger.info("[DVA-PALMPAY] Start: PalmPay Virtual Account")
-        from django.conf import settings
-
-        print(settings.PALMPAY_TEST_APP_ID)
-        print(settings.PALMPAY_TEST_MERCHANT_ID)
-        print(settings.PALMPAY_TEST_PRIVATE_KEY[:20])
-
 
         wallet, _ = Wallet.objects.get_or_create(user=user)
 
