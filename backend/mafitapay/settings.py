@@ -4,6 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import dj_database_url
 from datetime import timedelta
+from django.core.exceptions import ImproperlyConfigured
 
 # --------------------------------------------------
 # 1. ENVIRONMENT DETECTION
@@ -346,19 +347,33 @@ NINE_PSB_API_KEY = os.getenv("NINE_PSB_API_KEY")
 NINE_PSB_API_BASE_URL = os.getenv("NINE_PSB_API_BASE_URL", "https://api.9psb.com.ng/api/v1")
 NINE_PSB_WEBHOOK_SECRET = os.getenv("NINE_PSB_WEBHOOK_SECRET", "")
 
-PALMPAY_MERCHANT_ID = os.getenv("PALMPAY_MERCHANT_ID")
-PALMPAY_APP_ID = os.getenv("PALMPAY_APP_ID")
-PALMPAY_PUBLIC_KEY = os.getenv("PALMPAY_PUBLIC_KEY")
-PALMPAY_MERCHANT_PUBLIC_KEY = os.getenv("PALMPAY_MERCHANT_PUBLIC_KEY")
-PALMPAY_PRIVATE_KEY = os.getenv("PALMPAY_PRIVATE_KEY")
-PALMPAY_BASE_URL = os.getenv("PALMPAY_BASE_URL")
 
-PALMPAY_TEST_APP_ID = os.getenv("PALMPAY_TEST_APP_ID")
-PALMPAY_TEST_MERCHANT_ID = os.getenv("PALMPAY_TEST_MERCHANT_ID")
-PALMPAY_TEST_PUBLIC_KEY = os.getenv("PALMPAY_TEST_PUBLIC_KEY")
-PALMPAY_TEST_MERCHANT_PUBLIC_KEY = os.getenv("PALMPAY_TEST_MERCHANT_PUBLIC_KEY")
-PALMPAY_TEST_PRIVATE_KEY = os.getenv("PALMPAY_TEST_PRIVATE_KEY")
-PALMPAY_TEST_BASE_URL = os.getenv("PALMPAY_TEST_BASE_URL")
+
+
+def _env(name: str, required: bool = True):
+    value = os.getenv(name)
+    if required and not value:
+        raise ImproperlyConfigured(f"Missing environment variable: {name}")
+    return value
+
+
+# =========================
+# PALMPAY (LIVE)
+# =========================
+PALMPAY_MERCHANT_ID = _env("PALMPAY_MERCHANT_ID")
+PALMPAY_APP_ID = _env("PALMPAY_APP_ID")
+PALMPAY_PUBLIC_KEY = _env("PALMPAY_PUBLIC_KEY")
+PALMPAY_PRIVATE_KEY = _env("PALMPAY_PRIVATE_KEY")
+PALMPAY_BASE_URL = _env("PALMPAY_BASE_URL")
+
+# =========================
+# PALMPAY (TEST / SANDBOX)
+# =========================
+PALMPAY_TEST_MERCHANT_ID = _env("PALMPAY_TEST_MERCHANT_ID")
+PALMPAY_TEST_APP_ID = _env("PALMPAY_TEST_APP_ID")
+PALMPAY_TEST_PUBLIC_KEY = _env("PALMPAY_TEST_PUBLIC_KEY")
+PALMPAY_TEST_PRIVATE_KEY = _env("PALMPAY_TEST_PRIVATE_KEY")
+PALMPAY_TEST_BASE_URL = _env("PALMPAY_TEST_BASE_URL")
 
 VTPASS_PUBLIC_KEY = os.getenv("VTPASS_PUBLIC_KEY", "")
 VTPASS_API_KEY = os.getenv("VTPASS_API_KEY", "")

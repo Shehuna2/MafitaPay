@@ -279,15 +279,17 @@ class GenerateDVAAPIView(APIView):
             "type": fw_response.get("type", "static")
         }, status=201)
 
-    # ==========================================================================
-    # PALMPAY
-    # ==========================================================================
     def generate_palmpay_va(self, request, user):
         logger.info("[DVA-PALMPAY] Start: PalmPay Virtual Account")
+        from django.conf import settings
+
+        print(settings.PALMPAY_TEST_APP_ID)
+        print(settings.PALMPAY_TEST_MERCHANT_ID)
+        print(settings.PALMPAY_TEST_PRIVATE_KEY[:20])
+
 
         wallet, _ = Wallet.objects.get_or_create(user=user)
 
-        # 1. If already exists → return
         existing_va = VirtualAccount.objects.filter(
             user=user, provider="palmpay", assigned=True
         ).first()
@@ -302,85 +304,82 @@ class GenerateDVAAPIView(APIView):
                 "type": existing_va.metadata.get("type", "static"),
             })
 
-        # 2. Optional: Get BVN if provided
         bvn = request.data.get("bvn")
 
-        # SECURITY: Validate BVN format if provided (BVN=11 digits)
         if bvn:
             clean_bvn = re.sub(r"\D", "", str(bvn))
             if len(clean_bvn) != 11:
-                return Response({
-                    "error": "Invalid BVN format. Must be 11 digits."
-                }, status=400)
+                return Response(
+                    {"error": "Invalid BVN format. Must be 11 digits."},
+                    status=400,
+                )
             bvn = clean_bvn
 
-        # 3. Call PalmPay service
         palmpay = PalmpayService(use_live=not settings.DEBUG)
 
-        palmpay_response = palmpay.create_virtual_account(
-            user=user,
-            bvn=bvn
-        )
+        try:
+            palmpay_response = palmpay.create_virtual_account(
+                user=user,
+                bvn=bvn,
+            )
+        except Exception as exc:
+            logger.error("PalmPay service failure: %s", exc, exc_info=True)
+            return Response(
+                {"error": "PalmPay service unavailable."},
+                status=502,
+            )
 
-        # Check if response is None or contains an error
-        # snippet: updated section of GenerateDVAAPIView.generate_palmpay_va
-
-        palmpay_response = palmpay.create_virtual_account(
-            user=user,
-            bvn=bvn
-        )
-
-        # Check if response is None or contains an error
-        if palmpay_response is None:
-            return Response({
-                "error": "Failed to create PalmPay VA - no response from service"
-            }, status=500)
+        if not palmpay_response:
+            return Response(
+                {"error": "PalmPay returned empty response."},
+                status=502,
+            )
 
         if palmpay_response.get("error"):
-            error_message = palmpay_response.get("error", "Failed to create PalmPay VA")
-            # Network errors should return 500, API errors 400
-            error_lower = error_message.lower()
-            is_network_error = "network" in error_lower or "timeout" in error_lower or "timed out" in error_lower
-            status_code = 500 if is_network_error else palmpay_response.get("status_code", 400)
-            # Include raw gateway response for debugging (remove in production)
-            return Response({
-                "error": error_message,
-                "raw_response": palmpay_response.get("raw_response", {})
-            }, status=status_code)
+            return Response(
+                {
+                    "error": palmpay_response["error"],
+                    "raw_response": palmpay_response.get("raw", {}),
+                },
+                status=400,
+            )
 
-        account_number = palmpay_response["account_number"]
+        account_number = palmpay_response.get("account_number")
         bank_name = palmpay_response.get("bank_name", "PalmPay")
-        account_name = palmpay_response.get("account_name", "Virtual Account")
-        provider_ref = palmpay_response.get("reference")
+        account_name = palmpay_response.get("account_name")
 
-        # 4. SECURITY CHECK - prevent duplicate accounts
+        if not account_number or not account_name:
+            logger.error("Invalid PalmPay response payload: %s", palmpay_response)
+            return Response(
+                {"error": "Invalid response from PalmPay."},
+                status=502,
+            )
+
         conflict = VirtualAccount.objects.filter(
             provider="palmpay",
-            account_number=account_number
+            account_number=account_number,
         ).exclude(user=user).first()
 
         if conflict:
-            return Response({
-                "error": (
-                    "This account is already linked to another user."
-                )
-            }, status=400)
+            return Response(
+                {"error": "This account is already linked to another user."},
+                status=400,
+            )
 
-        # 5. Save database records
         try:
             with transaction.atomic():
                 va = VirtualAccount.objects.create(
                     user=user,
                     provider="palmpay",
-                    provider_account_id=provider_ref,
+                    provider_account_id=None,
                     account_number=account_number,
                     account_name=account_name,
                     bank_name=bank_name,
                     metadata={
                         "raw_response": palmpay_response,
-                        "type": palmpay_response.get("type", "static"),
+                        "type": "static",
                     },
-                    assigned=True
+                    assigned=True,
                 )
 
                 wallet.van_account_number = account_number
@@ -389,20 +388,24 @@ class GenerateDVAAPIView(APIView):
                 wallet.van_provider = "palmpay"
                 wallet.save()
 
-        except Exception as e:
-            logger.error("DB error saving PalmPay VA: %s", e, exc_info=True)
-            return Response({
-                "error": "Failed to save virtual account details."
-            }, status=500)
+        except Exception as exc:
+            logger.error("DB error saving PalmPay VA: %s", exc, exc_info=True)
+            return Response(
+                {"error": "Failed to save virtual account details."},
+                status=500,
+            )
 
-        return Response({
-            "success": True,
-            "message": "PalmPay virtual account generated successfully.",
-            "account_number": account_number,
-            "bank_name": bank_name,
-            "account_name": account_name,
-            "type": palmpay_response.get("type", "static")
-        }, status=201)
+        return Response(
+            {
+                "success": True,
+                "message": "PalmPay virtual account generated successfully.",
+                "account_number": account_number,
+                "bank_name": bank_name,
+                "account_name": account_name,
+                "type": "static",
+            },
+            status=201,
+        )
 
 
     # ==========================================================================
