@@ -309,7 +309,8 @@ class GenerateDVAAPIView(APIView):
                 )
             bvn = clean_bvn
 
-        palmpay = PalmpayService(use_live=not settings.DEBUG)
+        palmpay = PalmpayService(use_live=settings.PAYMENTS_LIVE)
+
 
         try:
             palmpay_response = palmpay.create_virtual_account(
