@@ -28,12 +28,13 @@ class PalmpayService:
         self.app_id = getattr(settings, f"PALMPAY_{prefix}APP_ID", None)
         self.public_key = getattr(settings, f"PALMPAY_{prefix}PUBLIC_KEY", None)
         self.private_key_raw = getattr(settings, f"PALMPAY_{prefix}PRIVATE_KEY", None)
-        self.base_url = (
-            getattr(settings, f"PALMPAY_{prefix}BASE_URL", None)
-            or ("https://open-gw-prod.palmpay-inc.com/api" if use_live
-                else "https://open-gw-daily.palmpay-inc.com/api")
+        self.base_url = getattr(
+            settings,
+            f"PALMPAY_{prefix}BASE_URL",
+            "https://open-gw-prod.palmpay-inc.com/api"
+            if use_live
+            else "https://open-gw-daily.palmpay-inc.com/api",
         )
-
 
         missing = [
             k for k, v in {

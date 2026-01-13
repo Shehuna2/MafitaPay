@@ -282,6 +282,7 @@ class GenerateDVAAPIView(APIView):
     def generate_palmpay_va(self, request, user):
         logger.info("[DVA-PALMPAY] Start: PalmPay Virtual Account")
 
+
         wallet, _ = Wallet.objects.get_or_create(user=user)
 
         existing_va = VirtualAccount.objects.filter(
@@ -309,8 +310,7 @@ class GenerateDVAAPIView(APIView):
                 )
             bvn = clean_bvn
 
-        palmpay = PalmpayService(use_live=settings.PAYMENTS_LIVE)
-
+        palmpay = PalmpayService(use_live=not settings.DEBUG)
 
         try:
             palmpay_response = palmpay.create_virtual_account(
