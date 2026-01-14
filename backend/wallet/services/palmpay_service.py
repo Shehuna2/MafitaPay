@@ -119,7 +119,7 @@ class PalmpayService:
 
         payload = {
             "requestTime": int(time.time() * 1000),
-            "version": "V2.0",
+            "version": "V1.0",
             "nonceStr": str(uuid.uuid4()),
             "identityType": "personal",
             "licenseNumber": bvn,
