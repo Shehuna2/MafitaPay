@@ -136,8 +136,6 @@ class PalmpayService:
             "CountryCode": "NG",
             "Signature": signature,
             "Authorization": f"Bearer {self.app_id}",
-            "App-Id": self.app_id,
-            "Merchant-Id": self.merchant_id,
         }
 
         endpoint = f"{self.base_url}/v2/virtual/account/label/create"
@@ -154,9 +152,10 @@ class PalmpayService:
 
         return {
             "provider": "palmpay",
-            "account_number": va.get("accountNumber"),
+            "account_number": va.get("virtualAccountNo"),
             "bank_name": va.get("bankName", "PalmPay"),
-            "account_name": va.get("accountName", name),
+            "account_name": va.get("virtualAccountName"),
+            "status": va.get("status"),
             "raw_response": data,
         }
 
