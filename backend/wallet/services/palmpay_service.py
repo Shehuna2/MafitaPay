@@ -119,6 +119,8 @@ class PalmpayService:
             "email": user.email,
             "appId": self.app_id,
             "merchantId": self.merchant_id,
+            "phoneNumber": getattr(user, "phone_number", None) or "2340000000000",
+            "country": "NG",
         }
 
         if bvn:
