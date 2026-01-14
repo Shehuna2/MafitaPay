@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import json
 import logging
 import time
 import uuid
@@ -11,9 +9,9 @@ import requests
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives import serialization
 
+from .palmpay_signature import palmpay_sign
 
 logger = logging.getLogger(__name__)
 
@@ -26,22 +24,24 @@ class PalmpayService:
 
         self.merchant_id = getattr(settings, f"PALMPAY_{prefix}MERCHANT_ID", None)
         self.app_id = getattr(settings, f"PALMPAY_{prefix}APP_ID", None)
-        self.public_key = getattr(settings, f"PALMPAY_{prefix}PUBLIC_KEY", None)
         self.private_key_raw = getattr(settings, f"PALMPAY_{prefix}PRIVATE_KEY", None)
+
         self.base_url = (
             getattr(settings, f"PALMPAY_{prefix}BASE_URL", None)
-            or ("https://open-gw-prod.palmpay-inc.com/api" if use_live
-                else "https://open-gw-daily.palmpay-inc.com/api")
+            or (
+                "https://open-gw-prod.palmpay-inc.com/api"
+                if use_live
+                else "https://open-gw-daily.palmpay-inc.com/api"
+            )
         )
-
 
         missing = [
             k for k, v in {
                 "MERCHANT_ID": self.merchant_id,
                 "APP_ID": self.app_id,
-                "PUBLIC_KEY": self.public_key,
                 "PRIVATE_KEY": self.private_key_raw,
-            }.items() if not v
+            }.items()
+            if not v
         ]
 
         if missing:
@@ -58,35 +58,31 @@ class PalmpayService:
         )
 
     # ---------------------------------------------------------
-    # CRYPTO
+    # PRIVATE KEY LOADING
     # ---------------------------------------------------------
     def _wrap_pkcs8_key(self, raw: str) -> bytes:
         raw = raw.strip().replace("\\n", "").replace("\n", "")
         body = "\n".join(raw[i:i + 64] for i in range(0, len(raw), 64))
-        pem = (
+        return (
             "-----BEGIN PRIVATE KEY-----\n"
             f"{body}\n"
             "-----END PRIVATE KEY-----\n"
-        )
-        return pem.encode("utf-8")
-
+        ).encode()
 
     def _wrap_pkcs1_key(self, raw: str) -> bytes:
         raw = raw.strip().replace("\\n", "").replace("\n", "")
         body = "\n".join(raw[i:i + 64] for i in range(0, len(raw), 64))
-        pem = (
+        return (
             "-----BEGIN RSA PRIVATE KEY-----\n"
             f"{body}\n"
             "-----END RSA PRIVATE KEY-----\n"
-        )
-        return pem.encode("utf-8")
-
+        ).encode()
 
     def _load_private_key(self, raw_key: str):
         candidates = []
 
         if "BEGIN" in raw_key:
-            candidates.append(raw_key.replace("\\n", "\n").encode("utf-8"))
+            candidates.append(raw_key.replace("\\n", "\n").encode())
         else:
             candidates.append(self._wrap_pkcs8_key(raw_key))
             candidates.append(self._wrap_pkcs1_key(raw_key))
@@ -95,43 +91,12 @@ class PalmpayService:
 
         for pem in candidates:
             try:
-                return serialization.load_pem_private_key(
-                    pem,
-                    password=None,
-                )
+                return serialization.load_pem_private_key(pem, password=None)
             except Exception as exc:
                 last_exc = exc
 
         logger.critical("PalmPay private key invalid: %s", last_exc)
         raise ImproperlyConfigured("Invalid PalmPay PRIVATE_KEY format") from last_exc
-
-
-    def _sign(self, payload: str, timestamp: str) -> str:
-        message = f"{timestamp}{payload}".encode("utf-8")
-
-        signature = self.private_key.sign(
-            message,
-            padding.PKCS1v15(),
-            hashes.SHA256(),
-        )
-
-        return base64.b64encode(signature).decode("utf-8")
-
-    def _headers(self, payload: str) -> Dict[str, str]:
-        timestamp = str(int(time.time() * 1000))
-        signature = self._sign(payload, timestamp)
-
-        return {
-            "Content-Type": "application/json;charset=UTF-8",
-            "CountryCode": "NG",
-            "Request-Time": timestamp,
-            "Signature": signature,
-            "Authorization": f"Bearer {self.app_id}",
-            "Public-Key": self.public_key,
-            "App-Id": self.app_id,
-            "Merchant-Id": self.merchant_id,
-        }
-
 
     # ---------------------------------------------------------
     # VIRTUAL ACCOUNT
@@ -144,36 +109,43 @@ class PalmpayService:
 
         name = user.email.split("@")[0][:50]
 
-        payload_dict = {
+        payload = {
             "requestTime": int(time.time() * 1000),
+            "version": "V2.0",
+            "nonceStr": str(uuid.uuid4()),
             "identityType": "personal",
             "virtualAccountName": name,
             "customerName": name,
             "email": user.email,
-            "nonceStr": str(uuid.uuid4()),
-            "version": "V2.0",
             "appId": self.app_id,
             "merchantId": self.merchant_id,
         }
 
         if bvn:
-            payload_dict["bvn"] = bvn
+            payload["bvn"] = bvn
 
-        payload = json.dumps(payload_dict, separators=(",", ":"))
-        headers = self._headers(payload)
+        signature = palmpay_sign(payload, self.private_key)
+
+        headers = {
+            "Content-Type": "application/json;charset=UTF-8",
+            "CountryCode": "NG",
+            "Signature": signature,
+            "Authorization": f"Bearer {self.app_id}",
+            "App-Id": self.app_id,
+            "Merchant-Id": self.merchant_id,
+        }
 
         endpoint = f"{self.base_url}/v2/virtual/account/label/create"
 
         resp = requests.post(
             endpoint,
-            data=payload,
+            json=payload,
             headers=headers,
             timeout=self.timeout,
         )
 
         data = resp.json()
         logger.warning("PalmPay raw response: %s", data)
-
 
         if data.get("respCode") not in ("000000", "0000", "0"):
             return {"error": data.get("respMsg"), "raw": data}
@@ -187,6 +159,7 @@ class PalmpayService:
             "account_name": va.get("accountName", name),
             "raw_response": data,
         }
+
 
     # ---------------------------------------------------------
     # WEBHOOK VERIFICATION
