@@ -36,3 +36,6 @@ frontend/dist/
 # Celery
 celerybeat-schedule
 celerybeat.pid
+
+merchant_private.pem
+merchant_public.pem
