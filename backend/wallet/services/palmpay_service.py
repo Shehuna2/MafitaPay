@@ -122,7 +122,7 @@ class PalmpayService:
             "version": "V2.0",
             "nonceStr": str(uuid.uuid4()),
             "identityType": "personal",
-            "identityNumber": bvn,
+            "licenseNumber": bvn,
             "virtualAccountName": name,
             "customerName": name,
             "email": user.email,
