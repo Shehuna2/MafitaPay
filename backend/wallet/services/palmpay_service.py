@@ -127,8 +127,6 @@ class PalmpayService:
             "customerName": name,
             "email": user.email,
             "phoneNumber": phone,
-            "appId": self.app_id,
-            "merchantId": self.merchant_id,
         }
 
         signature = palmpay_sign(payload, self.private_key)
