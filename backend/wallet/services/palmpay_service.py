@@ -105,9 +105,14 @@ class PalmpayService:
         self,
         user,
         bvn: Optional[str] = None,
+        phone_number: Optional[str] = None,
     ) -> Dict[str, Any]:
 
         name = user.email.split("@")[0][:50]
+        phone = phone_number or getattr(user, "phone_number", None)
+
+        if not phone:
+            raise ValueError("PalmPay requires phoneNumber")
 
         payload = {
             "requestTime": int(time.time() * 1000),
