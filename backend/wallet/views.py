@@ -279,6 +279,9 @@ class GenerateDVAAPIView(APIView):
             "type": fw_response.get("type", "static")
         }, status=201)
 
+    # ================================================================
+    # Palmpay
+    # ================================================================
     def generate_palmpay_va(self, request, user):
         logger.info("[DVA-PALMPAY] Start: PalmPay Virtual Account")
 

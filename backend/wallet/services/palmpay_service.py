@@ -105,31 +105,31 @@ class PalmpayService:
         self,
         user,
         bvn: Optional[str] = None,
-        phone_number: Optional[str] = None,
+        phone_number: Optional[str] = "08112345678",
     ) -> Dict[str, Any]:
 
         name = user.email.split("@")[0][:50]
         phone = phone_number or getattr(user, "phone_number", None)
 
         if not phone:
-            raise ValueError("PalmPay requires phoneNumber")
+            phone = str(getattr(user, "phone_number", "2348162345678"))
+
+        if not bvn:
+            bvn = str(getattr(user, "bvn", "")).strip()
 
         payload = {
             "requestTime": int(time.time() * 1000),
             "version": "V2.0",
             "nonceStr": str(uuid.uuid4()),
             "identityType": "personal",
+            "identityNumber": bvn,
             "virtualAccountName": name,
             "customerName": name,
             "email": user.email,
+            "phoneNumber": phone,
             "appId": self.app_id,
             "merchantId": self.merchant_id,
-            "phoneNumber": getattr(user, "phone_number", None) or "2340000000000",
-            "country": "NG",
         }
-
-        if bvn:
-            payload["bvn"] = bvn
 
         signature = palmpay_sign(payload, self.private_key)
 
@@ -144,15 +144,10 @@ class PalmpayService:
 
         endpoint = f"{self.base_url}/v2/virtual/account/label/create"
 
-        resp = requests.post(
-            endpoint,
-            json=payload,
-            headers=headers,
-            timeout=self.timeout,
-        )
-
+        resp = requests.post(endpoint, json=payload, headers=headers, timeout=self.timeout)
         data = resp.json()
-        logger.warning("PalmPay raw response: %s", data)
+
+        logger.info("PalmPay raw response: %s", data)
 
         if data.get("respCode") not in ("000000", "0000", "0"):
             return {"error": data.get("respMsg"), "raw": data}
