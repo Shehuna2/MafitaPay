@@ -1,44 +1,34 @@
-import hashlib
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives import hashes
 import base64
+import hashlib
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
 
 
 def palmpay_sign(params: dict, private_key) -> str:
-    # Step 1: filter out None/empty & sort
-    items = {
-        k: str(v).strip()
-        for k, v in params.items()
-        if v is not None and str(v).strip() != ""
-    }
+    # VERY IMPORTANT: Do NOT filter or strip!
+    # Include ALL parameters, even if value is empty string or None → convert to str
+    str_params = {k: str(v) if v is not None else "" for k, v in params.items()}
 
-    sorted_items = sorted(items.items(), key=lambda x: x[0])  # sort by key (ASCII order)
+    # Sort keys (exactly as support does)
+    sorted_keys = sorted(str_params.keys())
+    parse_str = '&'.join(f"{key}={str_params[key]}" for key in sorted_keys)
 
-    strA = "&".join(f"{k}={v}" for k, v in sorted_items)
+    # Debug – you should see this in logs
+    print("PalmPay strA:", parse_str)
+    print("strA length:", len(parse_str))
 
-    # DEBUG: Very important – log this!
-    print("=== PalmPay Signature Debug ===")
-    print("strA          :", strA)
-    print("strA length   :", len(strA))
+    # MD5 + uppercase
+    md5_hash = hashlib.md5(parse_str.encode('utf-8')).hexdigest().upper()
+    print("MD5 uppercase:", md5_hash)
 
-    # Step 2: MD5 + uppercase
-    md5_hash = hashlib.md5(strA.encode("utf-8")).hexdigest().upper()
-
-    print("MD5 uppercase :", md5_hash)
-
-    # Step 3: RSA sign with SHA256 + PSS (most likely working combo)
+    # Sign with SHA1 + PKCS1v15 (matches support code)
     signature = private_key.sign(
-        md5_hash.encode("utf-8"),
-        padding.PSS(
-            mgf=padding.MGF1(hashes.SHA256()),
-            salt_length=padding.PSS.MAX_LENGTH   # or try 32 / 20
-        ),
-        hashes.SHA256()
+        md5_hash.encode('utf-8'),
+        padding.PKCS1v15(),
+        hashes.SHA1()
     )
 
-    signed_b64 = base64.b64encode(signature).decode("utf-8")
+    b64_sig = base64.b64encode(signature).decode('utf-8')
+    print("Signature:", b64_sig)
 
-    print("Generated signature:", signed_b64)
-    print("==============================")
-
-    return signed_b64
+    return b64_sig

@@ -13,52 +13,30 @@ def verify_palmpay_callback(
     signature: str,
     palmpay_public_key,
 ) -> bool:
-    """
-    Verify PalmPay callback signature.
-
-    PalmPay rules:
-    - Remove `sign`
-    - Sort params by ASCII key order
-    - key=value&...
-    - MD5 uppercase
-    - Verify RSA SHA1WithRSA (PKCS#1 v1.5)
-    """
-
     if not signature:
         return False
 
-    # --------------------------------------------------
-    # 1. Filter params
-    # --------------------------------------------------
-    items = {}
+    # 1. Prepare params - include ALL fields except 'sign', convert to str (even empty)
+    str_params = {}
     for k, v in payload.items():
         if k == "sign":
             continue
-        if v is None:
-            continue
-        v = str(v).strip()
-        if v == "":
-            continue
-        items[k] = v
+        str_params[k] = str(v) if v is not None else ""
 
-    # --------------------------------------------------
-    # 2. ASCII sort
-    # --------------------------------------------------
-    sorted_items = sorted(items.items(), key=lambda x: x[0])
+    # 2. Sort keys
+    sorted_keys = sorted(str_params.keys())
 
-    # --------------------------------------------------
-    # 3. Build strA
-    # --------------------------------------------------
-    strA = "&".join(f"{k}={v}" for k, v in sorted_items)
+    # 3. Build exact string
+    strA = '&'.join(f"{key}={str_params[key]}" for key in sorted_keys)
 
-    # --------------------------------------------------
+    # Debug (very useful!)
+    print("Callback strA:", strA)
+    print("Callback MD5 input length:", len(strA))
+
     # 4. MD5 uppercase
-    # --------------------------------------------------
     md5_str = hashlib.md5(strA.encode("utf-8")).hexdigest().upper()
 
-    # --------------------------------------------------
-    # 5. Verify RSA signature
-    # --------------------------------------------------
+    # 5. Verify
     try:
         palmpay_public_key.verify(
             base64.b64decode(signature),
@@ -68,4 +46,7 @@ def verify_palmpay_callback(
         )
         return True
     except InvalidSignature:
+        return False
+    except Exception as e:
+        print("Callback verify error:", str(e))
         return False

@@ -149,57 +149,56 @@ class PalmpayService:
         self,
         user,
         bvn: Optional[str] = None,
-        phone_number: Optional[str] = "08112345678",
+        phone_number: Optional[str] = None,  # we won't use it anyway
     ) -> Dict[str, Any]:
-
         name = user.email.split("@")[0][:50]
-        phone = phone_number or getattr(user, "phone_number", None)
-
-        if not phone:
-            phone = str(getattr(user, "phone_number", "2348162345678"))
 
         if not bvn:
             bvn = str(getattr(user, "bvn", "")).strip()
 
         payload = {
             "requestTime": int(time.time() * 1000),
-            "version": "V2.0",
-            "nonceStr": str(uuid.uuid4()),
+            "version": "V1.1",                           # good choice
+            "nonceStr": str(uuid.uuid4()).replace("-", ""),  # good
             "identityType": "personal",
-            "licenseNumber": bvn,
+            "licenseNumber": bvn if bvn else "",         # empty string OK
             "virtualAccountName": name,
             "customerName": name,
             "email": user.email,
-            "phoneNumber": phone,
+            # DO NOT ADD phoneNumber !!!
+            # Optional: "accountReference": str(uuid.uuid4())[:32],
         }
 
         signature = self.sign_payload(payload)
-
 
         headers = {
             "Content-Type": "application/json;charset=UTF-8",
             "CountryCode": "NG",
             "Signature": signature,
             "Authorization": f"Bearer {self.app_id}",
+            # No App-Id, no Merchant-Id
         }
 
         endpoint = f"{self.base_url}/v2/virtual/account/label/create"
 
-        resp = requests.post(endpoint, json=payload, headers=headers, timeout=self.timeout)
-        data = resp.json()
+        try:
+            resp = requests.post(endpoint, json=payload, headers=headers, timeout=self.timeout)
+            data = resp.json()
+            logger.info("PalmPay raw response: %s", data)
 
-        logger.info("PalmPay raw response: %s", data)
+            if data.get("respCode") != "00000000":
+                return {"error": data.get("respMsg", "Unknown error"), "raw": data}
 
-        if data.get("respCode") != "00000000":
-            return {"error": data.get("respMsg"), "raw": data}
+            va = data.get("data") or {}
+            return {
+                "provider": "palmpay",
+                "account_number": va.get("virtualAccountNo"),
+                "bank_name": "PalmPay",
+                "account_name": va.get("virtualAccountName"),
+                "status": va.get("status"),
+                "raw_response": data,
+            }
 
-        va = data.get("data") or {}
-
-        return {
-            "provider": "palmpay",
-            "account_number": va.get("virtualAccountNo"),
-            "bank_name": va.get("bankName", "PalmPay"),
-            "account_name": va.get("virtualAccountName"),
-            "status": va.get("status"),
-            "raw_response": data,
-        }
+        except Exception as exc:
+            logger.error("PalmPay request failed", exc_info=True)
+            return {"error": str(exc)}

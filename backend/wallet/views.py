@@ -315,16 +315,18 @@ class GenerateDVAAPIView(APIView):
         palmpay = PalmpayService(use_live=settings.PAYMENTS_LIVE)
 
         try:
+            # ─── IMPORTANT CHANGE ────────────────────────────────
+            # Do NOT pass phone_number anymore
             palmpay_response = palmpay.create_virtual_account(
                 user=user,
-                bvn=bvn,
-                phone_number=getattr(user, "phone_number", None), # type: ignore
+                bvn=bvn,              # only bvn, no phone_number
             )
+            # ──────────────────────────────────────────────────────
 
         except Exception as exc:
             logger.error("PalmPay service failure: %s", exc, exc_info=True)
             return Response(
-                {"error": "PalmPay service unavailable."},
+                {"error": "PalmPay service unavailable. Please try again later."},
                 status=502,
             )
 
@@ -335,9 +337,16 @@ class GenerateDVAAPIView(APIView):
             )
 
         if palmpay_response.get("error"):
+            error_msg = palmpay_response["error"]
+            # Optional: make user-friendly messages for common PalmPay errors
+            if "sign error" in error_msg.lower():
+                error_msg = "Signature error - please contact support"
+            elif "OPEN_GW" in error_msg:
+                error_msg = "PalmPay gateway error - please try again"
+
             return Response(
                 {
-                    "error": palmpay_response["error"],
+                    "error": error_msg,
                     "raw_response": palmpay_response.get("raw", {}),
                 },
                 status=400,
@@ -361,7 +370,7 @@ class GenerateDVAAPIView(APIView):
 
         if conflict:
             return Response(
-                {"error": "This account is already linked to another user."},
+                {"error": "This BVN is already linked to another account."},
                 status=400,
             )
 
@@ -375,7 +384,7 @@ class GenerateDVAAPIView(APIView):
                     account_name=account_name,
                     bank_name=bank_name,
                     metadata={
-                        "raw_response": palmpay_response,
+                        "raw_response": palmpay_response.get("raw_response"),
                         "type": "static",
                     },
                     assigned=True,
@@ -390,7 +399,7 @@ class GenerateDVAAPIView(APIView):
         except Exception as exc:
             logger.error("DB error saving PalmPay VA: %s", exc, exc_info=True)
             return Response(
-                {"error": "Failed to save virtual account details."},
+                {"error": "Failed to save virtual account details. Please contact support."},
                 status=500,
             )
 
@@ -405,7 +414,6 @@ class GenerateDVAAPIView(APIView):
             },
             status=201,
         )
-
 
     # ==========================================================================
     # PAYSTACK
