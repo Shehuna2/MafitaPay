@@ -5,40 +5,45 @@ import base64
 
 
 def palmpay_sign(params: dict, private_key) -> str:
-    # Step 1: filter out None/empty & sort
-    items = {
-        k: str(v).strip()
-        for k, v in params.items()
-        if v is not None and str(v).strip() != ""
-    }
+    # Filter: remove None and empty after strip
+    filtered = {}
+    for k, v in params.items():
+        if v is None:
+            continue
+        str_v = str(v).strip()
+        if str_v == "":
+            continue
+        filtered[k] = str_v
 
-    sorted_items = sorted(items.items(), key=lambda x: x[0])  # sort by key (ASCII order)
+    # Sort keys (ASCII order = lexicographic in Python sorted)
+    sorted_keys = sorted(filtered.keys())
+    parts = []
+    for k in sorted_keys:
+        parts.append(f"{k}={filtered[k]}")
 
-    strA = "&".join(f"{k}={v}" for k, v in sorted_items)
+    strA = "&".join(parts)
 
-    # DEBUG: Very important – log this!
-    print("=== PalmPay Signature Debug ===")
-    print("strA          :", strA)
-    print("strA length   :", len(strA))
+    # CRITICAL DEBUG OUTPUT ────────────────────────────────
+    print("\n=== PALMPAY SIGNATURE DEBUG ===")
+    print("Sorted params (as dict):", filtered)
+    print("strA (exact string to MD5):")
+    print("   " + strA)
+    print("strA length:", len(strA))
+    print("strA repr:", repr(strA))  # shows hidden chars if any
 
-    # Step 2: MD5 + uppercase
     md5_hash = hashlib.md5(strA.encode("utf-8")).hexdigest().upper()
+    print("MD5 (uppercase):", md5_hash)
+    # ──────────────────────────────────────────────────────
 
-    print("MD5 uppercase :", md5_hash)
-
-    # Step 3: RSA sign with SHA256 + PSS (most likely working combo)
+    # Try variant A: SHA1 + PKCS1v15 (original doc style)
     signature = private_key.sign(
         md5_hash.encode("utf-8"),
-        padding.PSS(
-            mgf=padding.MGF1(hashes.SHA256()),
-            salt_length=padding.PSS.MAX_LENGTH   # or try 32 / 20
-        ),
-        hashes.SHA256()
+        padding.PKCS1v15(),
+        hashes.SHA1()
     )
 
-    signed_b64 = base64.b64encode(signature).decode("utf-8")
+    b64_sig = base64.b64encode(signature).decode("utf-8")
+    print("Signature (base64):", b64_sig)
+    print("================================\n")
 
-    print("Generated signature:", signed_b64)
-    print("==============================")
-
-    return signed_b64
+    return b64_sig
