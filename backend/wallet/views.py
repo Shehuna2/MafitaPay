@@ -487,7 +487,24 @@ class GenerateDVAAPIView(APIView):
             "account_name": va.account_name,
         }, status=status.HTTP_201_CREATED)
 
+class PalmpayWebhookView(APIView):
+    authentication_classes = []
+    permission_classes = []
 
+    def post(self, request):
+        body = request.data
+
+        palmpay = PalmpayService(use_live=settings.PAYMENTS_LIVE)
+
+        if not palmpay.verify_callback(body):
+            return Response("invalid", status=400)
+
+        # ---- BUSINESS LOGIC HERE ----
+        # order_id = body["orderId"]
+        # status = body["orderStatus"]
+
+        return Response("success", status=200)
+    
 class RequeryDVAAPIView(APIView):
     """Requery incoming transfers to a Paystack DVA."""
     permission_classes = [IsAuthenticated]

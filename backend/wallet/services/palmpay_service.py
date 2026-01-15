@@ -12,19 +12,26 @@ from django.core.exceptions import ImproperlyConfigured
 from cryptography.hazmat.primitives import serialization
 
 from .palmpay_signature import palmpay_sign
+from .palmpay_callback import verify_palmpay_callback
+
 
 logger = logging.getLogger(__name__)
 
 
 class PalmpayService:
-    timeout = 60
+
 
     def __init__(self, use_live: bool = False):
+        self.timeout = 30  # seconds
+
         prefix = "" if use_live else "TEST_"
 
-        self.merchant_id = getattr(settings, f"PALMPAY_{prefix}MERCHANT_ID", None)
-        self.app_id = getattr(settings, f"PALMPAY_{prefix}APP_ID", None)
-        self.private_key_raw = getattr(settings, f"PALMPAY_{prefix}PRIVATE_KEY", None)
+        self.merchant_id = getattr(settings, f"PALMPAY_{prefix}MERCHANT_ID")
+        self.app_id = getattr(settings, f"PALMPAY_{prefix}APP_ID")
+        self.private_key_raw = getattr(settings, f"PALMPAY_{prefix}PRIVATE_KEY")
+        self.palmpay_public_key_raw = getattr(
+            settings, f"PALMPAY_{prefix}PUBLIC_KEY"
+        )
 
         self.base_url = (
             getattr(settings, f"PALMPAY_{prefix}BASE_URL", None)
@@ -40,6 +47,8 @@ class PalmpayService:
                 "MERCHANT_ID": self.merchant_id,
                 "APP_ID": self.app_id,
                 "PRIVATE_KEY": self.private_key_raw,
+                "PUBLIC_KEY": self.palmpay_public_key_raw,
+                "BASE_URL": self.base_url,
             }.items()
             if not v
         ]
@@ -49,6 +58,8 @@ class PalmpayService:
 
         self.base_url = self.base_url.rstrip("/")
         self.private_key = self._load_private_key(self.private_key_raw)
+        self.palmpay_public_key = self._load_public_key(self.palmpay_public_key_raw)
+
 
         logger.info(
             "PalmPay initialized (%s) appId=%s merchantId=%s",
@@ -98,6 +109,39 @@ class PalmpayService:
         logger.critical("PalmPay private key invalid: %s", last_exc)
         raise ImproperlyConfigured("Invalid PalmPay PRIVATE_KEY format") from last_exc
 
+    def _wrap_public_key(self, raw: str) -> bytes:
+        raw = raw.strip().replace("\\n", "").replace("\n", "")
+        body = "\n".join(raw[i:i + 64] for i in range(0, len(raw), 64))
+        return (
+            "-----BEGIN PUBLIC KEY-----\n"
+            f"{body}\n"
+            "-----END PUBLIC KEY-----\n"
+        ).encode()
+
+    def _load_public_key(self, raw_key: str):
+        if "BEGIN" in raw_key:
+            pem = raw_key.replace("\\n", "\n").encode()
+        else:
+            pem = self._wrap_public_key(raw_key)
+
+        return serialization.load_pem_public_key(pem)
+    
+
+    def sign_payload(self, payload: dict) -> str:
+        return palmpay_sign(payload, self.private_key)
+
+    def verify_callback(self, body: dict) -> bool:
+        signature = body.get("sign")
+        if not signature:
+            return False
+
+        return verify_palmpay_callback(
+            payload=body,
+            signature=signature,
+            palmpay_public_key=self.palmpay_public_key,
+        )
+
+
     # ---------------------------------------------------------
     # VIRTUAL ACCOUNT
     # ---------------------------------------------------------
@@ -119,7 +163,7 @@ class PalmpayService:
 
         payload = {
             "requestTime": int(time.time() * 1000),
-            "version": "V1.0",
+            "version": "V2.0",
             "nonceStr": str(uuid.uuid4()),
             "identityType": "personal",
             "licenseNumber": bvn,
@@ -129,7 +173,8 @@ class PalmpayService:
             "phoneNumber": phone,
         }
 
-        signature = palmpay_sign(payload, self.private_key)
+        signature = self.sign_payload(payload)
+
 
         headers = {
             "Content-Type": "application/json;charset=UTF-8",
@@ -145,7 +190,7 @@ class PalmpayService:
 
         logger.info("PalmPay raw response: %s", data)
 
-        if data.get("respCode") not in ("000000", "0000", "0"):
+        if data.get("respCode") != "00000000":
             return {"error": data.get("respMsg"), "raw": data}
 
         va = data.get("data") or {}
@@ -158,49 +203,3 @@ class PalmpayService:
             "status": va.get("status"),
             "raw_response": data,
         }
-
-
-    # ---------------------------------------------------------
-    # WEBHOOK VERIFICATION
-    # ---------------------------------------------------------
-    import base64
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import padding
-    from cryptography.exceptions import InvalidSignature
-
-
-    def verify_webhook_signature(
-        self,
-        raw_body: bytes,
-        signature: str,
-        timestamp: str,
-    ) -> bool:
-        if not signature or not timestamp:
-            logger.warning("PalmPay webhook missing signature or timestamp.")
-            return False
-
-        try:
-            message = f"{timestamp}{raw_body.decode('utf-8')}".encode("utf-8")
-
-            public_key_pem = self._wrap_public_key(self.public_key)
-            public_key = serialization.load_pem_public_key(public_key_pem)
-
-            decoded_signature = base64.b64decode(signature)
-
-            public_key.verify(
-                decoded_signature,
-                message,
-                padding.PKCS1v15(),
-                hashes.SHA256(),
-            )
-
-            logger.info("PalmPay webhook signature verified successfully.")
-            return True
-
-        except InvalidSignature:
-            logger.warning("PalmPay webhook signature mismatch.")
-            return False
-
-        except Exception as exc:
-            logger.error("PalmPay webhook verification failed: %s", exc, exc_info=True)
-            return False
