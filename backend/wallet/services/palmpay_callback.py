@@ -1,6 +1,6 @@
-import json
 import hashlib
 import base64
+from urllib.parse import unquote
 from typing import Dict, Any
 
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -15,6 +15,7 @@ def verify_palmpay_callback(
 ) -> bool:
     if not signature:
         return False
+    signature = unquote(signature)
 
     # 1. Prepare params - include ALL fields except 'sign', convert to str (even empty)
     str_params = {}

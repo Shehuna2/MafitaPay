@@ -386,44 +386,32 @@ def palmpay_webhook(request):
             )
             return Response({"error": "payload too large"}, status=413)
         
-        # Get signature and timestamp from headers
-        signature = (
-            request.headers.get("X-Signature")
-            or request.headers.get("x-signature")
-            or request.META.get("HTTP_X_SIGNATURE")
-        )
-        
-        timestamp = (
-            request.headers.get("X-Timestamp")
-            or request.headers.get("x-timestamp")
-            or request.META.get("HTTP_X_TIMESTAMP")
-        )
-
-        if not signature or not timestamp:
-            logger.warning("Missing PalmPay webhook signature or timestamp")
-            return Response({"error": "missing signature or timestamp"}, status=400)
-
-        palmpay_service = PalmpayService(use_live=not settings.DEBUG)
-
-        # SECURITY: Validate private key is configured
-        if not palmpay_service.private_key:
-            env_label = "LIVE" if not settings.DEBUG else "TEST"
-            logger.error(
-                "CRITICAL: PalmPay private key not configured. "
-                "Cannot verify webhook. Environment: %s", env_label
-            )
-            return Response({"error": "configuration error"}, status=500)
-
-        # Verify authenticity
-        if not palmpay_service.verify_webhook_signature(raw, signature, timestamp):
-            logger.error("Invalid PalmPay webhook signature")
-            return Response({"error": "invalid signature"}, status=401)
-
         try:
             payload = json.loads(raw.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.error("Failed to decode PalmPay webhook payload: %s", str(e))
             return Response({"error": "invalid payload"}, status=400)
+
+        signature = payload.get("sign")
+        if not signature:
+            logger.warning("Missing PalmPay webhook signature in payload")
+            return Response({"error": "missing signature"}, status=400)
+
+        palmpay_service = PalmpayService(use_live=settings.PAYMENTS_LIVE)
+
+        # SECURITY: Validate public key is configured
+        if not palmpay_service.palmpay_public_key:
+            env_label = "LIVE" if settings.PAYMENTS_LIVE else "TEST"
+            logger.error(
+                "CRITICAL: PalmPay public key not configured. "
+                "Cannot verify webhook. Environment: %s", env_label
+            )
+            return Response({"error": "configuration error"}, status=500)
+
+        # Verify authenticity
+        if not palmpay_service.verify_callback(payload):
+            logger.error("Invalid PalmPay webhook signature")
+            return Response({"error": "invalid signature"}, status=401)
             
         event = payload.get("event") or payload.get("eventType") or payload.get("type")
         data = payload.get("data", {}) or payload
