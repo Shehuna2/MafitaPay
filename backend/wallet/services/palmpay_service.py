@@ -71,6 +71,14 @@ class PalmpayService:
     # ---------------------------------------------------------
     # PRIVATE KEY LOADING
     # ---------------------------------------------------------
+    def _extract_key_body(self, raw: str) -> str:
+        lines = []
+        for line in raw.strip().splitlines():
+            if "BEGIN" in line or "END" in line:
+                continue
+            lines.append(line.strip())
+        return "".join(lines).replace("\\n", "").replace("\n", "")
+
     def _wrap_pkcs8_key(self, raw: str) -> bytes:
         raw = raw.strip().replace("\\n", "").replace("\n", "")
         body = "\n".join(raw[i:i + 64] for i in range(0, len(raw), 64))
@@ -94,9 +102,11 @@ class PalmpayService:
 
         if "BEGIN" in raw_key:
             candidates.append(raw_key.replace("\\n", "\n").encode())
-        else:
-            candidates.append(self._wrap_pkcs8_key(raw_key))
-            candidates.append(self._wrap_pkcs1_key(raw_key))
+
+        key_body = self._extract_key_body(raw_key)
+        if key_body:
+            candidates.append(self._wrap_pkcs8_key(key_body))
+            candidates.append(self._wrap_pkcs1_key(key_body))
 
         last_exc = None
 
