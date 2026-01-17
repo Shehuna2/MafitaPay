@@ -220,7 +220,7 @@ export default function Layout({ children }) {
         </nav>
       </aside>
       <div className="flex-1 lg:ml-60 flex flex-col">
-        <main className="flex-1">{children || <Outlet />}</main>
+        <main className="flex-1 pt-[calc(64px+8px)] pb-[calc(76px+var(--sab))]">{children || <Outlet />}</main>
       </div>
       <nav className="fixed bottom-0 left-0 w-full bg-gray-800 border-t border-gray-700 flex justify-around p-3 lg:hidden z-30">
         {location.pathname.startsWith("/p2p")
@@ -268,4 +268,5 @@ export default function Layout({ children }) {
 
     </div>
   );
+
 }
