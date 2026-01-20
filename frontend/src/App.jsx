@@ -21,6 +21,7 @@ const AUTH_PATHS_EXEMPT_FROM_MAINTENANCE = [
 // Pages
 import Home from "./pages/Home";
 import About from "./pages/About";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Referral from "./pages/Referral";
 import Rewards from "./pages/Rewards";
 import Dashboard from "./pages/Dashboard";
@@ -123,6 +124,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/about" element={<About />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
 
             {/* Auth */}
             <Route path="/login" element={<Login />} />
