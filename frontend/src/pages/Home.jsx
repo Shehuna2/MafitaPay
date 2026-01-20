@@ -176,7 +176,11 @@ export default function Home() {
         {/* Footer */}
         <footer className="px-4 py-8 border-t border-gray-800">
           <div className="max-w-7xl mx-auto text-center text-sm text-gray-500">
-            © 2025 MafitaPay. All rights reserved. Built with <span className="text-red-500">heart</span> in Nigeria.
+            © 2025 MafitaPay. All rights reserved. Built with{" "}
+            <span className="text-red-500">heart</span> in Nigeria.{" "}
+            <Link className="text-indigo-300 hover:text-indigo-200" to="/privacy">
+              Privacy Policy
+            </Link>
           </div>
         </footer>
       </div>
