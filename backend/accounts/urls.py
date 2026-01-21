@@ -22,6 +22,8 @@ urlpatterns = [
     path("resend-verification/", views.ResendVerificationEmailView.as_view(), name="resend_verification"),
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),  
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),  
+    path("account/deactivate/", views.AccountDeactivateView.as_view(), name="account_deactivate"),
+    path("account/delete/", views.AccountDeleteView.as_view(), name="account_delete"),
 
     # WebAuthn endpoints
     path("webauthn/challenge/", WebAuthnChallengeView.as_view(), name="webauthn_challenge"),
