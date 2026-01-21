@@ -33,6 +33,8 @@ import WalletTransactions from "./pages/WalletTransactions";
 import Login from "./pages/accounts/Login";
 import Register from "./pages/accounts/Register";
 import Profile from "./pages/accounts/Profile";
+import AccountDeactivate from "./pages/accounts/AccountDeactivate";
+import AccountDelete from "./pages/accounts/AccountDelete";
 import VerifyEmail from "./pages/accounts/VerifyEmail";
 import ResetPassword from "./pages/accounts/ResetPassword";
 import ResetPasswordRequest from "./pages/accounts/ResetPasswordRequest";
@@ -140,6 +142,28 @@ function App() {
                 <PrivateRoute>
                   <Layout>
                     <Profile />
+                  </Layout>
+                </PrivateRoute>
+              }
+            />
+
+            <Route
+              path="/accounts/deactivate"
+              element={
+                <PrivateRoute>
+                  <Layout>
+                    <AccountDeactivate />
+                  </Layout>
+                </PrivateRoute>
+              }
+            />
+
+            <Route
+              path="/accounts/delete"
+              element={
+                <PrivateRoute>
+                  <Layout>
+                    <AccountDelete />
                   </Layout>
                 </PrivateRoute>
               }

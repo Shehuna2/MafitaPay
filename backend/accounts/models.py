@@ -64,6 +64,7 @@ class User(AbstractUser):
     # Biometric authentication fields
     biometric_enabled = models.BooleanField(default=False)
     biometric_registered_at = models.DateTimeField(null=True, blank=True)
+    deactivated_at = models.DateTimeField(null=True, blank=True)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []

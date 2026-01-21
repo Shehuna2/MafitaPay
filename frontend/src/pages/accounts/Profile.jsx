@@ -1,5 +1,5 @@
 // src/pages/accounts/Profile.jsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import client from "../../api/client";
 import {
@@ -8,12 +8,18 @@ import {
   CheckCircle2,
   LogOut,
   MessageCircle,
-  ArrowLeft,
   Shield,
+  ChevronRight,
+  FileText,
+  Lock,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useAuth } from "../../context/AuthContext";
+
+const DELETE_ENDPOINT = "account/delete/"; // <- change if your endpoint differs
 
 export default function Profile() {
   const { user: authUser, logout } = useAuth();
@@ -24,6 +30,12 @@ export default function Profile() {
   const [submitting, setSubmitting] = useState(false);
   const [isEdited, setIsEdited] = useState(false);
 
+  // Delete flow
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
   const [formData, setFormData] = useState({
     full_name: "",
     phone_number: "",
@@ -33,17 +45,13 @@ export default function Profile() {
   });
 
   const normalizeProfile = (data) => {
-    // Build a normalized profile object that always has full_name
     const first = data.first_name || data.profile?.first_name || "";
     const last = data.last_name || data.profile?.last_name || "";
     const apiFull = (data.full_name || "").trim();
     const computedFull = `${first} ${last}`.trim();
     const full_name = apiFull || computedFull || "";
 
-    return {
-      ...data,
-      full_name,
-    };
+    return { ...data, full_name };
   };
 
   const fetchProfile = useCallback(async () => {
@@ -53,7 +61,6 @@ export default function Profile() {
       const data = normalizeProfile(raw || {});
       setProfile(data);
 
-      // EXACT same field names as your original — guaranteed no breakage
       setFormData({
         full_name: data.full_name || "",
         phone_number: data.phone_number || "",
@@ -75,19 +82,52 @@ export default function Profile() {
   // Detect unsaved changes safely
   useEffect(() => {
     if (!profile) return;
-    const hasChanges = Object.keys(formData).some(key => {
+    const hasChanges = Object.keys(formData).some((key) => {
       const current = formData[key];
-      const original = key === "date_of_birth"
-        ? (profile[key]?.split?.("T")?.[0] || "")
-        : (profile[key] || "");
+      const original =
+        key === "date_of_birth"
+          ? profile[key]?.split?.("T")?.[0] || ""
+          : profile[key] || "";
       return String(current) !== String(original);
     });
     setIsEdited(hasChanges);
   }, [formData, profile]);
 
+  const initials = useMemo(() => {
+    const name = (profile?.full_name || "").trim();
+    if (!name) return "U";
+    const parts = name.split(" ").filter(Boolean);
+    const first = parts[0]?.[0] || "U";
+    const second = parts[1]?.[0] || "";
+    return (first + second).toUpperCase();
+  }, [profile?.full_name]);
+
+  // Profile completion (simple, honest)
+  const completion = useMemo(() => {
+    const fields = [
+      { key: "full_name", value: profile?.full_name },
+      { key: "email", value: profile?.email },
+      { key: "phone_number", value: profile?.phone_number },
+      { key: "date_of_birth", value: profile?.date_of_birth },
+      { key: "bank_name", value: profile?.bank_name },
+      { key: "account_no", value: profile?.account_no },
+    ];
+    const filled = fields.filter((f) => (f.value || "").toString().trim().length > 0).length;
+    const pct = Math.round((filled / fields.length) * 100);
+    return { pct, filled, total: fields.length };
+  }, [profile]);
+
+  const completionHint = useMemo(() => {
+    if (!profile) return null;
+    if (!profile.phone_number) return "Add your phone number to secure your account.";
+    if (!profile.date_of_birth) return "Add your date of birth for verification readiness.";
+    if (!profile.bank_name || !profile.account_no) return "Add bank details to speed up payouts.";
+    return "Profile looks good.";
+  }, [profile]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -97,11 +137,8 @@ export default function Profile() {
     setSubmitting(true);
     try {
       const data = new FormData();
-      // Only send fields that have values — exactly like your original
-      Object.keys(formData).forEach(key => {
-        if (formData[key]) {
-          data.append(key, formData[key]);
-        }
+      Object.keys(formData).forEach((key) => {
+        if (formData[key]) data.append(key, formData[key]);
       });
 
       const response = await client.patch("profile-api/", data, {
@@ -113,18 +150,18 @@ export default function Profile() {
       toast.success("Profile updated successfully!");
       setIsEdited(false);
 
-      // Sync localstorage + global user if needed
+      // Sync local storage user cache
       try {
         const stored = JSON.parse(localStorage.getItem("user") || "{}");
         const merged = { ...stored, ...normalized };
         localStorage.setItem("user", JSON.stringify(merged));
-        // notify other tabs
         window.dispatchEvent(new Event("userUpdated"));
-      } catch (e) {
-        // ignore localStorage sync errors
+      } catch {
+        // ignore
       }
     } catch (err) {
-      const msg = err.response?.data?.detail ||
+      const msg =
+        err.response?.data?.detail ||
         (err.response?.data && Object.values(err.response.data)[0]) ||
         "Failed to update profile";
       toast.error(msg);
@@ -139,213 +176,406 @@ export default function Profile() {
     navigate("/login");
   };
 
+  const clearLocalAuth = () => {
+    try {
+      localStorage.removeItem("access");
+      localStorage.removeItem("refresh");
+      localStorage.removeItem("user");
+      localStorage.removeItem("notifications");
+      localStorage.removeItem("last_user_fetch");
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirm.trim().toUpperCase() !== "DELETE") {
+      toast.error("Type DELETE to confirm.");
+      return;
+    }
+
+    if (!deletePassword.trim()) {
+      toast.error("Enter your password to continue.");
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      // Server-side deletion
+      await client.delete(DELETE_ENDPOINT, {
+        data: { password: deletePassword, confirm: "DELETE" },
+      });
+
+      // Local cleanup
+      clearLocalAuth();
+      logout();
+
+      toast.success("Account deleted.");
+      setShowDelete(false);
+      navigate("/register");
+    } catch (err) {
+      const msg =
+        err.response?.data?.detail ||
+        err.response?.data?.error ||
+        "Failed to delete account";
+      toast.error(msg);
+    } finally {
+      setDeleting(false);
+      setDeleteConfirm("");
+      setDeletePassword("");
+    }
+  };
+
   const whatsappMessage = authUser
     ? encodeURIComponent(`Hi, I am ${authUser.email}. I want to apply to become a merchant on MafitaPay.`)
     : encodeURIComponent("Hi, I want to apply to become a merchant on MafitaPay.");
 
   if (loading) return <ProfileSkeleton />;
-  if (!profile) return <div className="text-center text-gray-400 py-20">Profile not found.</div>;
 
-  const successRate = profile.success_rate?.toFixed(1) || "0.0";
+  if (!profile)
+    return (
+      <div className="min-h-full flex items-center justify-center px-4">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center max-w-sm">
+          <p className="text-gray-300">Profile not found.</p>
+          <button
+            onClick={fetchProfile}
+            className="mt-4 px-4 py-3 rounded-xl bg-green-600 hover:bg-green-500 font-semibold"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
 
   return (
     <>
       <ToastContainer position="top-center" theme="dark" autoClose={3000} />
 
-      <div className="min-h-screen bg-gray-950 text-white">
-        {/* Sticky Header */}
-        <div className="sticky top-0 z-10 bg-gray-950/95 backdrop-blur border-b border-gray-800">
-          <div className="max-w-5xl mx-auto px-4 py-5 flex items-center justify-between">
-            <h1 className="text-2xl font-bold flex items-center gap-3">
-              <User className="w-7 h-7 text-indigo-400" />
-              My Profile
-            </h1>
-            <Link to="/dashboard" className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 text-sm">
-              <ArrowLeft className="w-5 h-5" />
-              <span className="hidden xs:inline">Dashboard</span>
-            </Link>
+      <div className="min-h-full px-4 py-5 pb-10">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+              <User className="w-6 h-6 text-green-400" />
+            </div>
+            <div>
+              <h1 className="text-xl font-extrabold">Account</h1>
+              <p className="text-xs text-gray-400">Profile, security & legal</p>
+            </div>
           </div>
+
+          <Link
+            to="/dashboard"
+            className="text-xs text-gray-300 hover:text-white bg-white/5 border border-white/10 px-3 py-2 rounded-xl transition"
+          >
+            Dashboard
+          </Link>
         </div>
 
-        <div className="max-w-5xl mx-auto px-4 py-6 space-y-8">
+        {/* Profile Card */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+          <div className="flex items-center gap-4">
+            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-green-600/30 to-emerald-400/10 border border-white/10 flex items-center justify-center">
+              <span className="text-xl font-extrabold text-green-200">{initials}</span>
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="text-lg font-bold truncate">{profile.full_name || "User"}</div>
+              <div className="text-sm text-gray-400 truncate">{profile.email}</div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-2 text-xs rounded-full px-3 py-1 bg-black/30 border border-white/10`}
+                >
+                  <span className={`h-2 w-2 rounded-full ${profile.is_merchant ? "bg-green-400" : "bg-yellow-400"}`} />
+                  <span className="text-gray-200">{profile.is_merchant ? "Merchant" : "Regular user"}</span>
+                </span>
+
+                <span className="inline-flex items-center gap-2 text-xs rounded-full px-3 py-1 bg-black/30 border border-white/10">
+                  <span className="text-gray-400">Profile</span>
+                  <span className="text-green-300 font-bold">{completion.pct}%</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Completion bar */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+              <span>Completion</span>
+              <span>
+                {completion.filled}/{completion.total} fields
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full bg-green-500/60"
+                style={{ width: `${completion.pct}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-gray-300">{completionHint}</p>
+          </div>
+
           {/* Merchant CTA */}
           {!authUser?.is_merchant && (
-            <div className="bg-gradient-to-r from-emerald-900/40 to-teal-900/30 border border-emerald-700/50 rounded-2xl p-6 text-center">
-              <h3 className="text-lg font-bold mb-2">Become a Merchant</h3>
-              <p className="text-gray-300 mb-5 text-sm">
-                Contact support to start accepting payments
-              </p>
+            <div className="mt-5 bg-gradient-to-r from-emerald-900/40 to-teal-900/30 border border-emerald-700/40 rounded-2xl p-4">
+              <div className="text-sm font-bold">Become a Merchant</div>
+              <div className="text-xs text-gray-300 mt-1">
+                Contact support to start accepting payments.
+              </div>
+
               <a
                 href={`https://wa.me/+2348168623961?text=${whatsappMessage}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-3 bg-green-600 hover:bg-green-500 px-6 py-3.5 rounded-xl font-medium transition"
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 bg-green-600 hover:bg-green-500 px-4 py-3 rounded-xl font-semibold transition"
               >
                 <MessageCircle className="w-5 h-5" />
                 Contact Support
               </a>
             </div>
           )}
+        </div>
 
-          {/* Security & Authentication */}
-          <div className="bg-gradient-to-r from-blue-900/40 to-indigo-900/30 border border-blue-700/50 rounded-2xl p-6">
-            <div className="flex items-center justify-between">
+        {/* Quick Actions */}
+        <div className="mt-5 grid grid-cols-1 gap-3">
+          <Link
+            to="/security-settings"
+            className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-4 transition flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-2xl bg-blue-600/15 border border-white/10 flex items-center justify-center">
+                <Shield className="w-5 h-5 text-blue-300" />
+              </div>
               <div>
-                <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-blue-400" />
-                  Security & Authentication
-                </h3>
-                <p className="text-gray-300 text-sm">
-                  Manage your PIN and biometric authentication settings
-                </p>
+                <div className="font-bold">Security</div>
+                <div className="text-xs text-gray-400">PIN & biometric settings</div>
               </div>
-              <Link
-                to="/security-settings"
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-5 py-3 rounded-xl font-medium transition"
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-400" />
+          </Link>
+
+          <Link
+            to="/privacy"
+            className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-4 transition flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-2xl bg-green-600/15 border border-white/10 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-green-300" />
+              </div>
+              <div>
+                <div className="font-bold">Privacy Policy</div>
+                <div className="text-xs text-gray-400">How we handle your data</div>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-400" />
+          </Link>
+
+          <Link
+            to="/terms"
+            className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-4 transition flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-2xl bg-purple-600/15 border border-white/10 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-purple-300" />
+              </div>
+              <div>
+                <div className="font-bold">Terms of Service</div>
+                <div className="text-xs text-gray-400">Rules for using MafitaPay</div>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-400" />
+          </Link>
+        </div>
+
+        {/* Edit Form */}
+        <div className="mt-5 bg-white/5 border border-white/10 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="text-lg font-extrabold">Edit Profile</div>
+              <div className="text-xs text-gray-400">Update your details</div>
+            </div>
+
+            {isEdited && (
+              <span className="text-[11px] px-3 py-1 rounded-full bg-green-600/15 border border-green-500/20 text-green-300">
+                Unsaved changes
+              </span>
+            )}
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Field
+              label="Full Name"
+              name="full_name"
+              value={formData.full_name}
+              onChange={handleInputChange}
+              placeholder="Enter full name"
+            />
+
+            <Field
+              label="Phone Number"
+              name="phone_number"
+              value={formData.phone_number}
+              onChange={handleInputChange}
+              placeholder="e.g., +234..."
+            />
+
+            <Field
+              label="Date of Birth"
+              name="date_of_birth"
+              value={formData.date_of_birth}
+              onChange={handleInputChange}
+              type="date"
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field
+                label="Bank Name"
+                name="bank_name"
+                value={formData.bank_name}
+                onChange={handleInputChange}
+                placeholder="Enter bank name"
+              />
+              <Field
+                label="Account Number"
+                name="account_no"
+                value={formData.account_no}
+                onChange={handleInputChange}
+                placeholder="Enter account number"
+              />
+            </div>
+
+            <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="submit"
+                disabled={submitting || !isEdited}
+                className="w-full px-5 py-3.5 rounded-2xl bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed font-bold transition flex items-center justify-center gap-2"
               >
-                <Shield className="w-5 h-5" />
-                <span className="hidden sm:inline">Manage Security</span>
-                <span className="sm:hidden">Security</span>
-              </Link>
-            </div>
-          </div>
-
-          {/* Responsive Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            {/* Left: Summary Card */}
-            <div className="lg:col-span-1">
-              <div className="bg-gray-900/90 backdrop-blur border border-gray-800 rounded-2xl p-6 sticky top-24">
-                <div className="text-center mb-6">
-                  <div className="w-28 h-28 mx-auto mb-4 bg-gray-800 rounded-full flex items-center justify-center text-4xl font-bold text-gray-500">
-                    {profile.full_name ? profile.full_name.charAt(0).toUpperCase() : "U"}
-                  </div>
-                  <h3 className="mt-4 text-xl font-bold">{profile.full_name || "User"}</h3>
-                  <p className="text-gray-400 text-sm">{profile.email}</p>
-                </div>
-
-                <div className="space-y-4 text-sm">
-                  <InfoRow label="Role" value={profile.is_merchant ? "Merchant" : "Regular User"} />
-                  <InfoRow label="Total Trades" value={profile.total_trades || 0} />
-                  <InfoRow label="Successful" value={profile.successful_trades || 0} />
-                  <InfoRow 
-                    label="Success Rate" 
-                    value={<span className={parseFloat(successRate) >= 80 ? "text-green-400" : "text-yellow-400"}>{successRate}%</span>} 
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Edit Form */}
-            <div className="lg:col-span-3">
-              <form onSubmit={handleSubmit} className="bg-gray-900/90 backdrop-blur border border-gray-800 rounded-2xl p-6">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
-                  <User className="w-6 h-6 text-indigo-400" />
-                  Edit Profile
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  {[
-                    { label: "Full Name", name: "full_name", type: "text", placeholder: "Enter full name" },
-                    { label: "Phone Number", name: "phone_number", type: "text", placeholder: "e.g., +2341234567890" },
-                    { label: "Date of Birth", name: "date_of_birth", type: "date", placeholder: "" },
-                    { label: "Bank Name", name: "bank_name", type: "text", placeholder: "Enter bank name" },
-                    { label: "Account Number", name: "account_no", type: "text", placeholder: "Enter account number" },
-                  ].map(({ label, name, type, placeholder }) => (
-                    <div key={name} className="space-y-2">
-                      <label className="text-sm text-gray-400">{label}</label>
-                      <input
-                        type={type}
-                        name={name}
-                        value={formData[name]}
-                        onChange={handleInputChange}
-                        placeholder={placeholder}
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-                  <button
-                    type="submit"
-                    disabled={submitting || !isEdited}
-                    className="px-8 py-3.5 bg-indigo-600 hover:from-indigo-500 hover:to-indigo-500 disabled:opacity-50 rounded-xl font-medium flex items-center justify-center gap-3 transition"
-                  >
-                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-                    {submitting ? "Saving..." : "Save Changes"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="px-8 py-3.5 bg-red-600 hover:bg-red-500 rounded-xl font-medium flex items-center justify-center gap-3 transition"
-                  >
-                    <LogOut className="w-5 h-5" />
-                    Logout
-                  </button>
-                </div>
-
-                {isEdited && (
-                  <p className="text-center text-green-400 text-sm mt-4 animate-pulse">
-                    You have unsaved changes
-                  </p>
+                {submitting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-5 h-5" />
                 )}
-              </form>
-            </div>
-          </div>
+                {submitting ? "Saving..." : "Save Changes"}
+              </button>
 
-          {/* Mobile Bottom Bar */}
-          <div className="fixed bottom-0 left-0 right-0 bg-gray-950/95 backdrop-blur border-t border-gray-800 px-4 py-4 sm:hidden z-10">
-            <Link to="/dashboard" className="flex items-center justify-center gap-2 text-indigo-400 font-medium">
-              <ArrowLeft className="w-5 h-5" />
-              Back to Dashboard
-            </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full px-5 py-3.5 rounded-2xl bg-red-600 hover:bg-red-500 font-bold transition flex items-center justify-center gap-2"
+              >
+                <LogOut className="w-5 h-5" />
+                Logout
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Danger Zone */}
+        <div className="mt-5 bg-red-950/30 border border-red-700/30 rounded-2xl p-5">
+          <div className="flex items-start gap-3">
+            <div className="h-11 w-11 rounded-2xl bg-red-600/15 border border-red-700/30 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-red-300" />
+            </div>
+            <div className="flex-1">
+              <div className="font-extrabold text-red-200">Danger Zone</div>
+              <div className="text-xs text-gray-300 mt-1">
+                Deleting your account is permanent. This may remove access to your history. Some records may be retained if required by law.
+              </div>
+
+              <button
+                onClick={() => setShowDelete(true)}
+                className="mt-4 inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-red-600 hover:bg-red-500 font-bold transition"
+              >
+                <Trash2 className="w-5 h-5" />
+                Delete Account
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Delete confirm modal */}
+        {showDelete && (
+          <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-sm bg-gray-900 border border-white/10 rounded-2xl p-5">
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 rounded-2xl bg-red-600/15 border border-red-700/30 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-red-300" />
+                </div>
+                <div>
+                  <div className="font-extrabold">Confirm deletion</div>
+                  <div className="text-xs text-gray-400">Type DELETE to continue.</div>
+                </div>
+              </div>
+
+              <input
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                placeholder="Type DELETE"
+                className="mt-4 w-full px-4 py-3.5 bg-black/30 border border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-red-500/50 transition"
+              />
+
+              <input
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                placeholder="Password"
+                type="password"
+                className="mt-3 w-full px-4 py-3.5 bg-black/30 border border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-red-500/50 transition"
+              />
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => {
+                    setShowDelete(false);
+                    setDeleteConfirm("");
+                    setDeletePassword("");
+                  }}
+                  className="px-4 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 font-semibold transition"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  disabled={deleting || deleteConfirm.trim().toUpperCase() !== "DELETE" || !deletePassword.trim()}
+                  onClick={handleDeleteAccount}
+                  className="px-4 py-3 rounded-2xl bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed font-bold transition flex items-center justify-center gap-2"
+                >
+                  {deleting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
 }
 
-function InfoRow({ label, value }) {
+function Field({ label, name, value, onChange, placeholder, type = "text" }) {
   return (
-    <div className="flex justify-between py-3 border-b border-gray-800 last:border-none">
-      <span className="text-gray-400">{label}:</span>
-      <span className="font-medium">{value}</span>
+    <div className="space-y-2">
+      <label className="text-xs text-gray-400">{label}</label>
+      <input
+        type={type}
+        name={name}
+        value={value || ""}
+        onChange={onChange}
+        placeholder={placeholder}
+        className="w-full px-4 py-3.5 bg-black/30 border border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500/50 transition"
+      />
     </div>
   );
 }
 
 function ProfileSkeleton() {
   return (
-    <div className="min-h-screen bg-gray-950">
-      <style jsx>{`
-        @keyframes shimmer {
-          0% { background-position: -1000px 0; }
-          100% { background-position: 1000px 0; }
-        }
-        .shimmer { background: linear-gradient(to right, #1f2937 8%, #374151 18%, #1f2937 33%); background-size: 1000px 100%; animation: shimmer 1.8s infinite linear; }
-      `}</style>
-      <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
-        <div className="h-10 w-64 bg-gray-800 rounded-2xl shimmer mx-auto" />
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          <div className="bg-gray-900/80 rounded-2xl p-6 space-y-6">
-            <div className="w-28 h-28 mx-auto bg-gray-800 rounded-full shimmer" />
-            <div className="space-y-3"><div className="h-6 w-32 mx-auto bg-gray-800 rounded shimmer" /></div>
-          </div>
-          <div className="lg:col-span-3 bg-gray-900/80 rounded-2xl p-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {Array(5).fill().map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <div className="h-4 w-24 bg-gray-800 rounded shimmer" />
-                  <div className="h-12 w-full bg-gray-800 rounded-xl shimmer" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+    <div className="min-h-full px-4 py-6">
+      <div className="max-w-3xl mx-auto space-y-4">
+        <div className="h-16 rounded-2xl bg-white/5 border border-white/10 animate-pulse" />
+        <div className="h-44 rounded-2xl bg-white/5 border border-white/10 animate-pulse" />
+        <div className="h-40 rounded-2xl bg-white/5 border border-white/10 animate-pulse" />
+        <div className="h-72 rounded-2xl bg-white/5 border border-white/10 animate-pulse" />
       </div>
     </div>
   );
-
 }
