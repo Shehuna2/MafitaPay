@@ -149,6 +149,11 @@ class LoginSerializer(serializers.Serializer):
                 "email": user.email
             })
 
+        if not user.is_active:
+            raise serializers.ValidationError({
+                "detail": "Your account is deactivated. Please contact support if you need help reactivating it."
+            })
+
         # ---- 2FA Handling ----
         if user.two_factor_enabled:
             if not two_factor_code:
