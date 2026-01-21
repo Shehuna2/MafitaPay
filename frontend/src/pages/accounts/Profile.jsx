@@ -33,6 +33,7 @@ export default function Profile() {
   // Delete flow
   const [showDelete, setShowDelete] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
   const [deleting, setDeleting] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -193,10 +194,17 @@ export default function Profile() {
       return;
     }
 
+    if (!deletePassword.trim()) {
+      toast.error("Enter your password to continue.");
+      return;
+    }
+
     setDeleting(true);
     try {
       // Server-side deletion
-      await client.delete(DELETE_ENDPOINT);
+      await client.delete(DELETE_ENDPOINT, {
+        data: { password: deletePassword, confirm: "DELETE" },
+      });
 
       // Local cleanup
       clearLocalAuth();
@@ -214,6 +222,7 @@ export default function Profile() {
     } finally {
       setDeleting(false);
       setDeleteConfirm("");
+      setDeletePassword("");
     }
   };
 
@@ -506,11 +515,20 @@ export default function Profile() {
                 className="mt-4 w-full px-4 py-3.5 bg-black/30 border border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-red-500/50 transition"
               />
 
+              <input
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                placeholder="Password"
+                type="password"
+                className="mt-3 w-full px-4 py-3.5 bg-black/30 border border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-red-500/50 transition"
+              />
+
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <button
                   onClick={() => {
                     setShowDelete(false);
                     setDeleteConfirm("");
+                    setDeletePassword("");
                   }}
                   className="px-4 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 font-semibold transition"
                 >
@@ -518,7 +536,7 @@ export default function Profile() {
                 </button>
 
                 <button
-                  disabled={deleting || deleteConfirm.trim().toUpperCase() !== "DELETE"}
+                  disabled={deleting || deleteConfirm.trim().toUpperCase() !== "DELETE" || !deletePassword.trim()}
                   onClick={handleDeleteAccount}
                   className="px-4 py-3 rounded-2xl bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed font-bold transition flex items-center justify-center gap-2"
                 >
