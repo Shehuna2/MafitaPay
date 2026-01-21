@@ -86,6 +86,56 @@ class ProfileAPIView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class AccountDeactivateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        password = request.data.get("password")
+        user = request.user
+
+        if not password:
+            return Response({"error": "Password is required to deactivate your account."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not user.check_password(password):
+            return Response({"error": "Invalid password."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not user.is_active:
+            return Response({"error": "Account is already deactivated."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.is_active = False
+        user.deactivated_at = timezone.now()
+        user.two_factor_code = None
+        user.save(update_fields=["is_active", "deactivated_at", "two_factor_code"])
+
+        return Response({"message": "Account deactivated successfully."}, status=status.HTTP_200_OK)
+
+class AccountDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+        password = request.data.get("password")
+        confirmation = request.data.get("confirm")
+
+        if not password:
+            return Response({"error": "Password is required to delete your account."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if confirmation != "DELETE":
+            return Response({"error": "Please confirm account deletion by sending confirm=DELETE."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not user.check_password(password):
+            return Response({"error": "Invalid password."}, status=status.HTTP_400_BAD_REQUEST)
+
+        wallet = Wallet.objects.filter(user=user).first()
+        if wallet and (wallet.balance > 0 or wallet.locked_balance > 0):
+            return Response(
+                {"error": "Account cannot be deleted while wallet has remaining balance."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.delete()
+        return Response({"message": "Account deleted successfully."}, status=status.HTTP_200_OK)
+
 class VerifyEmailView(APIView):
     permission_classes = [AllowAny]
 
