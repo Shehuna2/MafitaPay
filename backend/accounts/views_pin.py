@@ -407,41 +407,51 @@ class BiometricDisableView(APIView):
 
 
 class BiometricStatusView(APIView):
-    """
-    GET /api/biometric/status/
-    Check if user has biometric enabled and provides detailed enrollment info
-    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        has_credential = bool(user.webauthn_credential_id)
-        
+
+        has_credential = bool(getattr(user, "biometric_device_id", None))
+
         return Response({
             "enabled": user.biometric_enabled,
             "registered_at": user.biometric_registered_at,
             "has_credential": has_credential,
             "is_enrolled": user.biometric_enabled and has_credential,
-            "platform": getattr(user, 'biometric_platform', None),
-        }, status=status.HTTP_200_OK)
+            "platform": getattr(user, "biometric_platform", None),
+            "device_id": getattr(user, "biometric_device_id", None),
+        }, status=200)
+
 
 
 class BiometricLoginView(APIView):
     permission_classes = []
 
     def post(self, request):
-        email = request.data.get("email")
-        device_id = request.data.get("device_id")
+        email = (request.data.get("email") or "").lower().strip()
+        device_id = (request.data.get("device_id") or "").strip()
+        platform = (request.data.get("platform") or "web").lower().strip()
+
+        if not email or not device_id:
+            return Response({"error": "email and device_id required"}, status=400)
 
         user = User.objects.filter(email=email).first()
         if not user or not user.biometric_enabled:
             return Response({"error": "Biometric login not available"}, status=400)
 
-        if user.biometric_device_id != device_id:
+        if getattr(user, "biometric_device_id", None) != device_id:
             return Response({"error": "Unrecognized device"}, status=401)
 
         refresh = RefreshToken.for_user(user)
         return Response({
+            "success": True,
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "is_merchant": user.is_merchant,
+                "is_staff": user.is_staff,
+            },
             "access": str(refresh.access_token),
-            "refresh": str(refresh)
-        })
+            "refresh": str(refresh),
+        }, status=200)
