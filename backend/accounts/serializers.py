@@ -389,24 +389,59 @@ class PINResetConfirmSerializer(serializers.Serializer):
 
 
 class BiometricEnrollmentSerializer(serializers.Serializer):
-    """Serializer for enrolling biometric authentication"""
-    credential_id = serializers.CharField(max_length=255)
-    public_key = serializers.CharField()
+    """
+    Enroll biometric for NATIVE devices (Capacitor).
+    We do NOT accept/pass WebAuthn credential/public_key here.
+    """
+    device_id = serializers.CharField(max_length=128)
+    platform = serializers.CharField(max_length=20, required=False, default="android")
 
-    def validate(self, data):
-        # Basic validation - actual cryptographic validation happens in the view
-        if not data.get('credential_id'):
-            raise serializers.ValidationError({"credential_id": "Credential ID is required."})
-        if not data.get('public_key'):
-            raise serializers.ValidationError({"public_key": "Public key is required."})
-        return data
+    def validate_device_id(self, value):
+        value = (value or "").strip()
+        if len(value) < 12:
+            raise serializers.ValidationError("device_id looks invalid.")
+        return value
+
+    def validate_platform(self, value):
+        value = (value or "").lower().strip()
+        allowed = {"android", "ios", "web"}
+        if value not in allowed:
+            # don’t hard fail if you want, but better to be strict
+            raise serializers.ValidationError("platform must be android, ios, or web.")
+        return value
 
 
 class BiometricLoginSerializer(serializers.Serializer):
-    """Serializer for biometric login"""
+    """
+    Login with biometric for NATIVE devices (Capacitor).
+    """
     email = serializers.EmailField()
-    platform = serializers.CharField(max_length=20, required=False, default='web')
+    device_id = serializers.CharField(max_length=128)
+    platform = serializers.CharField(max_length=20, required=False, default="android")
 
     def validate_email(self, value):
-        value = value.lower().strip()
+        return (value or "").lower().strip()
+
+    def validate_device_id(self, value):
+        value = (value or "").strip()
+        if len(value) < 12:
+            raise serializers.ValidationError("device_id looks invalid.")
         return value
+
+    def validate_platform(self, value):
+        value = (value or "").lower().strip()
+        allowed = {"android", "ios", "web"}
+        if value not in allowed:
+            raise serializers.ValidationError("platform must be android, ios, or web.")
+        return value
+
+
+class BiometricStatusSerializer(serializers.Serializer):
+    """
+    Optional: only if you want a clean response format from status endpoint.
+    """
+    enabled = serializers.BooleanField()
+    registered_at = serializers.DateTimeField(allow_null=True)
+    has_credential = serializers.BooleanField()
+    platform = serializers.CharField(allow_blank=True, allow_null=True, required=False)
+    device_id = serializers.CharField(allow_blank=True, allow_null=True, required=False)
