@@ -361,38 +361,22 @@ class PINStatusView(APIView):
 
 
 class BiometricEnrollView(APIView):
-    """
-    POST /api/biometric/enroll/
-    Enroll biometric authentication (register WebAuthn credential)
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         user = request.user
 
-        serializer = BiometricEnrollmentSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        device_id = request.data.get("device_id")
+        platform = request.data.get("platform")
 
-        try:
-            # Store WebAuthn credential
-            user.webauthn_credential_id = serializer.validated_data['credential_id']
-            user.webauthn_public_key = serializer.validated_data['public_key']
-            user.enable_biometric()
+        if not device_id or not platform:
+            return Response({"error": "Device ID and platform required"}, status=400)
 
-            log_security_event(user, 'biometric_enrolled', request)
+        user.biometric_device_id = device_id
+        user.biometric_platform = platform
+        user.enable_biometric()
 
-            return Response({
-                "success": True,
-                "message": "Biometric authentication enrolled successfully."
-            }, status=status.HTTP_201_CREATED)
-
-        except Exception as e:
-            logger.error(f"Error enrolling biometric for user {user.email}: {e}")
-            return Response(
-                {"error": "Failed to enroll biometric authentication."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return Response({"success": True}, status=201)
 
 
 class BiometricDisableView(APIView):
@@ -443,84 +427,21 @@ class BiometricStatusView(APIView):
 
 
 class BiometricLoginView(APIView):
-    """
-    POST /api/biometric/login/
-    Login with biometric authentication (for native platforms)
-    For web platforms, use WebAuthn challenge/verify flow
-    
-    SECURITY NOTE: This endpoint trusts that the OS-level biometric authentication
-    has been performed on the client side for native platforms. For production use,
-    consider implementing additional security measures such as:
-    - Device fingerprinting/attestation
-    - Rate limiting per IP/device
-    - Requiring re-authentication after certain time periods
-    - Using WebAuthn for web platforms which provides cryptographic proof
-    """
-    permission_classes = []  # Public endpoint
+    permission_classes = []
 
     def post(self, request):
-        serializer = BiometricLoginSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(
-                {"error": "Invalid request data."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        email = request.data.get("email")
+        device_id = request.data.get("device_id")
 
-        try:
-            email = serializer.validated_data['email']
-            platform = serializer.validated_data.get('platform', 'web')
-            
-            # Get user
-            try:
-                user = User.objects.get(email=email)
-            except User.DoesNotExist:
-                # Return generic error to prevent user enumeration
-                logger.warning(f"Biometric login attempt for non-existent user: {email}")
-                return Response(
-                    {"error": "Biometric authentication failed. Please use your password to login."},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
+        user = User.objects.filter(email=email).first()
+        if not user or not user.biometric_enabled:
+            return Response({"error": "Biometric login not available"}, status=400)
 
-            # Check if biometric is enabled
-            if not user.biometric_enabled:
-                logger.info(f"Biometric login attempt for user without biometric enabled: {email}")
-                return Response(
-                    {"error": "Biometric authentication is not enabled for this account. Please login with your password and enroll biometric in settings."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        if user.biometric_device_id != device_id:
+            return Response({"error": "Unrecognized device"}, status=401)
 
-            # Check if user has biometric credential
-            if not user.webauthn_credential_id:
-                logger.info(f"Biometric login attempt for user without credential: {email}")
-                return Response(
-                    {"error": "No biometric credential registered. Please login with your password and enroll biometric in settings."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # For native platforms, we trust the OS biometric authentication
-            # The frontend already verified biometric before calling this endpoint
-            # Generate JWT tokens
-            refresh = RefreshToken.for_user(user)
-            access_token = str(refresh.access_token)
-            refresh_token = str(refresh)
-
-            log_security_event(user, 'biometric_login', request, platform=platform)
-
-            return Response({
-                "success": True,
-                "user": {
-                    "id": user.id,
-                    "email": user.email,
-                    "is_merchant": user.is_merchant,
-                    "is_staff": user.is_staff,
-                },
-                "access": access_token,
-                "refresh": refresh_token,
-            }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            logger.error(f"Error during biometric login: {e}")
-            return Response(
-                {"error": "An unexpected error occurred. Please use your password to login."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            "access": str(refresh.access_token),
+            "refresh": str(refresh)
+        })
