@@ -433,6 +433,8 @@ class BiometricLoginView(APIView):
         device_id = (request.data.get("device_id") or "").strip()
         platform = (request.data.get("platform") or "web").lower().strip()
 
+        logger.info(f"Biometric login attempt: email={email}, device_id={device_id}, stored_device_id={user.biometric_device_id}")
+
         if not email or not device_id:
             return Response({"error": "email and device_id required"}, status=400)
 
