@@ -49,6 +49,9 @@ class User(AbstractUser):
         "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="referrals"
     )
 
+    biometric_platform = models.CharField(max_length=20, blank=True, null=True)
+    biometric_device_id = models.CharField(max_length=128, blank=True, null=True)
+
     webauthn_credential_id = models.CharField(max_length=255, blank=True, null=True)
     webauthn_public_key = models.TextField(blank=True, null=True)
     webauthn_sign_count = models.PositiveIntegerField(default=0)  # optional: track replay attacks
