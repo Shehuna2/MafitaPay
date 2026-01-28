@@ -411,8 +411,8 @@ class BiometricStatusView(APIView):
 
     def get(self, request):
         user = request.user
+        has_credential = bool(user.biometric_device_id)
 
-        has_credential = bool(getattr(user, "biometric_device_id", None))
 
         return Response({
             "enabled": user.biometric_enabled,
