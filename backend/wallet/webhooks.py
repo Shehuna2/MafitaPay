@@ -894,3 +894,137 @@ def flutterwave_card_webhook(request):
             str(e), type(e).__name__
         )
         return Response({"error": "server error"}, status=500)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@csrf_exempt
+def fincra_card_webhook(request):
+    """Fincra card checkout webhook handler for card deposits."""
+    raw = request.body or b""
+    if len(raw) > MAX_WEBHOOK_SIZE:
+        return Response({"error": "payload too large"}, status=413)
+
+    signature = (
+        request.headers.get("x-fincra-signature")
+        or request.headers.get("fincra-signature")
+        or request.META.get("HTTP_X_FINCRA_SIGNATURE")
+    )
+    if not signature:
+        return Response({"error": "missing signature"}, status=400)
+
+    use_live = not settings.DEBUG
+    from .services.fincra_card_service import FincraCardService
+
+    try:
+        service = FincraCardService(use_live=use_live)
+    except Exception:
+        logger.exception("Fincra webhook rejected: service misconfigured")
+        return Response({"error": "service misconfigured"}, status=500)
+
+    if not service.verify_webhook_signature(raw, signature):
+        return Response({"error": "invalid signature"}, status=401)
+
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return Response({"error": "invalid payload"}, status=400)
+
+    event = (payload.get("event") or payload.get("type") or "").lower()
+    data = payload.get("data", payload)
+
+    tx_ref = (
+        data.get("reference")
+        or data.get("tx_ref")
+        or data.get("transactionReference")
+        or data.get("customerReference")
+    )
+    status_text = (
+        data.get("status")
+        or data.get("paymentStatus")
+        or payload.get("status")
+        or ""
+    ).lower()
+    tx_id = data.get("id") or data.get("transactionId") or data.get("paymentId")
+
+    if not tx_ref:
+        return Response({"error": "missing tx_ref"}, status=400)
+
+    if event and event not in {
+        "checkout.paid",
+        "checkout.completed",
+        "payment.success",
+        "payment.successful",
+    }:
+        return Response({"status": "ignored"}, status=200)
+
+    from .models import CardDeposit, WebhookRetryQueue, Notification
+
+    with transaction.atomic():
+        card_deposit = CardDeposit.objects.select_for_update().filter(
+            flutterwave_tx_ref=tx_ref,
+            provider="fincra",
+        ).first()
+
+        if not card_deposit:
+            return Response({"error": "transaction not found"}, status=404)
+
+        if card_deposit.status == "successful":
+            return Response({"status": "already_processed"}, status=200)
+
+        if status_text in {"successful", "success", "paid", "completed"}:
+            card_deposit.status = "successful"
+            card_deposit.flutterwave_tx_id = str(tx_id) if tx_id else None
+            card_deposit.raw_response = payload
+            card_deposit.save()
+
+            wallet = Wallet.objects.select_for_update().get(user=card_deposit.user)
+            success = wallet.deposit(
+                amount=card_deposit.ngn_amount,
+                reference=tx_ref,
+                metadata={
+                    "type": "card_deposit",
+                    "provider": "fincra",
+                    "currency": card_deposit.currency,
+                    "foreign_amount": str(card_deposit.amount),
+                    "exchange_rate": str(card_deposit.exchange_rate),
+                    "provider_tx_id": str(tx_id) if tx_id else None,
+                },
+            )
+
+            if not success:
+                retry_entry, _ = WebhookRetryQueue.objects.get_or_create(
+                    webhook_type="card_deposit",
+                    tx_ref=tx_ref,
+                    defaults={"payload": payload, "signature": signature},
+                )
+                retry_entry.mark_transient_failure("wallet deposit failed", "WalletDepositFailed")
+                card_deposit.status = "processing"
+                card_deposit.save(update_fields=["status"])
+                return Response({"error": "wallet credit failed", "will_retry": True}, status=500)
+
+            Notification.objects.create(
+                user=card_deposit.user,
+                message=(
+                    f"Card deposit of {card_deposit.amount} {card_deposit.currency} "
+                    f"(₦{card_deposit.ngn_amount}) completed successfully"
+                ),
+            )
+            return Response({"status": "success"}, status=200)
+
+        if status_text in {"failed", "cancelled", "expired"}:
+            card_deposit.status = "failed"
+            card_deposit.flutterwave_tx_id = str(tx_id) if tx_id else None
+            card_deposit.raw_response = payload
+            card_deposit.save()
+            return Response({"status": "failed"}, status=200)
+
+        card_deposit.status = "processing"
+        card_deposit.raw_response = payload
+        if tx_id:
+            card_deposit.flutterwave_tx_id = str(tx_id)
+            card_deposit.save(update_fields=["status", "raw_response", "flutterwave_tx_id"])
+        else:
+            card_deposit.save(update_fields=["status", "raw_response"])
+
+    return Response({"status": "processing"}, status=200)

@@ -22,6 +22,7 @@ export default function CardDeposit() {
   // Form state
   const [currency, setCurrency] = useState("USD");
   const [amount, setAmount] = useState("");
+  const [provider, setProvider] = useState("flutterwave");
   
   // Calculation state
   const [calculation, setCalculation] = useState(null);
@@ -113,12 +114,13 @@ export default function CardDeposit() {
       const response = await client.post("/wallet/card-deposit/initiate/", {
         currency,
         amount: parseFloat(amount),
+        provider,
         use_live: import.meta.env.MODE === 'production'
       });
 
       if (response.data.success && response.data.authorization_url) {
         toast.success("Redirecting to secure payment page...");
-        // Redirect to Flutterwave hosted payment page
+        // Redirect to provider hosted payment page
         window.location.href = response.data.authorization_url;
       } else {
         throw new Error("No payment link received");
@@ -133,6 +135,7 @@ export default function CardDeposit() {
   };
 
   const selectedCurrency = SUPPORTED_CURRENCIES.find(c => c.code === currency);
+  const providerName = provider === "fincra" ? "Fincra" : "Flutterwave";
 
   return (
     <>
@@ -193,8 +196,22 @@ export default function CardDeposit() {
           {/* Main Form */}
           <div className="bg-gray-800/80 rounded-2xl p-4 sm:p-5 shadow-2xl border border-gray-700/50 animate-fade-in-up mb-5">
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Currency and Amount */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Provider, Currency and Amount */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                    Payment Provider
+                  </label>
+                  <select
+                    value={provider}
+                    onChange={(e) => setProvider(e.target.value)}
+                    className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                  >
+                    <option value="flutterwave">Flutterwave</option>
+                    <option value="fincra">Fincra</option>
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1.5">
                     Currency
@@ -255,7 +272,7 @@ export default function CardDeposit() {
                       <span className="text-white">₦{parseFloat(calculation.gross_ngn).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Fees (Flutterwave + Platform):</span>
+                      <span className="text-gray-400">Fees ({providerName} + Platform):</span>
                       <span className="text-red-400">
                         -₦{(parseFloat(calculation.flutterwave_fee) + parseFloat(calculation.platform_margin)).toFixed(2)}
                       </span>
@@ -285,14 +302,14 @@ export default function CardDeposit() {
                   <>
                     <span>Continue</span>
                     <span className="text-sm font-normal opacity-90">
-                      (via Flutterwave)
+                      (via {providerName})
                     </span>
                   </>
                 )}
               </button>
 
               <p className="text-center text-xs text-gray-400 mt-4">
-                You'll be redirected to Flutterwave's secure page to enter your card details.
+                You'll be redirected to the selected provider's secure page to enter your card details.
               </p>
             </form>
           </div>
