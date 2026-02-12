@@ -22,7 +22,6 @@ from .serializers import (
 from .utils import extract_bank_name, extract_account_name
 from .services.flutterwave_service import FlutterwaveService
 from .services.palmpay_service import PalmpayService
-from .services.flutterwave_card_service import FlutterwaveCardService
 from .permissions import IsMerchantOrSuperUser
 
 
@@ -1127,12 +1126,6 @@ class CardDepositInitiateView(APIView):
         data = serializer.validated_data
         provider = data.get("provider", "flutterwave")
 
-        if provider == "fincra":
-            return Response(
-                {"error": "Fincra card deposits are not yet configured. Please use Flutterwave for now."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         user = request.user
         email = user.email
 
@@ -1161,9 +1154,9 @@ class CardDepositInitiateView(APIView):
 
         redirect_url = f"{settings.FRONTEND_URL}/wallet/card-deposit/callback"
 
-        # Create the deposit record early (pending)
         card_deposit = CardDeposit.objects.create(
             user=user,
+            provider=provider,
             currency=data["currency"],
             amount=data["amount"],
             exchange_rate=calculation["exchange_rate"],
@@ -1176,40 +1169,77 @@ class CardDepositInitiateView(APIView):
             use_live_mode=data["use_live"],
         )
 
-        # ------------------------------------------------------------------
-        # Switch to Flutterwave Standard (Hosted Payment Link) for full support
-        # of USD/GBP/EUR, no card details on server, PCI compliant
-        # ------------------------------------------------------------------
+        if provider == "flutterwave":
+            result = self._initiate_flutterwave_payment(
+                tx_ref=tx_ref,
+                user=user,
+                email=email,
+                card_deposit=card_deposit,
+                data=data,
+                calculation=calculation,
+                redirect_url=redirect_url,
+            )
+        else:
+            result = self._initiate_fincra_payment(
+                tx_ref=tx_ref,
+                user=user,
+                email=email,
+                card_deposit=card_deposit,
+                data=data,
+                calculation=calculation,
+                redirect_url=redirect_url,
+            )
+
+        if result.get("status") != "success":
+            card_deposit.status = "failed"
+            card_deposit.raw_response = result
+            card_deposit.save(update_fields=["status", "raw_response"])
+            return Response(
+                {"error": result.get("message", "Payment initiation failed")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        card_deposit.raw_response = result.get("data", {})
+        card_deposit.status = "processing"
+        card_deposit.save(update_fields=["raw_response", "status"])
+
+        return Response(
+            {
+                "success": True,
+                "message": "Payment initiated. Redirect user to the payment link.",
+                "provider": provider,
+                "tx_ref": tx_ref,
+                "authorization_url": result["link"],
+                "deposit_id": card_deposit.id,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    def _initiate_flutterwave_payment(self, *, tx_ref, user, email, card_deposit, data, calculation, redirect_url):
         use_live = data["use_live"]
         cfg = "LIVE" if use_live else "TEST"
         secret_key = getattr(settings, f"FLW_{cfg}_SECRET_KEY", None)
         base_url = getattr(settings, f"FLW_{cfg}_V3_BASE_URL", "https://api.flutterwave.com/v3").rstrip("/")
 
         if not secret_key:
-            return Response(
-                {"error": "Payment service misconfigured"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            return {"status": "error", "message": "Flutterwave payment service misconfigured"}
 
         payload = {
             "tx_ref": tx_ref,
-            "amount": str(calculation["net_amount"]),  # Charge the net NGN amount (or gross_ngn if you cover fees)
-            "currency": "NGN",  # Hosted payments support charging in NGN even for foreign currency display
+            "amount": str(calculation["net_amount"]),
+            "currency": "NGN",
             "redirect_url": redirect_url,
-            "customer": {
-                "email": email, "name": user.get_full_name() or email
-            },
+            "customer": {"email": email, "name": user.get_full_name() or email},
             "meta": {
                 "deposit_id": str(card_deposit.id),
                 "foreign_amount": str(data["amount"]),
                 "foreign_currency": data["currency"],
+                "provider": "flutterwave",
             },
             "customizations": {
                 "title": "Wallet Deposit",
                 "description": f"Deposit {data['amount']} {data['currency']} to your wallet",
-                # "logo": "https://your-site.com/logo.png",  # optional
             },
-            # Optional: restrict to card only
             "payment_options": "card",
         }
 
@@ -1223,44 +1253,46 @@ class CardDepositInitiateView(APIView):
         try:
             resp = requests.post(endpoint, json=payload, headers=headers, timeout=60)
             resp.raise_for_status()
-            result = resp.json()
+            fw_result = resp.json()
         except Exception as e:
             logger.error("Flutterwave payment initiation failed", exc_info=True)
-            card_deposit.status = "failed"
-            card_deposit.raw_response = {"error": str(e)}
-            card_deposit.save(update_fields=["status", "raw_response"])
-            return Response(
-                {"error": "Failed to initiate payment with provider"},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+            return {"status": "error", "message": str(e)}
 
-        if result.get("status") != "success":
-            card_deposit.status = "failed"
-            card_deposit.raw_response = result
-            card_deposit.save(update_fields=["status", "raw_response"])
-            return Response(
-                {"error": result.get("message", "Payment initiation failed")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        if fw_result.get("status") != "success":
+            return {
+                "status": "error",
+                "message": fw_result.get("message", "Payment initiation failed"),
+                "data": fw_result,
+            }
 
-        payment_link = result["data"]["link"]
+        return {
+            "status": "success",
+            "data": fw_result,
+            "link": fw_result["data"]["link"],
+        }
 
-        # Update deposit with initial response
-        card_deposit.raw_response = result
-        card_deposit.status = "processing"  # awaiting callback/webhook
-        card_deposit.save(update_fields=["raw_response", "status"])
+    def _initiate_fincra_payment(self, *, tx_ref, user, email, card_deposit, data, calculation, redirect_url):
+        from .services.fincra_card_service import FincraCardService
 
-        return Response(
-            {
-                "success": True,
-                "message": "Payment initiated. Redirect user to the payment link.",
-                "provider": provider,
-                "tx_ref": tx_ref,
-                "authorization_url": payment_link,
-                "deposit_id": card_deposit.id,
+        try:
+            service = FincraCardService(use_live=data["use_live"])
+        except Exception:
+            logger.exception("Fincra payment service misconfigured")
+            return {"status": "error", "message": "Fincra payment service misconfigured"}
+
+        return service.initiate_checkout(
+            tx_ref=tx_ref,
+            amount=str(calculation["net_amount"]),
+            redirect_url=redirect_url,
+            email=email,
+            name=user.get_full_name() or email,
+            metadata={
+                "deposit_id": str(card_deposit.id),
+                "foreign_amount": str(data["amount"]),
+                "foreign_currency": data["currency"],
+                "provider": "fincra",
             },
-            status=status.HTTP_201_CREATED,
-        )      
+        )
 
 class CardDepositListView(generics.ListAPIView):
     """List user's card deposit transactions"""

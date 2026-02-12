@@ -149,6 +149,7 @@ class CardDepositSerializer(serializers.ModelSerializer):
         model = CardDeposit
         fields = [
             'id',
+            'provider',
             'currency',
             'amount',
             'exchange_rate',
@@ -166,7 +167,7 @@ class CardDepositSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = [
-            'id', 'exchange_rate', 'ngn_amount', 'gross_ngn',
+            'id', 'provider', 'exchange_rate', 'ngn_amount', 'gross_ngn',
             'flutterwave_fee', 'platform_margin', 'flutterwave_tx_id',
             'status', 'card_last4', 'card_brand', 'created_at', 'updated_at'
         ]

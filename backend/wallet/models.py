@@ -377,6 +377,12 @@ class CardDepositExchangeRate(models.Model):
         }
 
 
+CARD_DEPOSIT_PROVIDER = [
+    ('flutterwave', 'Flutterwave'),
+    ('fincra', 'Fincra'),
+]
+
+
 CARD_DEPOSIT_STATUS = [
     ('pending', 'Pending'),
     ('processing', 'Processing'),
@@ -400,6 +406,7 @@ class CardDeposit(models.Model):
     platform_margin = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     
     # Transaction details
+    provider = models.CharField(max_length=20, choices=CARD_DEPOSIT_PROVIDER, default='flutterwave')
     flutterwave_tx_ref = models.CharField(max_length=255, unique=True, db_index=True)
     flutterwave_tx_id = models.CharField(max_length=255, blank=True, null=True, db_index=True)
     status = models.CharField(max_length=20, choices=CARD_DEPOSIT_STATUS, default='pending')
