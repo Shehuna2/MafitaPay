@@ -1271,6 +1271,15 @@ class CardDepositInitiateView(APIView):
             "link": fw_result["data"]["link"],
         }
 
+    def _build_fincra_full_name(self, user) -> str:
+        full_name = (user.get_full_name() or "").strip()
+        if len(full_name.split()) >= 2:
+            return full_name
+        if getattr(user, "first_name", "").strip() and getattr(user, "last_name", "").strip():
+            return f"{user.first_name.strip()} {user.last_name.strip()}"
+        return f"MafitaPay Customer {user.id}"
+
+
     def _initiate_fincra_payment(self, *, tx_ref, user, email, card_deposit, data, calculation, redirect_url):
         from .services.fincra_card_service import FincraCardService
 
@@ -1280,19 +1289,26 @@ class CardDepositInitiateView(APIView):
             logger.exception("Fincra payment service misconfigured")
             return {"status": "error", "message": "Fincra payment service misconfigured"}
 
+        fincra_name = self._build_fincra_full_name(user)
+
         return service.initiate_checkout(
             tx_ref=tx_ref,
-            amount=str(calculation["net_amount"]),
+            amount=str(data["amount"]),
+            currency=data["currency"],
             redirect_url=redirect_url,
             email=email,
-            name=user.get_full_name() or email,
+            name=fincra_name,  # <-- FIX
             metadata={
                 "deposit_id": str(card_deposit.id),
                 "foreign_amount": str(data["amount"]),
                 "foreign_currency": data["currency"],
                 "provider": "fincra",
+                "expected_ngn_credit": str(calculation["net_amount"]),
+                "rate": str(calculation["exchange_rate"]),
             },
         )
+
+
 
 class CardDepositListView(generics.ListAPIView):
     """List user's card deposit transactions"""
