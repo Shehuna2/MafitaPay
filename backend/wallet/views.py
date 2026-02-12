@@ -1125,6 +1125,13 @@ class CardDepositInitiateView(APIView):
         serializer = CardDepositInitiateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        provider = data.get("provider", "flutterwave")
+
+        if provider == "fincra":
+            return Response(
+                {"error": "Fincra card deposits are not yet configured. Please use Flutterwave for now."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         user = request.user
         email = user.email
@@ -1247,6 +1254,7 @@ class CardDepositInitiateView(APIView):
             {
                 "success": True,
                 "message": "Payment initiated. Redirect user to the payment link.",
+                "provider": provider,
                 "tx_ref": tx_ref,
                 "authorization_url": payment_link,
                 "deposit_id": card_deposit.id,
@@ -1619,5 +1627,4 @@ class WebhookRetryProcessView(APIView):
                 'WalletDepositFailed'
             )
             return 'wallet_deposit_failed'
-
 

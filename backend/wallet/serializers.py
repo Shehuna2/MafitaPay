@@ -176,12 +176,14 @@ from decimal import Decimal
 from rest_framework import serializers
 
 SUPPORTED_CARD_CURRENCIES = {"USD", "GBP", "EUR"}
+SUPPORTED_CARD_PROVIDERS = {"flutterwave", "fincra"}
 
 
 class CardDepositInitiateSerializer(serializers.Serializer):
     amount = serializers.DecimalField(max_digits=12, decimal_places=2)
     currency = serializers.CharField(max_length=3)
     use_live = serializers.BooleanField(required=False, default=False)
+    provider = serializers.CharField(required=False, default="flutterwave")
 
     def validate_currency(self, value):
         value = value.upper()
@@ -195,3 +197,11 @@ class CardDepositInitiateSerializer(serializers.Serializer):
         if value <= 0:
             raise serializers.ValidationError("Amount must be greater than zero")
         return value
+
+    def validate_provider(self, value):
+        provider = str(value).lower().strip()
+        if provider not in SUPPORTED_CARD_PROVIDERS:
+            raise serializers.ValidationError(
+                f"Card deposits provider must be one of: {', '.join(sorted(SUPPORTED_CARD_PROVIDERS))}"
+            )
+        return provider
