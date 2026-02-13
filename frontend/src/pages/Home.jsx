@@ -63,10 +63,10 @@ export default function Home() {
               </div>
 
               <h2 className="text-3xl md:text-5xl font-bold text-white mb-6 animate-fade-in-up">
-                Crypto. Bills. Rewards.
+                Airtime. Data. Bills. Rewards.
               </h2>
               <p className="text-lg md:text-xl text-gray-300 mb-10 max-w-3xl mx-auto animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
-                Buy crypto instantly, pay airtime, data, electricity, and earn <span className="text-yellow-400 font-bold">up to ₦500+</span> per referral — all in one secure app.
+                Buy airtime instantly, data, bills, electricity, and earn <span className="text-yellow-400 font-bold">up to ₦500+</span> per referral — all in one secure app.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up" style={{ animationDelay: "0.4s" }}>
@@ -161,7 +161,7 @@ export default function Home() {
               Join Thousands Earning with MafitaPay
             </h2>
             <p className="text-lg text-gray-300 mb-8">
-              Start buying crypto, paying bills, and earning rewards — <span className="text-indigo-300 font-bold">today</span>.
+              Start buying airtime and data, paying bills, and earning rewards — <span className="text-indigo-300 font-bold">today</span>.
             </p>
             <Link
               to="/register"

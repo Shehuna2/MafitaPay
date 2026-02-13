@@ -15,7 +15,11 @@ export default defineConfig({
     port: 5173,
     open: true,
     // Allow Capacitor to access the dev server
-    host: '0.0.0.0'
+    host: '0.0.0.0',
+    allowedHosts: [
+      "f392-102-91-103-5.ngrok-free.app",
+      ".ngrok-free.app", // allow any ngrok-free subdomain (optional)
+    ],
   },
   preview: {
     port: 4173
