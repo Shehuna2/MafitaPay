@@ -18,8 +18,12 @@ export default function CardDepositCallback() {
   const [detail, setDetail] = useState("Preparing verification...");
   const [seconds, setSeconds] = useState(5);
 
-  const pollRef = useRef(null);
+  // NEW: display info
+  const [depositInfo, setDepositInfo] = useState(null); // {amount,currency,ngn_amount,provider,status}
+  const [walletInfo, setWalletInfo] = useState(null);   // {balance, locked_balance, ...}
+  const [showAmounts, setShowAmounts] = useState(false);
 
+  const pollRef = useRef(null);
   const isFinal = useMemo(() => status === "successful" || status === "failed", [status]);
 
   async function verifyDeposit() {
@@ -126,6 +130,10 @@ export default function CardDepositCallback() {
   useEffect(() => {
     if (status !== "successful") return;
 
+    // show amounts/balance as soon as we hit success
+    setShowAmounts(true);
+    fetchWallet();
+
     const tick = window.setInterval(() => setSeconds((s) => Math.max(0, s - 1)), 1000);
     const go = window.setTimeout(() => navigate("/dashboard", { replace: true }), 5000);
 
@@ -134,6 +142,14 @@ export default function CardDepositCallback() {
       window.clearTimeout(go);
     };
   }, [status, navigate]);
+
+  const foreignLine =
+    depositInfo?.amount && depositInfo?.currency
+      ? `${depositInfo.amount} ${depositInfo.currency}`
+      : null;
+
+  const ngnLine = depositInfo?.ngn_amount ? `₦${depositInfo.ngn_amount}` : null;
+  const balanceLine = walletInfo?.balance ? `₦${walletInfo.balance}` : null;
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
@@ -144,6 +160,7 @@ export default function CardDepositCallback() {
               <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center">
                 <CheckCircle className="w-12 h-12 text-green-400" />
               </div>
+
               <div>
                 <h2 className="text-2xl font-bold text-white mb-2">Payment Successful!</h2>
                 <p className="text-gray-300">Redirecting to dashboard in {seconds}s...</p>
