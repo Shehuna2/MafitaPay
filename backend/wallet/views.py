@@ -1192,6 +1192,18 @@ class CardDepositInitiateView(APIView):
             use_live_mode=data["use_live"],
         )
 
+        
+        from .card_deposit_config import FLUTTERWAVE_CARD_CURRENCIES
+        if provider == "flutterwave" and data["currency"] not in FLUTTERWAVE_CARD_CURRENCIES:
+            return Response(
+                {
+                    "error": f"Flutterwave does not support card deposits in {data['currency']}.",
+                    "allowed_currencies": sorted(FLUTTERWAVE_CARD_CURRENCIES),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
         if provider == "flutterwave":
             result = self._initiate_flutterwave_payment(
                 tx_ref=tx_ref,
@@ -1239,6 +1251,7 @@ class CardDepositInitiateView(APIView):
         )
 
     def _initiate_flutterwave_payment(self, *, tx_ref, user, email, card_deposit, data, calculation, redirect_url):
+        from .card_deposit_config import FLUTTERWAVE_CARD_CURRENCIES
         use_live = data["use_live"]
         cfg = "LIVE" if use_live else "TEST"
         secret_key = getattr(settings, f"FLW_{cfg}_SECRET_KEY", None)
@@ -1247,10 +1260,16 @@ class CardDepositInitiateView(APIView):
         if not secret_key:
             return {"status": "error", "message": "Flutterwave payment service misconfigured"}
 
+        charge_amount = str(data["amount"])       # e.g. "50.00"
+        charge_currency = data["currency"]
+
+        if charge_currency not in FLUTTERWAVE_CARD_CURRENCIES:
+            return {"status": "error", "message": f"Unsupported Flutterwave currency: {charge_currency}"}
+
         payload = {
             "tx_ref": tx_ref,
-            "amount": str(calculation["net_amount"]),
-            "currency": "NGN",
+            "amount": charge_amount,
+            "currency": charge_currency,
             "redirect_url": redirect_url,
             "customer": {"email": email, "name": user.get_full_name() or email},
             "meta": {
@@ -1258,10 +1277,13 @@ class CardDepositInitiateView(APIView):
                 "foreign_amount": str(data["amount"]),
                 "foreign_currency": data["currency"],
                 "provider": "flutterwave",
+                # Helpful for reconciliation / support
+                "expected_ngn_credit": str(calculation["net_amount"]),
+                "rate": str(calculation["exchange_rate"]),
             },
             "customizations": {
                 "title": "Wallet Deposit",
-                "description": f"Deposit {data['amount']} {data['currency']} to your wallet",
+                "description": f"Deposit {charge_amount} {charge_currency} to your wallet",
             },
             "payment_options": "card",
         }

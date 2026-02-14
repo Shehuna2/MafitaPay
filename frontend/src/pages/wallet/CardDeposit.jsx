@@ -28,6 +28,8 @@ const CURRENCY_ALLOWED_PROVIDERS = {
   XAF: ["flutterwave"],
 };
 
+const FLUTTERWAVE_CARD_CURRENCIES = new Set(["USD", "GBP", "EUR", "GHS", "XOF", "XAF"]);
+
 export default function CardDeposit() {
   const navigate = useNavigate();
   
@@ -47,8 +49,11 @@ export default function CardDeposit() {
   
   // View state
   const [showHistory, setShowHistory] = useState(false);
-
-  const allowedProviders = CURRENCY_ALLOWED_PROVIDERS[currency] || ["flutterwave"];
+  const allowedProvidersRaw = CURRENCY_ALLOWED_PROVIDERS[currency] || ["flutterwave"];
+  const allowedProviders = allowedProvidersRaw.filter((p) => {
+    if (p !== "flutterwave") return true;
+    return FLUTTERWAVE_CARD_CURRENCIES.has(currency);
+  });
 
   useEffect(() => {
     if (!allowedProviders.includes(provider)) {
@@ -239,6 +244,11 @@ export default function CardDeposit() {
                       </option>
                     ))}
                   </select>
+                  {!FLUTTERWAVE_CARD_CURRENCIES.has(currency) ? (
+                    <p className="text-xs text-gray-400 mt-2">
+                      Flutterwave is not available for {currency}.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div>

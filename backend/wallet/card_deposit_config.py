@@ -11,6 +11,8 @@ DEFAULT_CARD_DEPOSIT_PROVIDER_MAP = {
     "XAF": ["flutterwave"],
 }
 
+FLUTTERWAVE_CARD_CURRENCIES = {"USD", "GBP", "EUR", "GHS", "XOF", "XAF"}
+
 
 def get_card_deposit_provider_map():
     configured = getattr(settings, "CARD_DEPOSIT_PROVIDER_MAP", None)
