@@ -4,7 +4,7 @@ from .views import (
     GenerateDVAAPIView, RequeryDVAAPIView,
     SecureWithdrawalView, SecurePaymentView,  
     CardDepositExchangeRateView, CardDepositInitiateView, CardDepositStatusView,
-    CardDepositListView, CardDepositWebhookDebugView, WebhookRetryProcessView
+    CardDepositVerifyView, CardDepositListView, CardDepositWebhookDebugView, WebhookRetryProcessView
 )
 from .webhooks import paystack_webhook, psb_webhook, flutterwave_webhook, palmpay_webhook, flutterwave_card_webhook, fincra_card_webhook
 
@@ -37,6 +37,7 @@ urlpatterns = [
     path("api/wallet/card-deposit/calculate-rate/", CardDepositExchangeRateView.as_view(), name="card-deposit-calculate-rate"),
     path("api/wallet/card-deposit/initiate/", CardDepositInitiateView.as_view(), name="card-deposit-initiate"),
     path("api/wallet/card-deposit/status/", CardDepositStatusView.as_view(), name="card-deposit-status"),
+    path("api/wallet/card-deposit/verify/", CardDepositVerifyView.as_view(), name="card-deposit-verify"),
     path("api/wallet/card-deposit/list/", CardDepositListView.as_view(), name="card-deposit-list"),
     
     # Card deposit webhook
