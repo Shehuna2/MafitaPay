@@ -327,6 +327,9 @@ class CardDepositExchangeRate(models.Model):
         ('EUR', 'Euro'),
         ('USD', 'US Dollar'),
         ('GBP', 'British Pound'),
+        ('GHS', 'Ghana Cedi'),
+        ('XOF', 'West African CFA Franc'),
+        ('XAF', 'Central African CFA Franc'),
     ]
     
     currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, unique=True)

@@ -129,6 +129,38 @@ class FincraCardService:
         digest = hmac.new(self.webhook_secret.encode("utf-8"), message, hashlib.sha512).hexdigest()
         return hmac.compare_digest(digest, signature)
 
+    def verify_by_reference(self, reference: str) -> Dict[str, Any]:
+        """
+        Verify a checkout payment by merchant reference.
+
+        Endpoint:
+            GET /checkout/payments/merchant-reference/{reference}
+        """
+        endpoint = f"{self.base_url}/checkout/payments/merchant-reference/{reference}"
+
+        try:
+            resp = requests.get(endpoint, headers=self._headers(), timeout=self.timeout)
+        except requests.RequestException:
+            logger.exception("Fincra checkout verification failed (network)")
+            return {"status": "error", "message": "Provider request failed"}
+
+        data = self._safe_json(resp)
+        if resp.status_code != 200:
+            logger.warning(
+                "Fincra verification failed status=%s reference=%s response=%s",
+                resp.status_code,
+                reference,
+                data,
+            )
+            return {
+                "status": "error",
+                "message": (data.get("message") if isinstance(data, dict) else None) or "Verification failed",
+                "data": data,
+                "http_status": resp.status_code,
+            }
+
+        return {"status": "success", "data": data}
+
     @staticmethod
     def extract_signature(headers: Any, meta: Dict[str, Any]) -> Optional[str]:
         for k in (
