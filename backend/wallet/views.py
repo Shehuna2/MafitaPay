@@ -1348,6 +1348,9 @@ class CardDepositStatusView(APIView):
 class CardDepositVerifyView(APIView):
     permission_classes = [IsAuthenticated]
 
+    SUCCESS_VALUES = {"successful", "success", "paid", "completed"}
+    FAILED_VALUES = {"failed", "cancelled", "canceled"}
+
     def post(self, request):
         tx_ref = (
             request.data.get("tx_ref")
@@ -1360,6 +1363,7 @@ class CardDepositVerifyView(APIView):
                 status=drf_status.HTTP_400_BAD_REQUEST,
             )
 
+        # Fetch WITHOUT locking (avoid holding DB locks while calling provider)
         card_deposit = CardDeposit.objects.filter(
             user=request.user,
             flutterwave_tx_ref=tx_ref,
@@ -1368,6 +1372,7 @@ class CardDepositVerifyView(APIView):
         if not card_deposit:
             return Response({"error": "deposit not found"}, status=drf_status.HTTP_404_NOT_FOUND)
 
+        # Provider verification OUTSIDE transaction
         provider_result = self._verify_provider(card_deposit, tx_ref)
         if provider_result.get("status") == "error":
             return Response(
@@ -1381,7 +1386,7 @@ class CardDepositVerifyView(APIView):
                 status=drf_status.HTTP_400_BAD_REQUEST,
             )
 
-        remote_status = provider_result.get("payment_status")
+        remote_status = (provider_result.get("payment_status") or "").lower()
         provider_tx_id = provider_result.get("provider_tx_id")
         provider_payload = provider_result.get("raw")
 
@@ -1400,26 +1405,28 @@ class CardDepositVerifyView(APIView):
             if provider_payload is not None:
                 locked_deposit.raw_response = provider_payload
 
-            if remote_status in {"successful", "success", "paid", "completed"}:
+            if remote_status in self.SUCCESS_VALUES:
                 locked_deposit.status = "successful"
-            elif remote_status in {"failed", "cancelled", "canceled"}:
+            elif remote_status in self.FAILED_VALUES:
+                # Never downgrade a successful deposit
                 if locked_deposit.status != "successful":
                     locked_deposit.status = "failed"
             else:
-                if locked_deposit.status in {"pending", "processing"}:
+                if locked_deposit.status != "successful":
                     locked_deposit.status = "processing"
 
-            locked_deposit.save(update_fields=["status", "flutterwave_tx_id", "raw_response", "updated_at"])
+            # IMPORTANT: don't include updated_at unless you're sure it exists
+            locked_deposit.save(update_fields=["status", "flutterwave_tx_id", "raw_response"])
 
             credited = False
             if locked_deposit.status == "successful":
-                existing_txn = WalletTransaction.objects.filter(
+                # IMPORTANT: idempotency should not depend on WalletTransaction.status
+                already_exists = WalletTransaction.objects.filter(
                     user=locked_deposit.user,
                     reference=tx_ref,
-                    status="success",
-                ).first()
+                ).exists()
 
-                if not existing_txn:
+                if not already_exists:
                     wallet, _ = Wallet.objects.select_for_update().get_or_create(user=locked_deposit.user)
                     credited = wallet.deposit(
                         amount=locked_deposit.ngn_amount,
@@ -1431,8 +1438,10 @@ class CardDepositVerifyView(APIView):
                             "foreign_amount": str(locked_deposit.amount),
                             "exchange_rate": str(locked_deposit.exchange_rate),
                             "provider_tx_id": locked_deposit.flutterwave_tx_id,
+                            "verified_via": "verify_endpoint",
                         },
                     )
+
                     if credited:
                         Notification.objects.create(
                             user=locked_deposit.user,
@@ -1485,6 +1494,7 @@ class CardDepositVerifyView(APIView):
                 "raw": payload,
             }
 
+        # default: flutterwave
         from .services.flutterwave_card_service import FlutterwaveCardService
 
         service = FlutterwaveCardService(use_live=card_deposit.use_live_mode)
