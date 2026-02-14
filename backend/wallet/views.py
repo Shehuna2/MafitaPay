@@ -10,8 +10,11 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework import status, generics, permissions
+from rest_framework import status as drf_status, generics, permissions
 from rest_framework.pagination import PageNumberPagination
+from rest_framework import status
+
+from .models import CardDeposit
 import paystack
 from paystack import DedicatedVirtualAccount
 from .models import Wallet, WalletTransaction, Notification, VirtualAccount, Deposit, CardDepositExchangeRate, CardDeposit
@@ -1152,7 +1155,9 @@ class CardDepositInitiateView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        redirect_url = f"{settings.FRONTEND_URL}/wallet/card-deposit/callback"
+        # redirect_url = f"{settings.FRONTEND_URL}/wallet/card-deposit/callback"
+        redirect_url = f"{settings.FRONTEND_URL}/card-deposit-callback"
+
 
         card_deposit = CardDeposit.objects.create(
             user=user,
@@ -1308,6 +1313,36 @@ class CardDepositInitiateView(APIView):
             },
         )
 
+
+class CardDepositStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        tx_ref = request.query_params.get("tx_ref") or request.query_params.get("reference")
+        if not tx_ref:
+            return Response({"error": "tx_ref is required"}, status=drf_status.HTTP_400_BAD_REQUEST)
+
+        deposit = CardDeposit.objects.filter(
+            user=request.user,
+            flutterwave_tx_ref=tx_ref,
+        ).first()
+
+        if not deposit:
+            return Response({"error": "deposit not found"}, status=drf_status.HTTP_404_NOT_FOUND)
+
+        return Response(
+            {
+                "success": True,
+                "tx_ref": tx_ref,
+                "status": deposit.status,  # pending/processing/successful/failed
+                "provider": deposit.provider,
+                "amount": str(deposit.amount),
+                "currency": deposit.currency,
+                "ngn_amount": str(deposit.ngn_amount),
+                "updated_at": deposit.updated_at,
+            },
+            status=drf_status.HTTP_200_OK,
+        )
 
 
 class CardDepositListView(generics.ListAPIView):

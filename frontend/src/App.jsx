@@ -281,6 +281,17 @@ function App() {
             />
 
             <Route
+              path="/wallet/card-deposit/callback"
+              element={
+                <PrivateRoute>
+                  <Layout>
+                    <CardDepositCallback />
+                  </Layout>
+                </PrivateRoute>
+              }
+            />
+
+            <Route
               path="/wallet-transactions"
               element={
                 <PrivateRoute>

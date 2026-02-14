@@ -2,9 +2,9 @@ from django.urls import path
 from .views import (
     WalletView, WalletTransactionListView, NotificationListView, NotificationMarkReadView,
     GenerateDVAAPIView, RequeryDVAAPIView,
-    SecureWithdrawalView, SecurePaymentView,  # New secure transaction views
-    CardDepositExchangeRateView, CardDepositInitiateView, CardDepositListView,  # Card deposit views
-    CardDepositWebhookDebugView, WebhookRetryProcessView  # Webhook debug and retry views
+    SecureWithdrawalView, SecurePaymentView,  
+    CardDepositExchangeRateView, CardDepositInitiateView, CardDepositStatusView,
+    CardDepositListView, CardDepositWebhookDebugView, WebhookRetryProcessView
 )
 from .webhooks import paystack_webhook, psb_webhook, flutterwave_webhook, palmpay_webhook, flutterwave_card_webhook, fincra_card_webhook
 
@@ -36,6 +36,7 @@ urlpatterns = [
     # Card deposit endpoints
     path("api/wallet/card-deposit/calculate-rate/", CardDepositExchangeRateView.as_view(), name="card-deposit-calculate-rate"),
     path("api/wallet/card-deposit/initiate/", CardDepositInitiateView.as_view(), name="card-deposit-initiate"),
+    path("api/wallet/card-deposit/status/", CardDepositStatusView.as_view(), name="card-deposit-status"),
     path("api/wallet/card-deposit/list/", CardDepositListView.as_view(), name="card-deposit-list"),
     
     # Card deposit webhook
