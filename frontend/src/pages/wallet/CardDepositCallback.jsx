@@ -14,12 +14,12 @@ export default function CardDepositCallback() {
     "";
 
   const flwStatus = (searchParams.get("status") || "").toLowerCase();
-  const [status, setStatus] = useState("processing");
+
+  const [status, setStatus] = useState("processing"); // processing|successful|failed
   const [detail, setDetail] = useState("Preparing verification...");
   const [seconds, setSeconds] = useState(5);
 
   const pollRef = useRef(null);
-
   const isFinal = useMemo(() => status === "successful" || status === "failed", [status]);
 
   async function verifyDeposit() {
@@ -30,11 +30,9 @@ export default function CardDepositCallback() {
     }
 
     try {
-      const resp = await client.post("/wallet/card-deposit/verify/", {
-        tx_ref: reference,
-      });
-
+      const resp = await client.post("/wallet/card-deposit/verify/", { tx_ref: reference });
       const verifiedStatus = (resp?.data?.status || "").toLowerCase();
+
       if (verifiedStatus === "successful") {
         setStatus("successful");
         setDetail("Wallet credited successfully.");
@@ -46,7 +44,10 @@ export default function CardDepositCallback() {
         setDetail("Verification in progress...");
       }
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.response?.data?.error || "Verification request failed.";
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        "Verification request failed.";
       setStatus("processing");
       setDetail(msg);
     }
@@ -85,36 +86,38 @@ export default function CardDepositCallback() {
       return;
     }
 
+    // IMPORTANT: if provider explicitly says failed, stop here.
     if (flwStatus === "failed" || flwStatus === "cancelled") {
       setStatus("failed");
       setDetail("Provider returned a failed status.");
+      return;
     }
 
     let tries = 0;
     let stopped = false;
 
-    const runInitialVerification = async () => {
+    const run = async () => {
+      // one server-to-server verification attempt
       await verifyDeposit();
-      const currentStatus = await fetchStatus();
-      if (["successful", "failed"].includes(currentStatus)) {
-        stopped = true;
-        return;
-      }
+
+      // then poll ONLY our API status
+      const first = await fetchStatus();
+      if (["successful", "failed"].includes(first)) return;
 
       pollRef.current = window.setInterval(async () => {
         if (stopped) return;
 
         tries += 1;
-        const polledStatus = await fetchStatus();
+        const s = await fetchStatus();
 
-        if (tries >= 15 || ["successful", "failed"].includes(polledStatus)) {
+        if (tries >= 15 || ["successful", "failed"].includes(s)) {
           stopped = true;
           window.clearInterval(pollRef.current);
         }
       }, 2000);
     };
 
-    runInitialVerification();
+    run();
 
     return () => {
       stopped = true;
@@ -171,8 +174,14 @@ export default function CardDepositCallback() {
           )}
 
           <div className="text-gray-400 text-sm">
-            <div><span className="text-gray-500">Reference:</span> {reference || "—"}</div>
-            {flwStatus ? <div><span className="text-gray-500">Provider status:</span> {flwStatus}</div> : null}
+            <div>
+              <span className="text-gray-500">Reference:</span> {reference || "—"}
+            </div>
+            {flwStatus ? (
+              <div>
+                <span className="text-gray-500">Provider status:</span> {flwStatus}
+              </div>
+            ) : null}
           </div>
 
           {!isFinal ? (
