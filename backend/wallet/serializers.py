@@ -175,9 +175,14 @@ class CardDepositSerializer(serializers.ModelSerializer):
 
 from decimal import Decimal
 from rest_framework import serializers
+from .card_deposit_config import (
+    get_supported_card_currencies,
+    get_supported_card_providers,
+    get_allowed_providers_for_currency,
+)
 
-SUPPORTED_CARD_CURRENCIES = {"USD", "GBP", "EUR"}
-SUPPORTED_CARD_PROVIDERS = {"flutterwave", "fincra"}
+SUPPORTED_CARD_CURRENCIES = set(get_supported_card_currencies())
+SUPPORTED_CARD_PROVIDERS = set(get_supported_card_providers())
 
 
 class CardDepositInitiateSerializer(serializers.Serializer):
@@ -190,7 +195,7 @@ class CardDepositInitiateSerializer(serializers.Serializer):
         value = value.upper()
         if value not in SUPPORTED_CARD_CURRENCIES:
             raise serializers.ValidationError(
-                f"Card deposits only support: {', '.join(SUPPORTED_CARD_CURRENCIES)}"
+                f"Card deposits only support: {', '.join(sorted(SUPPORTED_CARD_CURRENCIES))}"
             )
         return value
 
@@ -206,3 +211,19 @@ class CardDepositInitiateSerializer(serializers.Serializer):
                 f"Card deposits provider must be one of: {', '.join(sorted(SUPPORTED_CARD_PROVIDERS))}"
             )
         return provider
+
+    def validate(self, attrs):
+        currency = attrs.get("currency")
+        provider = attrs.get("provider")
+
+        if currency and provider:
+            allowed_providers = get_allowed_providers_for_currency(currency)
+            if provider not in allowed_providers:
+                raise serializers.ValidationError({
+                    "provider": (
+                        f"Provider '{provider}' is not supported for {currency}. "
+                        f"Allowed providers: {', '.join(allowed_providers)}"
+                    )
+                })
+
+        return attrs

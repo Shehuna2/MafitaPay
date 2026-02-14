@@ -13,8 +13,20 @@ import CardDepositCard from "../../components/CardDepositCard";
 const SUPPORTED_CURRENCIES = [
   { code: "EUR", symbol: "€", name: "Euro" },
   { code: "USD", symbol: "$", name: "US Dollar" },
-  { code: "GBP", symbol: "£", name: "British Pound" }
+  { code: "GBP", symbol: "£", name: "British Pound" },
+  { code: "GHS", symbol: "₵", name: "Ghanaian Cedi" },
+  { code: "XOF", symbol: "CFA", name: "West African CFA Franc" },
+  { code: "XAF", symbol: "FCFA", name: "Central African CFA Franc" },
 ];
+
+const CURRENCY_ALLOWED_PROVIDERS = {
+  USD: ["flutterwave", "fincra"],
+  GBP: ["flutterwave", "fincra"],
+  EUR: ["flutterwave", "fincra"],
+  GHS: ["flutterwave", "fincra"],
+  XOF: ["flutterwave"],
+  XAF: ["flutterwave"],
+};
 
 export default function CardDeposit() {
   const navigate = useNavigate();
@@ -35,6 +47,20 @@ export default function CardDeposit() {
   
   // View state
   const [showHistory, setShowHistory] = useState(false);
+
+  const allowedProviders = CURRENCY_ALLOWED_PROVIDERS[currency] || ["flutterwave"];
+
+  useEffect(() => {
+    if (!allowedProviders.includes(provider)) {
+      const nextProvider = allowedProviders[0];
+      setProvider(nextProvider);
+      toast(
+        `${provider === "fincra" ? "Fincra" : "Flutterwave"} is not available for ${currency}. Switched to ${nextProvider === "fincra" ? "Fincra" : "Flutterwave"}.`,
+        { icon: "ℹ️" }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currency]);
 
   const calculateRate = async () => {
     setCalculationLoading(true);
@@ -207,8 +233,11 @@ export default function CardDeposit() {
                     onChange={(e) => setProvider(e.target.value)}
                     className="w-full bg-gray-800/60 border border-gray-700/80 p-2.5 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500/50 transition-all"
                   >
-                    <option value="flutterwave">Flutterwave</option>
-                    <option value="fincra">Fincra</option>
+                    {allowedProviders.map((providerCode) => (
+                      <option key={providerCode} value={providerCode}>
+                        {providerCode === "fincra" ? "Fincra" : "Flutterwave"}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
