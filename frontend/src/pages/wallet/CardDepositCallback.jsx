@@ -19,6 +19,11 @@ export default function CardDepositCallback() {
   const [detail, setDetail] = useState("Preparing verification...");
   const [seconds, setSeconds] = useState(5);
 
+  // NEW: display info
+  const [depositInfo, setDepositInfo] = useState(null); // {amount,currency,ngn_amount,provider,status}
+  const [walletInfo, setWalletInfo] = useState(null);   // {balance, locked_balance, ...}
+  const [showAmounts, setShowAmounts] = useState(false);
+
   const pollRef = useRef(null);
   const isFinal = useMemo(() => status === "successful" || status === "failed", [status]);
 
@@ -61,7 +66,10 @@ export default function CardDepositCallback() {
         `/wallet/card-deposit/status/?tx_ref=${encodeURIComponent(reference)}`
       );
 
-      const s = (resp?.data?.status || "").toLowerCase();
+      const data = resp?.data || {};
+      setDepositInfo(data);
+
+      const s = (data?.status || "").toLowerCase();
       if (s === "successful") {
         setStatus("successful");
         setDetail("Wallet credited successfully.");
@@ -79,6 +87,16 @@ export default function CardDepositCallback() {
     }
   }
 
+  // NEW: fetch wallet after success to show updated balance
+  async function fetchWallet() {
+    try {
+      const resp = await client.get("/wallet/");
+      setWalletInfo(resp?.data || null);
+    } catch {
+      // non-fatal: page still works
+    }
+  }
+
   useEffect(() => {
     if (!reference) {
       setStatus("failed");
@@ -86,7 +104,6 @@ export default function CardDepositCallback() {
       return;
     }
 
-    // IMPORTANT: if provider explicitly says failed, stop here.
     if (flwStatus === "failed" || flwStatus === "cancelled") {
       setStatus("failed");
       setDetail("Provider returned a failed status.");
@@ -97,10 +114,7 @@ export default function CardDepositCallback() {
     let stopped = false;
 
     const run = async () => {
-      // one server-to-server verification attempt
       await verifyDeposit();
-
-      // then poll ONLY our API status
       const first = await fetchStatus();
       if (["successful", "failed"].includes(first)) return;
 
@@ -129,6 +143,10 @@ export default function CardDepositCallback() {
   useEffect(() => {
     if (status !== "successful") return;
 
+    // show amounts/balance as soon as we hit success
+    setShowAmounts(true);
+    fetchWallet();
+
     const tick = window.setInterval(() => setSeconds((s) => Math.max(0, s - 1)), 1000);
     const go = window.setTimeout(() => navigate("/dashboard", { replace: true }), 5000);
 
@@ -137,6 +155,14 @@ export default function CardDepositCallback() {
       window.clearTimeout(go);
     };
   }, [status, navigate]);
+
+  const foreignLine =
+    depositInfo?.amount && depositInfo?.currency
+      ? `${depositInfo.amount} ${depositInfo.currency}`
+      : null;
+
+  const ngnLine = depositInfo?.ngn_amount ? `₦${depositInfo.ngn_amount}` : null;
+  const balanceLine = walletInfo?.balance ? `₦${walletInfo.balance}` : null;
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
@@ -147,9 +173,34 @@ export default function CardDepositCallback() {
               <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center">
                 <CheckCircle className="w-12 h-12 text-green-400" />
               </div>
+
               <div>
                 <h2 className="text-2xl font-bold text-white mb-2">Payment Successful!</h2>
                 <p className="text-gray-300">Redirecting to dashboard in {seconds}s...</p>
+
+                {showAmounts ? (
+                  <div className="mt-4 text-left bg-gray-900/40 rounded-xl p-4 border border-gray-700/50">
+                    {foreignLine ? (
+                      <div className="text-gray-200">
+                        <span className="text-gray-400">Charged:</span> {foreignLine}
+                      </div>
+                    ) : null}
+
+                    {ngnLine ? (
+                      <div className="text-gray-200 mt-1">
+                        <span className="text-gray-400">Credited:</span> {ngnLine}
+                      </div>
+                    ) : null}
+
+                    {balanceLine ? (
+                      <div className="text-gray-200 mt-1">
+                        <span className="text-gray-400">New balance:</span> {balanceLine}
+                      </div>
+                    ) : (
+                      <div className="text-gray-400 mt-1 text-sm">Fetching wallet balance...</div>
+                    )}
+                  </div>
+                ) : null}
               </div>
             </>
           ) : status === "failed" ? (
