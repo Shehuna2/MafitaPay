@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
+import client from "../../api/client";
 
 export default function CardDepositCallback() {
   const navigate = useNavigate();
@@ -12,16 +13,16 @@ export default function CardDepositCallback() {
     searchParams.get("transactionReference") ||
     "";
 
-  const flwStatus = (searchParams.get("status") || "").toLowerCase(); // flutterwave style
-  const [status, setStatus] = useState("processing"); // processing|successful|failed
-  const [detail, setDetail] = useState("");
+  const flwStatus = (searchParams.get("status") || "").toLowerCase();
+  const [status, setStatus] = useState("processing");
+  const [detail, setDetail] = useState("Preparing verification...");
   const [seconds, setSeconds] = useState(5);
 
   const pollRef = useRef(null);
 
   const isFinal = useMemo(() => status === "successful" || status === "failed", [status]);
 
-  async function fetchStatus() {
+  async function verifyDeposit() {
     if (!reference) {
       setStatus("failed");
       setDetail("Missing transaction reference in redirect URL.");
@@ -29,50 +30,94 @@ export default function CardDepositCallback() {
     }
 
     try {
-      const resp = await fetch(
-        `/api/wallet/card-deposit/status/?tx_ref=${encodeURIComponent(reference)}`,
-        { credentials: "include" }
-      );
+      const resp = await client.post("/wallet/card-deposit/verify/", {
+        tx_ref: reference,
+      });
 
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        setStatus("processing");
-        setDetail(data?.error || "Checking payment status...");
-        return;
-      }
-
-      const s = (data?.status || "").toLowerCase();
-      if (s === "successful") {
+      const verifiedStatus = (resp?.data?.status || "").toLowerCase();
+      if (verifiedStatus === "successful") {
         setStatus("successful");
-        setDetail("");
-      } else if (s === "failed") {
+        setDetail("Wallet credited successfully.");
+      } else if (verifiedStatus === "failed") {
         setStatus("failed");
-        setDetail("");
+        setDetail("Payment verification failed.");
       } else {
         setStatus("processing");
-        setDetail("");
+        setDetail("Verification in progress...");
       }
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.response?.data?.error || "Verification request failed.";
+      setStatus("processing");
+      setDetail(msg);
+    }
+  }
+
+  async function fetchStatus() {
+    if (!reference) return "failed";
+
+    try {
+      const resp = await client.get(
+        `/wallet/card-deposit/status/?tx_ref=${encodeURIComponent(reference)}`
+      );
+
+      const s = (resp?.data?.status || "").toLowerCase();
+      if (s === "successful") {
+        setStatus("successful");
+        setDetail("Wallet credited successfully.");
+      } else if (s === "failed") {
+        setStatus("failed");
+        setDetail("Payment could not be completed.");
+      } else {
+        setStatus("processing");
+      }
+      return s;
     } catch {
       setStatus("processing");
       setDetail("Network issue while confirming payment. Retrying...");
+      return "processing";
     }
   }
 
   useEffect(() => {
-    // If Flutterwave gave an explicit status, reflect it immediately (still poll for final wallet credit).
-    if (flwStatus === "successful") setStatus("processing");
-    if (flwStatus === "failed" || flwStatus === "cancelled") setStatus("failed");
+    if (!reference) {
+      setStatus("failed");
+      setDetail("Missing transaction reference in redirect URL.");
+      return;
+    }
 
-    fetchStatus();
+    if (flwStatus === "failed" || flwStatus === "cancelled") {
+      setStatus("failed");
+      setDetail("Provider returned a failed status.");
+    }
 
     let tries = 0;
-    pollRef.current = window.setInterval(() => {
-      tries += 1;
-      fetchStatus();
-      if (tries >= 15) window.clearInterval(pollRef.current); // ~30s max
-    }, 2000);
+    let stopped = false;
+
+    const runInitialVerification = async () => {
+      await verifyDeposit();
+      const currentStatus = await fetchStatus();
+      if (["successful", "failed"].includes(currentStatus)) {
+        stopped = true;
+        return;
+      }
+
+      pollRef.current = window.setInterval(async () => {
+        if (stopped) return;
+
+        tries += 1;
+        const polledStatus = await fetchStatus();
+
+        if (tries >= 15 || ["successful", "failed"].includes(polledStatus)) {
+          stopped = true;
+          window.clearInterval(pollRef.current);
+        }
+      }, 2000);
+    };
+
+    runInitialVerification();
 
     return () => {
+      stopped = true;
       if (pollRef.current) window.clearInterval(pollRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,9 +146,7 @@ export default function CardDepositCallback() {
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-white mb-2">Payment Successful!</h2>
-                <p className="text-gray-300">
-                  Your wallet is being credited. Redirecting in {seconds}s...
-                </p>
+                <p className="text-gray-300">Redirecting to dashboard in {seconds}s...</p>
               </div>
             </>
           ) : status === "failed" ? (
@@ -113,9 +156,7 @@ export default function CardDepositCallback() {
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-white mb-2">Payment Failed</h2>
-                <p className="text-gray-300">
-                  If you were charged, contact support with your reference.
-                </p>
+                <p className="text-gray-300">If you were charged, contact support with your reference.</p>
               </div>
             </>
           ) : (
@@ -123,9 +164,7 @@ export default function CardDepositCallback() {
               <Loader2 className="w-12 h-12 text-indigo-400 animate-spin" />
               <div>
                 <h2 className="text-2xl font-bold text-white mb-2">Confirming Payment...</h2>
-                <p className="text-gray-300">
-                  Please wait while we confirm your payment. This may take a few seconds.
-                </p>
+                <p className="text-gray-300">Please wait while we verify and credit your wallet.</p>
                 {detail ? <p className="text-gray-400 mt-2 text-sm">{detail}</p> : null}
               </div>
             </>
@@ -133,14 +172,18 @@ export default function CardDepositCallback() {
 
           <div className="text-gray-400 text-sm">
             <div><span className="text-gray-500">Reference:</span> {reference || "—"}</div>
+            {flwStatus ? <div><span className="text-gray-500">Provider status:</span> {flwStatus}</div> : null}
           </div>
 
           {!isFinal ? (
             <button
-              onClick={fetchStatus}
+              onClick={async () => {
+                await verifyDeposit();
+                await fetchStatus();
+              }}
               className="w-full mt-2 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold"
             >
-              Refresh Status
+              Verify Again
             </button>
           ) : null}
 
